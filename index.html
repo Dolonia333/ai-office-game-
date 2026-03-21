@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <base href="/pixel-office-game/" />
+    <title>OpenClaw Pixel Office</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        background: #020617;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      #game-container {
+        width: 1280px;
+        height: 720px;
+        border: 1px solid #1f2937;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        background: #020617;
+      }
+      #game-container canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+    </style>
+    <script>
+      // Show runtime errors on screen (helps when canvas is just a blank color).
+      (function () {
+        function ensureOverlay() {
+          let el = document.getElementById('runtime-error');
+          if (!el) {
+            el = document.createElement('pre');
+            el.id = 'runtime-error';
+            el.style.position = 'fixed';
+            el.style.left = '12px';
+            el.style.top = '12px';
+            el.style.right = '12px';
+            el.style.maxHeight = '45vh';
+            el.style.overflow = 'auto';
+            el.style.padding = '10px 12px';
+            el.style.margin = '0';
+            el.style.background = 'rgba(2, 6, 23, 0.92)';
+            el.style.border = '1px solid #7f1d1d';
+            el.style.color = '#fecaca';
+            el.style.fontSize = '12px';
+            el.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace';
+            el.style.whiteSpace = 'pre-wrap';
+            el.style.zIndex = '999999';
+            el.textContent = '';
+            document.body.appendChild(el);
+          }
+          return el;
+        }
+
+        window.addEventListener('error', function (ev) {
+          const el = ensureOverlay();
+          el.textContent += `[error] ${ev.message}\n${ev.filename || ''}:${ev.lineno || ''}:${ev.colno || ''}\n\n`;
+        });
+        window.addEventListener('unhandledrejection', function (ev) {
+          const el = ensureOverlay();
+          el.textContent += `[unhandledrejection] ${String(ev.reason)}\n\n`;
+        });
+      })();
+    </script>
+    <!-- World generator modules (ESM) -->
+    <script type="module" src="./src/world/rng.js"></script>
+    <script type="module" src="./src/world/generator.js"></script>
+    <script type="module" src="./src/world/renderer.js"></script>
+    <script type="module" src="./src/world/debug.js"></script>
+    <!-- Phaser 3 from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
+    <!-- OpenClaw Gateway Bridge -->
+    <script src="./src/gateway-bridge.js" defer></script>
+    <script src="./src/npc-agent-controller.js" defer></script>
+    <script src="./src/openclaw-chat.js" defer></script>
+    <!-- Game scene -->
+    <!-- Cache-bust during development so changes always show up -->
+    <script src="./office-scene.js?v=dev34" defer></script>
+  </head>
+  <body>
+    <div id="game-container"></div>
+  </body>
+</html>
+

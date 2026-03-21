@@ -1,0 +1,76 @@
+{
+  "file": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Interiors_RPG_Maker_Version\\Modern_Interiors_RPG_Maker_Version\\RPG_MAKER_XP\\3_Bathroom.png",
+  "width": 256,
+  "height": 1250,
+  "grid": 16,
+  "objects": [
+    {
+      "name": "obj_0",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 48
+      },
+      "grid": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "origin": "bottom",
+      "pivot_y": 48
+    },
+    {
+      "name": "obj_1",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 640
+      },
+      "grid": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 40
+      },
+      "origin": "bottom",
+      "pivot_y": 640
+    },
+    {
+      "name": "obj_2",
+      "rect": {
+        "x": 0,
+        "y": 64,
+        "w": 64,
+        "h": 16
+      },
+      "grid": {
+        "x": 0,
+        "y": 4,
+        "w": 4,
+        "h": 1
+      },
+      "origin": "bottom",
+      "pivot_y": 80
+    },
+    {
+      "name": "obj_3",
+      "rect": {
+        "x": 0,
+        "y": 656,
+        "w": 256,
+        "h": 528
+      },
+      "grid": {
+        "x": 0,
+        "y": 41,
+        "w": 16,
+        "h": 33
+      },
+      "origin": "bottom",
+      "pivot_y": 1184
+    }
+  ]
+}

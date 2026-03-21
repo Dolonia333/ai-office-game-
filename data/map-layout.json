@@ -1,0 +1,30 @@
+{
+  "info": {
+    "purpose": "Data-driven room layout in tile grid coordinates.",
+    "tileSize": 32,
+    "origin": "top-left of room grid in world pixels"
+  },
+  "room": {
+    "originPx": { "x": 320, "y": 160 },
+    "sizeTiles": { "w": 20, "h": 12 }
+  },
+  "floor": {
+    "sheetId": "modern_interiors_floors_a2",
+    "tileIndex": 0
+  },
+  "walls": {
+    "sheetId": "modern_interiors_walls_a4",
+    "tileIndex": 4,
+    "entrance": {
+      "side": "bottom",
+      "fromX": 8,
+      "toX": 11
+    }
+  },
+  "placements": [
+    { "objectId": "desk_basic", "tilePos": { "x": 6, "y": 5 } },
+    { "objectId": "desk_basic", "tilePos": { "x": 12, "y": 5 } },
+    { "objectId": "computer_basic", "tilePos": { "x": 6, "y": 5 } }
+  ]
+}
+

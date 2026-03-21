@@ -1,0 +1,192 @@
+{
+  "//": "High-level config describing important LimeZu tilesheets and how to slice them into tiles.",
+  "tilesheets": [
+    {
+      "id": "modern_interiors_floors_a2",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_MV/Floors_TILESET_A2_.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "categories": [
+        {
+          "name": "floor_office_wood",
+          "fromIndex": 0,
+          "toIndex": 31,
+          "tags": ["floor", "office", "wood"]
+        }
+      ]
+    },
+    {
+      "id": "modern_interiors_walls_a4",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_MV/Walls_TILESET_A4_.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "categories": [
+        {
+          "name": "wall_interior",
+          "fromIndex": 0,
+          "toIndex": 63,
+          "tags": ["wall", "interior", "solid"]
+        }
+      ]
+    },
+    {
+      "id": "mv_classroom_library_01",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_MV/Interiors/Theme_Sorter_MV/Classroom_and_Library_01.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 24,
+      "categories": [
+        {
+          "name": "mv_classroom_library_all",
+          "fromIndex": 0,
+          "toIndex": 575,
+          "tags": ["mv", "interior", "classroom", "library", "office"]
+        }
+      ]
+    },
+    {
+      "id": "vxace_generic_bcde_01",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_VX_ACE (WIP)/Theme_Sorter_VX_ACE/B-C-D-E_Generic_01.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 16,
+      "categories": [
+        {
+          "name": "vxace_generic_doors",
+          "fromIndex": 0,
+          "toIndex": 31,
+          "tags": ["interior", "vxace", "door", "solid"]
+        },
+        {
+          "name": "vxace_generic_windows",
+          "fromIndex": 32,
+          "toIndex": 63,
+          "tags": ["interior", "vxace", "window"]
+        },
+        {
+          "name": "vxace_generic_curtains",
+          "fromIndex": 64,
+          "toIndex": 127,
+          "tags": ["interior", "vxace", "curtain"]
+        },
+        {
+          "name": "vxace_generic_misc",
+          "fromIndex": 128,
+          "toIndex": 255,
+          "tags": ["interior", "vxace", "generic"]
+        }
+      ]
+    },
+    {
+      "id": "vxace_living_room_bcde_01",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_VX_ACE (WIP)/Theme_Sorter_VX_ACE/B-C-D-E_Living_Room_01.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 16,
+      "categories": [
+        {
+          "name": "vxace_living_room_plants",
+          "fromIndex": 0,
+          "toIndex": 63,
+          "tags": ["interior", "vxace", "plant", "decor"]
+        },
+        {
+          "name": "vxace_living_room_shelves",
+          "fromIndex": 64,
+          "toIndex": 127,
+          "tags": ["interior", "vxace", "shelf", "furniture"]
+        },
+        {
+          "name": "vxace_living_room_rugs",
+          "fromIndex": 128,
+          "toIndex": 191,
+          "tags": ["interior", "vxace", "rug", "floor_decor"]
+        },
+        {
+          "name": "vxace_living_room_misc",
+          "fromIndex": 192,
+          "toIndex": 255,
+          "tags": ["interior", "vxace", "misc"]
+        }
+      ]
+    },
+    {
+      "id": "vxace_a5_walls_floors",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_VX_ACE (WIP)/Theme_Sorter_VX_ACE/A5_Walls_Floors.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "categories": [
+        {
+          "name": "vxace_a5_walls_floors_all",
+          "fromIndex": 0,
+          "toIndex": 127,
+          "tags": ["vxace", "walls", "floors"]
+        }
+      ]
+    },
+    {
+      "id": "vxace_basement_bcde_01",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_VX_ACE (WIP)/Theme_Sorter_VX_ACE/B-C-D-E_Basement_01.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 16,
+      "categories": [
+        {
+          "name": "vxace_basement_all",
+          "fromIndex": 0,
+          "toIndex": 255,
+          "tags": ["vxace", "interior", "basement"]
+        }
+      ]
+    },
+    {
+      "id": "xp_everything_00",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/0_Everything.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "categories": [
+        {
+          "name": "xp_everything_all",
+          "fromIndex": 0,
+          "toIndex": 127,
+          "tags": ["xp", "interior", "everything"]
+        }
+      ]
+    },
+    {
+      "id": "xp_generic_01",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/1_Generic.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "categories": [
+        {
+          "name": "xp_generic_all",
+          "fromIndex": 0,
+          "toIndex": 127,
+          "tags": ["xp", "interior", "generic"]
+        }
+      ]
+    },
+    {
+      "id": "xp_living_room_02",
+      "path": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/2_LivingRoom.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "categories": [
+        {
+          "name": "xp_living_room_all",
+          "fromIndex": 0,
+          "toIndex": 127,
+          "tags": ["xp", "interior", "living_room"]
+        }
+      ]
+    }
+  ]
+}
+

@@ -1,0 +1,100 @@
+{
+  "info": {
+    "purpose": "Exact recreation of the Modern Office promo image layout.",
+    "slice_margin_px": 2,
+    "origin": "Place (x,y) = bottom-center of sprite. origin: 'bottom' = setOrigin(0.5, 1)."
+  },
+  "objects": {
+    "vending_machine_full": {
+      "sheet": "mo_black_shadow_32",
+      "x": 64, "y": 736, "w": 64, "h": 96,
+      "origin": "bottom", "depth": 1.5, "type": "furniture", "action": null
+    },
+    "vending_machine_alt": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 736, "w": 64, "h": 96,
+      "origin": "bottom", "depth": 1.5, "type": "furniture", "action": null
+    },
+    "glass_table": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 864, "w": 64, "h": 32,
+      "origin": "bottom", "depth": 1.0, "type": "furniture", "action": null
+    },
+    "waiting_chairs": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 256, "w": 160, "h": 64,
+      "origin": "bottom", "depth": 1.5, "type": "seat", "action": "seat"
+    },
+    "boss_desk": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 832, "w": 256, "h": 128,
+      "origin": "bottom", "depth": 1.5, "type": "surface", "action": null
+    },
+    "boss_chair": {
+      "sheet": "mo_black_shadow_32",
+      "x": 448, "y": 704, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.6, "type": "seat", "action": "seat"
+    },
+    "plant_tall": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 384, "w": 32, "h": 96,
+      "origin": "bottom", "depth": 1.55, "type": "decor", "action": null
+    },
+    "desk_pod": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 0, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5, "type": "surface", "action": null
+    },
+    "chair_office": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 256, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 1.6, "type": "seat", "action": "seat"
+    },
+    "monitor": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 896, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 2, "type": "decor", "action": "use_it", "parent_offset_y": -26
+    },
+    "water_cooler": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 576, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.5, "type": "furniture"
+    },
+    "bookshelf": {
+      "sheet": "mo_black_shadow_32",
+      "x": 96, "y": 576, "w": 96, "h": 96,
+      "origin": "bottom", "depth": 1.5, "type": "furniture"
+    }
+  },
+  "placements": [
+    { "id": "boss_desk", "instanceId": "boss_desk_1", "x": 400, "y": 180 },
+    { "id": "boss_chair", "instanceId": "boss_chair_1", "x": 400, "y": 140 },
+    { "id": "monitor", "instanceId": "boss_monitor_1", "parentInstanceId": "boss_desk_1", "parent_offset_y": -26 },
+    { "id": "plant_tall", "instanceId": "boss_plant_1", "x": 580, "y": 180 },
+
+    { "id": "desk_pod", "instanceId": "desk_1", "x": 400, "y": 300 },
+    { "id": "chair_office", "instanceId": "chair_1", "x": 400, "y": 350 },
+    { "id": "monitor", "instanceId": "mon_1", "parentInstanceId": "desk_1", "parent_offset_y": -26 },
+
+    { "id": "desk_pod", "instanceId": "desk_2", "x": 480, "y": 300 },
+    { "id": "chair_office", "instanceId": "chair_2", "x": 480, "y": 350 },
+    { "id": "monitor", "instanceId": "mon_2", "parentInstanceId": "desk_2", "parent_offset_y": -26 },
+
+    { "id": "desk_pod", "instanceId": "desk_3", "x": 400, "y": 420 },
+    { "id": "chair_office", "instanceId": "chair_3", "x": 400, "y": 470 },
+    { "id": "monitor", "instanceId": "mon_3", "parentInstanceId": "desk_3", "parent_offset_y": -26 },
+
+    { "id": "desk_pod", "instanceId": "desk_4", "x": 480, "y": 420 },
+    { "id": "chair_office", "instanceId": "chair_4", "x": 480, "y": 470 },
+    { "id": "monitor", "instanceId": "mon_4", "parentInstanceId": "desk_4", "parent_offset_y": -26 },
+
+    { "id": "bookshelf", "instanceId": "bookshelf_1", "x": 300, "y": 300 },
+
+    { "id": "vending_machine_full", "instanceId": "vend_1", "x": 200, "y": 480 },
+    { "id": "vending_machine_alt", "instanceId": "vend_2", "x": 264, "y": 480 },
+    { "id": "water_cooler", "instanceId": "water_cooler_1", "x": 312, "y": 480 },
+
+    { "id": "waiting_chairs", "instanceId": "waiting_1", "x": 160, "y": 360 },
+    { "id": "glass_table", "instanceId": "glass_table_1", "x": 160, "y": 390 }
+  ]
+}

@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sprite Labeler – Identify every sprite on the sheet</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --input-bg: #21262d;
+      --accent: #58a6ff;
+      --save: #238636;
+      --save-hover: #2ea043;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar input[type="search"] { width: 220px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    .toolbar select { padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    .btn { padding: 8px 16px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: var(--save); color: #fff; }
+    .btn-primary:hover { background: var(--save-hover); }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--input-bg); }
+    .layout { display: grid; grid-template-columns: 1fr 360px; gap: 12px; align-items: start; }
+    @media (max-width: 1150px) { .layout { grid-template-columns: 1fr; } }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .card .idx { width: 100%; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+    .card .idx .left { font-size: 12px; color: var(--text); font-weight: 600; }
+    .card .idx .right { font-size: 11px; color: var(--muted); }
+    .card canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      max-width: 128px;
+      max-height: 128px;
+      margin-bottom: 8px;
+      background: #000;
+      cursor: zoom-in;
+    }
+    .card .rect { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .card label { font-size: 11px; color: var(--muted); align-self: flex-start; margin-bottom: 2px; }
+    .card input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .card input[type="text"]::placeholder { color: var(--muted); }
+    .card select {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+    }
+    .card.warn { border-color: #d29922; }
+    .card.selected { outline: 2px solid var(--accent); }
+    .loadErr { color: #f85149; margin: 16px 0; }
+    .stats { color: var(--muted); font-size: 13px; }
+
+    .side {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      position: sticky;
+      top: 12px;
+      max-height: calc(100vh - 24px);
+      overflow: auto;
+    }
+    .side h2 { font-size: 14px; margin: 0 0 8px; color: var(--text); }
+    .refImg { width: 100%; border-radius: 8px; border: 1px solid var(--border); background: #000; margin: 10px 0; }
+    .reqList { display: grid; gap: 6px; }
+    .reqItem {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.02);
+    }
+    .reqItem:hover { background: rgba(255,255,255,0.05); }
+    .reqItem.active { border-color: var(--accent); }
+    .reqItem .name { font-size: 13px; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .badge.ok { border-color: #238636; color: #7ee787; }
+    .badge.miss { border-color: #d29922; color: #e3b341; }
+    .small { font-size: 12px; color: var(--muted); }
+    .row { display:flex; gap:8px; flex-wrap: wrap; align-items:center; margin: 8px 0; }
+
+    dialog#zoomDialog {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0;
+      background: var(--card);
+      color: var(--text);
+      width: min(900px, calc(100vw - 24px));
+    }
+    dialog#zoomDialog::backdrop { background: rgba(0,0,0,.65); }
+    .zoomHeader { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .zoomHeader .title { font-weight: 600; }
+    .zoomBody { padding: 12px; display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .zoomCanvasWrap { display: flex; justify-content: center; align-items: center; background: #000; border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+    #zoomCanvas { image-rendering: pixelated; image-rendering: crisp-edges; max-width: 100%; height: auto; }
+    .zoomMeta { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; }
+  </style>
+</head>
+<body>
+  <h1>Sprite Labeler</h1>
+  <p class="sub">Label sprites from Modern Office sheets. Pick a sheet, then set a <strong>Catalog ID</strong> (e.g. desk_pod, chair_office, water_cooler, printer) and <strong>Type</strong> for each. Leave ID blank to omit from catalog. Then click <strong>Save catalog</strong> to download the corrected JSON.</p>
+
+  <div class="toolbar">
+    <select id="sheetSelect" title="Select sheet">
+      <option value="modern_office_black_shadow_32">Sheet: Black Shadow 32×32</option>
+      <option value="modern_office_16">Sheet: Modern Office 16×16</option>
+      <option value="modern_office_singles_16">Sheet: Modern Office Singles 16×16</option>
+    </select>
+    <input type="search" id="search" placeholder="Filter by ID or rect..." />
+    <select id="filterType">
+      <option value="">All types</option>
+      <option value="surface">surface</option>
+      <option value="seat">seat</option>
+      <option value="decor">decor</option>
+      <option value="furniture">furniture</option>
+    </select>
+    <select id="focusMode" title="Focus on core Openplan IDs">
+      <option value="">Focus: all sprites</option>
+      <option value="core">Focus: core openplan IDs</option>
+      <option value="core_unlabeled">Focus: core openplan (unlabeled)</option>
+      <option value="core_labeled">Focus: core openplan (labeled)</option>
+    </select>
+    <label class="stats" style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="onlyUnlabeled" />
+      Unlabeled only
+    </label>
+    <span class="stats" id="stats"></span>
+    <button class="btn btn-secondary" id="prevUnlabeledBtn">Prev unlabeled</button>
+    <button class="btn btn-secondary" id="nextUnlabeledBtn">Next unlabeled</button>
+    <button class="btn btn-secondary" id="fillSuggestedBtn">Fill suggested names</button>
+    <button class="btn btn-primary" id="saveBtn">Save catalog (download JSON)</button>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div id="grid" class="grid"></div>
+      <p id="loadErr" class="loadErr" style="display:none;"></p>
+    </div>
+    <aside class="side">
+      <h2>Reference checklist</h2>
+      <div class="small">Pick a required ID, then click a sprite card and press <b>Assign</b>. This is the “game-builder” workflow: checklist → place exact props.</div>
+      <div class="row">
+        <select id="referenceSelect">
+          <option value="">No reference</option>
+          <option value="hu4gzs_office">Hu4Gzs office</option>
+        </select>
+        <button class="btn btn-secondary" id="assignBtn">Assign</button>
+        <button class="btn btn-secondary" id="clearReqBtn">Clear</button>
+        <button class="btn btn-secondary" id="nextMissingBtn">Next missing</button>
+      </div>
+      <img id="referenceImg" class="refImg" style="display:none;" />
+      <div id="reqList" class="reqList"></div>
+      <div class="small" style="margin-top:10px;">Tip: you can Alt+click a card to assign instantly when a required ID is selected.</div>
+    </aside>
+  </div>
+  <dialog id="zoomDialog">
+    <div class="zoomHeader">
+      <div class="title" id="zoomTitle">Sprite</div>
+      <button class="btn btn-secondary" id="zoomCloseBtn" style="padding:6px 10px;">Close</button>
+    </div>
+    <div class="zoomBody">
+      <div class="zoomCanvasWrap"><canvas id="zoomCanvas"></canvas></div>
+      <div class="zoomMeta" id="zoomMeta"></div>
+    </div>
+  </dialog>
+
+  <script type="module">
+    const sheetBase = '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff';
+    const SHEETS = {
+      modern_office_black_shadow_32: {
+        label: 'Black Shadow 32×32',
+        sheetId: 'mo_black_shadow_32',
+        sheetUrl: sheetBase + '/Modern_Office_Revamped_v1.2/2_Modern_Office_Black_Shadow/Modern_Office_Black_Shadow_32x32.png',
+        extractUrl: 'out/sheet_extract/modern_office_black_shadow_32.objects.json',
+        defaultCatalogUrl: 'data/furniture_catalog_openplan.json'
+      },
+      modern_office_16: {
+        label: 'Modern Office 16×16',
+        sheetId: 'modern_office_16',
+        sheetUrl: sheetBase + '/Modern_Office_Revamped_v1.2/Modern_Office_16x16.png',
+        extractUrl: 'out/sheet_extract/modern_office_16.objects.json',
+        defaultCatalogUrl: null
+      },
+      modern_office_singles_16: {
+        label: 'Modern Office Singles 16×16',
+        sheetId: 'modern_office_singles_16',
+        mode: 'singles',
+        manifestUrl: 'out/singles/modern_office_singles_16.manifest.json',
+        defaultCatalogUrl: null
+      }
+    };
+    let activeSheetKey = 'modern_office_black_shadow_32';
+
+    function rectKey(r) {
+      return `${r.x},${r.y},${r.w},${r.h}`;
+    }
+
+    function drawCrop(img, x, y, w, h) {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+      return c;
+    }
+
+    async function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to load sheet: ' + src));
+        img.src = src;
+      });
+    }
+
+    let sheetImg = null;
+    let extract = { objects: [] };
+    let singlesManifest = null;
+    let currentCatalog = { objects: {}, placements: [] };
+    const TYPE_OPTIONS = ['', 'surface', 'seat', 'decor', 'furniture'];
+    let selectedIndex = null;
+    let activeRequiredId = null;
+
+    const REFERENCES = {
+      hu4gzs_office: {
+        label: 'Hu4Gzs office',
+        img: 'assets/ref_Hu4Gzs.png',
+        required: [
+          { id: 'desk_pod', type: 'surface' },
+          { id: 'desk', type: 'surface' },
+          { id: 'chair_office', type: 'seat' },
+          { id: 'monitor', type: 'decor' },
+          { id: 'triple_monitor_with_keyboard', type: 'decor' },
+          { id: 'desk_lamp', type: 'decor' },
+          { id: 'paper_stack', type: 'decor' },
+          { id: 'laptop_open', type: 'decor' },
+          { id: 'phone', type: 'decor' },
+          { id: 'file_stack', type: 'decor' },
+          { id: 'whiteboard_wall', type: 'decor' },
+          { id: 'bookshelf', type: 'furniture' },
+          { id: 'plant_pot', type: 'furniture' },
+          { id: 'water_cooler', type: 'furniture' },
+          { id: 'printer', type: 'furniture' },
+          { id: 'vending_machine_full', type: 'furniture' },
+          { id: 'coffee_machine', type: 'furniture' },
+          { id: 'wall_art_colorful_large', type: 'decor' },
+          { id: 'wall_art_small', type: 'decor' }
+        ]
+      }
+    };
+
+    // Suggested names from manual review (obj index -> catalog ID or hint). Use as placeholder; "(skip)" = leave blank.
+    const SUGGESTED_NAMES = {
+      0: 'painting',
+      1: 'two_desks',
+      2: 'big_desk',
+      3: 'couple_desks',
+      4: 'big_desk',
+      5: 'desk',
+      6: 'bookshelf',
+      7: 'desk_accessories',
+      8: 'painting',
+      9: '(skip – fragments)',
+      10: 'water_cooler',
+      11: 'printer',
+      12: 'plant_pot',
+      13: 'paper_stack',
+      14: 'desk_with_monitor',
+      15: 'triple_monitor',
+      16: '(skip – chair+plant+picture)',
+      17: 'computer_desk',
+      18: 'computer_desk_angled',
+      19: 'chair_office',
+      20: 'chair_office_back',
+      21: '(skip – four chairs)',
+      22: '(skip – unclear)',
+      23: 'monitor',
+      24: 'picture_with_sign',
+      25: '(other)',
+      26: 'three_monitors_back',
+      27: 'couch_corner',
+      28: 'desk',
+      29: 'desk',
+      30: 'desk',
+      31: 'chair_small',
+      32: 'side_table',
+      33: 'desk',
+      34: 'desk_modular',
+
+      // User-verified IDs (from labeler)
+      53: 'bookshelf',
+      55: 'plant_pot',
+      60: 'triple_monitor_with_keyboard',
+      66: 'whiteboard_wall',
+      70: 'laptop_tilt_right',
+      71: 'laptop_tilt_left',
+      82: 'laptop_open',
+      85: 'printer',
+      95: 'printer_light',
+      101: 'printer_scanner_left',
+      102: 'printer_scanner_right',
+      106: 'vending_machine_empty',
+      107: 'vending_machine_full',
+      109: 'printer_alt'
+    };
+    function suggestedName(index) {
+      return SUGGESTED_NAMES[index] != null ? SUGGESTED_NAMES[index] : ('obj_' + index);
+    }
+
+    const SUGGESTED_TYPES = {
+      // furniture
+      bookshelf: 'furniture',
+      plant_pot: 'furniture',
+      whiteboard_wall: 'decor',
+      printer: 'furniture',
+      printer_light: 'furniture',
+      printer_alt: 'furniture',
+      printer_scanner_left: 'furniture',
+      printer_scanner_right: 'furniture',
+      vending_machine_empty: 'furniture',
+      vending_machine_full: 'furniture',
+      // decor (place on desk)
+      triple_monitor_with_keyboard: 'decor',
+      laptop_tilt_right: 'decor',
+      laptop_tilt_left: 'decor',
+      laptop_open: 'decor'
+    };
+
+    // What we actually care about for the openplan catalog. This lets you focus on just these IDs.
+    const CORE_OPENPLAN_IDS = new Set([
+      'desk_pod',
+      'chair_office',
+      'monitor',
+      'desk_lamp',
+      'paper_stack',
+      'plant_pot',
+      'whiteboard_wall',
+      'bookshelf',
+      'water_cooler',
+      'printer',
+      'printer_light',
+      'printer_alt',
+      'printer_scanner_left',
+      'printer_scanner_right',
+      'vending_machine_empty',
+      'vending_machine_full',
+      'laptop_open',
+      'laptop_tilt_left',
+      'laptop_tilt_right',
+      'triple_monitor_with_keyboard',
+      // allow suggested placeholders that you might use then rename
+      'desk',
+      'big_desk',
+      'two_desks',
+      'couple_desks'
+    ]);
+
+    function isCoreCandidate(o) {
+      const id = (o.catalogId || '').trim();
+      const sug = suggestedName(o.index);
+      return CORE_OPENPLAN_IDS.has(id) || CORE_OPENPLAN_IDS.has(sug);
+    }
+
+    // Build map: rect -> catalog id from current catalog (when sheet ids match)
+    function catalogRectToId() {
+      const m = new Map();
+      for (const [id, def] of Object.entries(currentCatalog.objects || {})) {
+        if (def.sheet !== SHEETS[activeSheetKey].sheetId) continue;
+        const r = { x: def.x, y: def.y, w: def.w, h: def.h };
+        m.set(rectKey(r), { id, type: def.type || 'furniture' });
+      }
+      return m;
+    }
+
+    function getObj(index) { return extract.objects[index]; }
+
+    function openZoom(index) {
+      const o = getObj(index);
+      if (!o) return;
+      const r = o.rect;
+      const scale = Math.max(4, Math.floor(Math.min(12, 640 / Math.max(1, r.w))));
+      const zc = document.getElementById('zoomCanvas');
+      zc.width = r.w * scale;
+      zc.height = r.h * scale;
+      const zctx = zc.getContext('2d');
+      zctx.imageSmoothingEnabled = false;
+      zctx.clearRect(0, 0, zc.width, zc.height);
+      if (o.singleUrl) {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => {
+          zctx.clearRect(0, 0, zc.width, zc.height);
+          zctx.drawImage(im, 0, 0, r.w, r.h, 0, 0, zc.width, zc.height);
+        };
+        im.src = o.singleUrl;
+      } else {
+        if (!sheetImg) return;
+        zctx.drawImage(sheetImg, r.x, r.y, r.w, r.h, 0, 0, zc.width, zc.height);
+      }
+      document.getElementById('zoomTitle').textContent = `obj_${index}` + (o.catalogId ? ` → ${o.catalogId}` : '');
+      const suggested = suggestedName(index);
+      const meta = [
+        `<span class="pill">rect: (${r.x},${r.y}) ${r.w}×${r.h}</span>`,
+        `<span class="pill">suggested: ${suggested}</span>`,
+        `<span class="pill">type: ${o.type || 'furniture'}</span>`,
+        `<span class="pill">id: ${o.catalogId || '(blank)'}</span>`
+      ];
+      document.getElementById('zoomMeta').innerHTML = meta.join('');
+      const dlg = document.getElementById('zoomDialog');
+      if (!dlg.open) dlg.showModal();
+    }
+
+    function render(objs) {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      for (const o of objs) {
+        const r = o.rect;
+        const canvas = o.singleUrl
+          ? (() => {
+              const c = document.createElement('canvas');
+              c.width = r.w; c.height = r.h;
+              const cctx = c.getContext('2d');
+              cctx.imageSmoothingEnabled = false;
+              const im = new Image();
+              im.crossOrigin = 'anonymous';
+              im.onload = () => { cctx.drawImage(im, 0, 0); };
+              im.src = o.singleUrl;
+              return c;
+            })()
+          : (sheetImg ? drawCrop(sheetImg, r.x, r.y, r.w, r.h) : null);
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.index = o.index;
+        if (selectedIndex === o.index) card.classList.add('selected');
+        card.addEventListener('click', (e) => {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+          selectedIndex = o.index;
+          if (activeRequiredId && e.altKey) {
+            const obj = getObj(selectedIndex);
+            obj.catalogId = activeRequiredId;
+            updateStats();
+            applyFilters();
+            refreshRequiredList();
+            return;
+          }
+          render(objs);
+        });
+        const idx = document.createElement('div');
+        idx.className = 'idx';
+        const left = document.createElement('div');
+        left.className = 'left';
+        left.textContent = `obj_${o.index}`;
+        const right = document.createElement('div');
+        right.className = 'right';
+        right.textContent = suggestedName(o.index);
+        idx.appendChild(left);
+        idx.appendChild(right);
+        card.appendChild(idx);
+        if (canvas) card.appendChild(canvas);
+        if (canvas) canvas.addEventListener('click', () => openZoom(o.index));
+        const rectLabel = document.createElement('div');
+        rectLabel.className = 'rect';
+        rectLabel.textContent = `(${r.x},${r.y}) ${r.w}×${r.h}`;
+        card.appendChild(rectLabel);
+
+        const lid = document.createElement('label');
+        lid.textContent = 'Catalog ID';
+        card.appendChild(lid);
+        const input = document.createElement('input');
+        input.type = 'text';
+        const suggested = suggestedName(o.index);
+        input.placeholder = suggested.startsWith('(') ? suggested : 'e.g. ' + suggested;
+        const existing = getObj(o.index).catalogId || '';
+        input.value = existing;
+        if (!existing && !suggested.startsWith('(')) {
+          input.placeholder = 'e.g. ' + suggested;
+        }
+        input.dataset.index = o.index;
+        input.addEventListener('input', () => {
+          getObj(Number(input.dataset.index)).catalogId = input.value.trim();
+          updateStats();
+        });
+        card.appendChild(input);
+
+        const ltype = document.createElement('label');
+        ltype.textContent = 'Type';
+        card.appendChild(ltype);
+        const select = document.createElement('select');
+        select.dataset.index = o.index;
+        const currentType = getObj(o.index).type || 'furniture';
+        TYPE_OPTIONS.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = t || '—';
+          if (t === currentType) opt.selected = true;
+          select.appendChild(opt);
+        });
+        select.addEventListener('change', () => {
+          getObj(Number(select.dataset.index)).type = select.value || 'furniture';
+        });
+        card.appendChild(select);
+
+        fragment.appendChild(card);
+      }
+      grid.appendChild(fragment);
+    }
+
+    function updateStats() {
+      const labeled = extract.objects.filter(o => o.catalogId && o.catalogId.length > 0).length;
+      document.getElementById('stats').textContent = `${labeled} / ${extract.objects.length} labeled`;
+    }
+
+    function refreshRequiredList() {
+      const sel = document.getElementById('referenceSelect')?.value || '';
+      const panel = document.getElementById('reqList');
+      const imgEl = document.getElementById('referenceImg');
+      if (!panel || !imgEl) return;
+      panel.innerHTML = '';
+      if (!sel || !REFERENCES[sel]) {
+        imgEl.style.display = 'none';
+        return;
+      }
+      const ref = REFERENCES[sel];
+      imgEl.src = ref.img;
+      imgEl.style.display = 'block';
+      const have = new Set(extract.objects.map(o => (o.catalogId || '').trim()).filter(Boolean));
+      for (const req of ref.required) {
+        const item = document.createElement('div');
+        item.className = 'reqItem' + (activeRequiredId === req.id ? ' active' : '');
+        item.dataset.id = req.id;
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = req.id;
+        const badge = document.createElement('div');
+        const ok = have.has(req.id);
+        badge.className = 'badge ' + (ok ? 'ok' : 'miss');
+        badge.textContent = ok ? 'FOUND' : 'MISSING';
+        item.appendChild(name);
+        item.appendChild(badge);
+        item.addEventListener('click', () => {
+          activeRequiredId = req.id;
+          autoFilterForRequired(req.id);
+          applyFilters();
+          refreshRequiredList();
+        });
+        panel.appendChild(item);
+      }
+    }
+
+    function autoFilterForRequired(reqId) {
+      // lightweight heuristic: set search to the first token or known variants
+      const tok = (reqId || '').split('_')[0];
+      const search = document.getElementById('search');
+      if (search) search.value = tok;
+      // also narrow by type when we know it
+      const refKey = document.getElementById('referenceSelect')?.value || '';
+      const req = REFERENCES[refKey]?.required?.find(r => r.id === reqId);
+      const typeSel = document.getElementById('filterType');
+      if (req && typeSel) typeSel.value = req.type === 'surface' ? 'surface' : (req.type === 'seat' ? 'seat' : (req.type === 'decor' ? 'decor' : 'furniture'));
+    }
+
+    function unlabeledIndexes() {
+      const idxs = [];
+      extract.objects.forEach((o, i) => { if (!o.catalogId) idxs.push(i); });
+      return idxs;
+    }
+
+    function scrollToObj(index) {
+      const el = document.querySelector(`.card[data-index=\"${index}\"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function applyFilters() {
+      const q = (document.getElementById('search').value || '').trim().toLowerCase();
+      const typeFilter = (document.getElementById('filterType').value || '').trim();
+      const onlyUnlabeled = !!document.getElementById('onlyUnlabeled').checked;
+      const focusMode = (document.getElementById('focusMode').value || '').trim();
+      let list = extract.objects.map((o, i) => ({ ...o, index: i }));
+      if (focusMode === 'core') {
+        list = list.filter(isCoreCandidate);
+      } else if (focusMode === 'core_unlabeled') {
+        list = list.filter(o => isCoreCandidate(o) && !o.catalogId);
+      } else if (focusMode === 'core_labeled') {
+        list = list.filter(o => isCoreCandidate(o) && !!o.catalogId);
+      }
+      if (onlyUnlabeled) {
+        list = list.filter(o => !o.catalogId);
+      }
+      if (q) {
+        list = list.filter(o => {
+          const id = (o.catalogId || o.name || '').toLowerCase();
+          const suggested = suggestedName(o.index).toLowerCase();
+          const rect = `(${o.rect.x},${o.rect.y})`;
+          return id.includes(q) || suggested.includes(q) || rect.includes(q);
+        });
+      }
+      if (typeFilter) {
+        list = list.filter(o => (o.type || '') === typeFilter);
+      }
+      render(list);
+    }
+
+    function buildCatalogFromLabels() {
+      const objects = {};
+      const used = new Set();
+      for (const o of extract.objects) {
+        let id = (o.catalogId || '').trim();
+        if (!id) continue;
+        const r = o.rect;
+        if (used.has(id)) {
+          let n = 2;
+          while (used.has(id + '_' + n)) n++;
+          id = id + '_' + n;
+        }
+        used.add(id);
+        objects[id] = {
+          sheet: SHEETS[activeSheetKey].sheetId,
+          x: r.x,
+          y: r.y,
+          w: r.w,
+          h: r.h,
+          origin: 'bottom',
+          depth: 1.5,
+          type: o.type || 'furniture',
+          action: (o.type === 'seat') ? 'seat' : null
+        };
+      }
+      return {
+        info: {
+          purpose: `Catalog (corrected via Sprite Labeler) – ${SHEETS[activeSheetKey].label}`,
+          slice_margin_px: 2,
+          origin: 'Place (x,y) = bottom-center of sprite.'
+        },
+        objects,
+        placements: currentCatalog.placements || []
+      };
+    }
+
+    async function loadActiveSheet() {
+      const loadErr = document.getElementById('loadErr');
+      loadErr.style.display = 'none';
+      const cfg = SHEETS[activeSheetKey];
+
+      sheetImg = null;
+      singlesManifest = null;
+      if (cfg.mode === 'singles') {
+        try {
+          const r = await fetch(cfg.manifestUrl);
+          singlesManifest = await r.json();
+        } catch (e) {
+          loadErr.textContent = 'Could not load singles manifest: ' + e.message;
+          loadErr.style.display = 'block';
+          return false;
+        }
+        // Each entry is its own object; rect is just the full image.
+        extract = {
+          objects: (singlesManifest.entries || []).map((ent, i) => ({
+            name: `obj_${i}`,
+            rect: { x: 0, y: 0, w: ent.w, h: ent.h },
+            origin: 'bottom',
+            pivot_y: ent.h,
+            singleUrl: ent.url
+          }))
+        };
+      } else {
+        try {
+          sheetImg = await loadImage(cfg.sheetUrl);
+        } catch (e) {
+          loadErr.textContent = 'Could not load sheet. ' + e.message;
+          loadErr.style.display = 'block';
+          return false;
+        }
+        try {
+          const r = await fetch(cfg.extractUrl);
+          extract = await r.json();
+        } catch (e) {
+          loadErr.textContent = 'Could not load extracted objects: ' + e.message;
+          loadErr.style.display = 'block';
+          return false;
+        }
+      }
+
+      currentCatalog = { objects: {}, placements: [] };
+      if (cfg.defaultCatalogUrl) {
+        try {
+          const r2 = await fetch(cfg.defaultCatalogUrl);
+          currentCatalog = await r2.json();
+        } catch (_) {
+          currentCatalog = { objects: {}, placements: [] };
+        }
+      }
+
+      const rectToId = catalogRectToId();
+      extract.objects = (extract.objects || []).map((o, i) => {
+        const r = o.rect;
+        const k = rectKey(r);
+        const existing = rectToId.get(k);
+        return {
+          ...o,
+          index: i,
+          catalogId: existing ? existing.id : '',
+          type: existing ? existing.type : (SUGGESTED_TYPES[suggestedName(i)] || 'furniture')
+        };
+      });
+
+      applyFilters();
+      updateStats();
+      refreshRequiredList();
+      return true;
+    }
+
+    async function main() {
+      // Sheet selector
+      const sheetSelect = document.getElementById('sheetSelect');
+      sheetSelect.value = activeSheetKey;
+      sheetSelect.addEventListener('change', async () => {
+        activeSheetKey = sheetSelect.value;
+        // reset search/filter state but keep focus selections
+        document.getElementById('search').value = '';
+        document.getElementById('onlyUnlabeled').checked = false;
+        await loadActiveSheet();
+      });
+
+      document.getElementById('search').addEventListener('input', applyFilters);
+      document.getElementById('filterType').addEventListener('change', applyFilters);
+      document.getElementById('focusMode').addEventListener('change', applyFilters);
+      document.getElementById('onlyUnlabeled').addEventListener('change', applyFilters);
+      document.getElementById('referenceSelect').addEventListener('change', () => {
+        activeRequiredId = null;
+        refreshRequiredList();
+      });
+      document.getElementById('assignBtn').addEventListener('click', () => {
+        if (selectedIndex == null) return;
+        if (!activeRequiredId) return;
+        const obj = getObj(selectedIndex);
+        obj.catalogId = activeRequiredId;
+        const refKey = document.getElementById('referenceSelect').value;
+        const req = REFERENCES[refKey]?.required?.find(r => r.id === activeRequiredId);
+        if (req) obj.type = req.type;
+        updateStats();
+        applyFilters();
+        refreshRequiredList();
+      });
+      document.getElementById('clearReqBtn').addEventListener('click', () => {
+        activeRequiredId = null;
+        refreshRequiredList();
+      });
+      document.getElementById('nextMissingBtn').addEventListener('click', () => {
+        const refKey = document.getElementById('referenceSelect').value;
+        const ref = REFERENCES[refKey];
+        if (!ref) return;
+        const have = new Set(extract.objects.map(o => (o.catalogId || '').trim()).filter(Boolean));
+        const next = ref.required.find(r => !have.has(r.id));
+        if (!next) return;
+        activeRequiredId = next.id;
+        autoFilterForRequired(next.id);
+        applyFilters();
+        refreshRequiredList();
+      });
+
+      document.getElementById('zoomCloseBtn').addEventListener('click', () => {
+        document.getElementById('zoomDialog').close();
+      });
+
+      document.getElementById('nextUnlabeledBtn').addEventListener('click', () => {
+        const idxs = unlabeledIndexes();
+        if (!idxs.length) return;
+        applyFilters();
+        scrollToObj(idxs[0]);
+        openZoom(idxs[0]);
+      });
+      document.getElementById('prevUnlabeledBtn').addEventListener('click', () => {
+        const idxs = unlabeledIndexes();
+        if (!idxs.length) return;
+        applyFilters();
+        const last = idxs[idxs.length - 1];
+        scrollToObj(last);
+        openZoom(last);
+      });
+
+      document.getElementById('fillSuggestedBtn').addEventListener('click', () => {
+        let n = 0;
+        extract.objects.forEach((o, i) => {
+          const s = suggestedName(i);
+          if (s && !s.startsWith('(') && !o.catalogId) {
+            o.catalogId = s;
+            if (!o.type && SUGGESTED_TYPES[s]) {
+              o.type = SUGGESTED_TYPES[s];
+            }
+            n++;
+          }
+        });
+        applyFilters();
+        updateStats();
+        if (n) document.getElementById('fillSuggestedBtn').textContent = 'Fill suggested names (filled ' + n + ')';
+      });
+
+      document.getElementById('saveBtn').addEventListener('click', () => {
+        const catalog = buildCatalogFromLabels();
+        const blob = new Blob([JSON.stringify(catalog, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `catalog_${activeSheetKey}_labeled.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      await loadActiveSheet();
+    }
+
+    main();
+  </script>
+</body>
+</html>

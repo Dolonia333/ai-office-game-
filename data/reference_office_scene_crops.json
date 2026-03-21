@@ -1,0 +1,19 @@
+[
+  { "note": "Tight, single-object crops (no multi-object composites yet)." },
+  { "name": "chair_orange", "x": 176, "y": 112, "w": 32, "h": 36, "wTiles": 2, "hTiles": 2 },
+  { "name": "chair_gray", "x": 280, "y": 220, "w": 34, "h": 34, "wTiles": 2, "hTiles": 2 },
+
+  { "name": "water_cooler", "x": 188, "y": 244, "w": 44, "h": 68, "wTiles": 2, "hTiles": 3 },
+  { "name": "vending_machine", "x": 242, "y": 224, "w": 64, "h": 104, "wTiles": 2, "hTiles": 4 },
+  { "name": "coffee_station", "x": 332, "y": 236, "w": 76, "h": 68, "wTiles": 3, "hTiles": 3 },
+
+  { "name": "plant_pot_large", "x": 344, "y": 64, "w": 36, "h": 64, "wTiles": 2, "hTiles": 3 },
+  { "name": "plant_pot_small", "x": 206, "y": 128, "w": 32, "h": 48, "wTiles": 2, "hTiles": 2 },
+
+  { "name": "sofa_left", "x": 0, "y": 288, "w": 96, "h": 64, "wTiles": 4, "hTiles": 3 },
+  { "name": "wall_screen", "x": 228, "y": 40, "w": 80, "h": 40, "wTiles": 4, "hTiles": 2 },
+  { "name": "bookshelf", "x": 296, "y": 40, "w": 64, "h": 104, "wTiles": 3, "hTiles": 4 },
+  { "name": "poster_color", "x": 24, "y": 224, "w": 80, "h": 40, "wTiles": 4, "hTiles": 2 },
+  { "name": "door", "x": 136, "y": 248, "w": 44, "h": 68, "wTiles": 2, "hTiles": 3 }
+]
+

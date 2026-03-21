@@ -1,0 +1,735 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Pixel Office Sprite Assembly System",
+    "description": "Complete technical blueprint for building office layouts without 'broken' sprites. All coordinates from Modern Office sprite sheet (64x64 grid). Includes modular groupings, stacking order, and assembly rules.",
+    "sheet_size_px": "64x64 tiles",
+    "coordinate_system": "Top-left anchor (x, y) in pixels",
+    "credit": "Modern Office Revamped v1.2 by LimeZu"
+  },
+
+  "z_index_layers": {
+    "0": { "name": "Floor", "description": "Carpet/tile base textures", "examples": ["floor_tile_grey_grid"] },
+    "1": { "name": "Under-Furniture", "description": "Chairs (when not sitting), items below desks", "examples": ["office_chair_grey_back"] },
+    "2": { "name": "Furniture Base", "description": "Desk surfaces, tables, seating anchors", "examples": ["desk_tan_horizontal", "desk_grey_horizontal"] },
+    "3": { "name": "Partitions & Walls", "description": "Dividers, end-caps, wall-mounted items", "examples": ["cubicle_divider_horizontal", "cubicle_endcap_vertical"] },
+    "4": { "name": "Desktop Items", "description": "Monitors, lamps, papers (Y-offset -10 to -20px)", "examples": ["monitor_dual_light_grey", "desk_lamp"] },
+    "5": { "name": "Characters", "description": "NPCs and player character", "examples": ["character_sprite"] }
+  },
+
+  "sprite_categories": {
+
+    "desks_and_surfaces": {
+      "description": "Base workstation surfaces. Foundation pieces for cubicles.",
+      "sprites": {
+        "desk_tan_horizontal": {
+          "coords": { "x": 64, "y": 0 },
+          "size": { "w": 128, "h": 64 },
+          "type": "surface",
+          "z_index": 2,
+          "modular_group": "tan_desk_set",
+          "description": "Standard horizontal desk top (2 tiles wide)",
+          "notes": "Primary workstation. Requires divider above to form cubicle."
+        },
+        "desk_tan_vertical_left": {
+          "coords": { "x": 0, "y": 0 },
+          "size": { "w": 64, "h": 128 },
+          "type": "surface_end",
+          "z_index": 2,
+          "modular_group": "tan_desk_set",
+          "description": "Vertical desk end (left side)",
+          "notes": "Use to cap the left side of a desk row"
+        },
+        "desk_tan_vertical_right": {
+          "coords": { "x": 128, "y": 0 },
+          "size": { "w": 64, "h": 128 },
+          "type": "surface_end",
+          "z_index": 2,
+          "modular_group": "tan_desk_set",
+          "description": "Vertical desk end (right side)",
+          "notes": "Use to cap the right side of a desk row"
+        },
+        "desk_grey_horizontal": {
+          "coords": { "x": 320, "y": 0 },
+          "size": { "w": 128, "h": 64 },
+          "type": "surface",
+          "z_index": 2,
+          "modular_group": "grey_desk_set",
+          "description": "Grey horizontal desk top (2 tiles wide)",
+          "notes": "Alternative color to tan. Same functionality."
+        },
+        "desk_compact_horizontal": {
+          "coords": { "x": 192, "y": 0 },
+          "size": { "w": 64, "h": 64 },
+          "type": "surface",
+          "z_index": 2,
+          "modular_group": "compact_desk_set",
+          "description": "Narrower desk (1 tile wide)",
+          "notes": "For tight spaces or tight corners"
+        },
+        "desk_corner_l_shape": {
+          "coords": { "x": 0, "y": 1088 },
+          "size": { "w": 128, "h": 128 },
+          "type": "surface_corner",
+          "z_index": 2,
+          "modular_group": "corner_desk_set",
+          "description": "L-shaped corner desk (2x2 tiles)",
+          "notes": "CRITICAL: Do not try to use straight desk in corners. Must use this piece."
+        }
+      }
+    },
+
+    "cubicle_dividers": {
+      "description": "Privacy and structure. Attach to backs/sides of desks.",
+      "sprites": {
+        "cubicle_divider_horizontal": {
+          "coords": { "x": 0, "y": 832 },
+          "size": { "w": 128, "h": 64 },
+          "type": "partition",
+          "z_index": 3,
+          "placement_rule": "Place directly above desk (Y offset -64px)",
+          "description": "Horizontal divider wall (white/grey trim)",
+          "notes": "CRITICAL: Sits on top edge of desk. Must not omit or desk looks incomplete."
+        },
+        "cubicle_divider_horizontal_extension": {
+          "coords": { "x": 128, "y": 832 },
+          "size": { "w": 128, "h": 64 },
+          "type": "partition",
+          "z_index": 3,
+          "placement_rule": "Extends horizontal divider",
+          "description": "Extended horizontal divider for wider pods"
+        },
+        "cubicle_endcap_vertical": {
+          "coords": { "x": 0, "y": 896 },
+          "size": { "w": 64, "h": 128 },
+          "type": "partition_end",
+          "z_index": 3,
+          "placement_rule": "Place on far left/right edge of desk row",
+          "description": "Vertical end-cap to 'close' the side",
+          "notes": "CRITICAL: Without this, cubicle looks 'open' on sides. Always use pairs (left+right)."
+        }
+      }
+    },
+
+    "seating": {
+      "description": "Office chairs. Multiple orientations. Place BELOW desk surface.",
+      "sprites": {
+        "office_chair_grey_back": {
+          "coords": { "x": 0, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat",
+          "z_index": 1,
+          "orientation": "facing_back",
+          "placement_rule": "Place 64px below desk (at Y_desk + 64)",
+          "description": "Grey office chair (back facing forward)",
+          "notes": "Standard 'working' position. Use when chair is behind the desk."
+        },
+        "office_chair_grey_front": {
+          "coords": { "x": 64, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat",
+          "z_index": 1,
+          "orientation": "facing_front",
+          "placement_rule": "Place 64px below desk (at Y_desk + 64)",
+          "description": "Grey office chair (seat facing forward)",
+          "notes": "Mirror of back view. Use when chair is in front of desk."
+        },
+        "office_chair_grey_side_left": {
+          "coords": { "x": 128, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat",
+          "z_index": 1,
+          "orientation": "facing_left",
+          "description": "Grey office chair (side profile, facing left)"
+        },
+        "office_chair_grey_side_right": {
+          "coords": { "x": 192, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat",
+          "z_index": 1,
+          "orientation": "facing_right",
+          "description": "Grey office chair (side profile, facing right)"
+        },
+        "office_chair_orange_back": {
+          "coords": { "x": 0, "y": 320 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat",
+          "z_index": 1,
+          "orientation": "facing_back",
+          "placement_rule": "Place 64px below desk",
+          "description": "Orange office chair (back facing forward)",
+          "notes": "Alternative color. Same sizing and placement rules."
+        },
+        "office_chair_orange_front": {
+          "coords": { "x": 64, "y": 320 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat",
+          "z_index": 1,
+          "orientation": "facing_front",
+          "description": "Orange office chair (seat facing forward)"
+        },
+        "bucket_chair_grey": {
+          "coords": { "x": 128, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat_casual",
+          "z_index": 1,
+          "description": "Grey bucket/barrel chair"
+        },
+        "bucket_chair_yellow": {
+          "coords": { "x": 192, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seat_casual",
+          "z_index": 1,
+          "description": "Yellow bucket/barrel chair"
+        },
+        "sofa_grey_left": {
+          "coords": { "x": 0, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seating_modular",
+          "z_index": 2,
+          "modular_group": "sofa_grey_3piece",
+          "placement_note": "LEFT END ONLY. Do not use alone.",
+          "description": "Grey sofa left armrest"
+        },
+        "sofa_grey_middle": {
+          "coords": { "x": 64, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seating_modular",
+          "z_index": 2,
+          "modular_group": "sofa_grey_3piece",
+          "placement_note": "Can repeat for longer sofa. Must have left+right ends.",
+          "description": "Grey sofa middle seat (repeatable)"
+        },
+        "sofa_grey_right": {
+          "coords": { "x": 128, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seating_modular",
+          "z_index": 2,
+          "modular_group": "sofa_grey_3piece",
+          "placement_note": "RIGHT END ONLY. Do not use alone.",
+          "description": "Grey sofa right armrest"
+        },
+        "sofa_tan_left": {
+          "coords": { "x": 0, "y": 576 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seating_modular",
+          "z_index": 2,
+          "modular_group": "sofa_tan_3piece",
+          "description": "Tan sofa left armrest"
+        },
+        "sofa_tan_middle": {
+          "coords": { "x": 64, "y": 576 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seating_modular",
+          "z_index": 2,
+          "modular_group": "sofa_tan_3piece",
+          "description": "Tan sofa middle seat (repeatable)"
+        },
+        "sofa_tan_right": {
+          "coords": { "x": 128, "y": 576 },
+          "size": { "w": 64, "h": 64 },
+          "type": "seating_modular",
+          "z_index": 2,
+          "modular_group": "sofa_tan_3piece",
+          "description": "Tan sofa right armrest"
+        }
+      }
+    },
+
+    "technology_and_screens": {
+      "description": "Monitors, computers, laptops. Place on desks with Y-offset (-10 to -20px for sitting-on effect).",
+      "sprites": {
+        "monitor_single": {
+          "coords": { "x": 384, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -15,
+          "description": "Single monitor (front view)"
+        },
+        "monitor_single_side": {
+          "coords": { "x": 448, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -15,
+          "description": "Single monitor (side view)"
+        },
+        "monitor_dual": {
+          "coords": { "x": 384, "y": 384 },
+          "size": { "w": 128, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -15,
+          "placement_rule": "Only use on 2-tile or wider desks",
+          "description": "Dual monitor setup (light grey)"
+        },
+        "monitor_triple": {
+          "coords": { "x": 320, "y": 384 },
+          "size": { "w": 192, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -15,
+          "placement_rule": "Only use on 3-tile or wider desks",
+          "description": "Triple monitor setup"
+        },
+        "monitor_dual_with_keyboard": {
+          "coords": { "x": 320, "y": 832 },
+          "size": { "w": 128, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -15,
+          "description": "Dual monitors with keyboard below"
+        },
+        "pc_tower_full": {
+          "coords": { "x": 256, "y": 832 },
+          "size": { "w": 64, "h": 128 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -10,
+          "description": "Full PC tower + monitor setup"
+        },
+        "laptop_open": {
+          "coords": { "x": 448, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Laptop (open, active)"
+        },
+        "laptop_closed": {
+          "coords": { "x": 448, "y": 576 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Laptop (closed)"
+        },
+        "desk_lamp_on_angle1": {
+          "coords": { "x": 320, "y": 512 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -16,
+          "description": "Desk lamp (on, 45° angle)"
+        },
+        "desk_lamp_on_angle2": {
+          "coords": { "x": 320, "y": 576 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -16,
+          "description": "Desk lamp (on, different angle)"
+        },
+        "desk_lamp_off": {
+          "coords": { "x": 320, "y": 640 },
+          "size": { "w": 64, "h": 64 },
+          "type": "desktop_item",
+          "z_index": 4,
+          "y_offset": -16,
+          "description": "Desk lamp (off state)"
+        }
+      }
+    },
+
+    "decor_and_walls": {
+      "description": "Wall-mounted items, posters, art, plants.",
+      "sprites": {
+        "plant_pot_large": {
+          "coords": { "x": 192, "y": 256 },
+          "size": { "w": 64, "h": 128 },
+          "type": "decorative",
+          "z_index": 3,
+          "placement_note": "Use in room corners for 3D depth",
+          "description": "Large potted plant (tall)"
+        },
+        "plant_pot_small": {
+          "coords": { "x": 192, "y": 320 },
+          "size": { "w": 64, "h": 64 },
+          "type": "decorative",
+          "z_index": 3,
+          "description": "Small potted plant (desk-top size)"
+        },
+        "whiteboard_blank": {
+          "coords": { "x": 256, "y": 384 },
+          "size": { "w": 128, "h": 64 },
+          "type": "wall_item",
+          "z_index": 3,
+          "placement_rule": "Mount on wall face, not floor",
+          "description": "Whiteboard (blank)"
+        },
+        "whiteboard_bar_graph": {
+          "coords": { "x": 256, "y": 448 },
+          "size": { "w": 128, "h": 64 },
+          "type": "wall_item",
+          "z_index": 3,
+          "description": "Whiteboard (bar graph)"
+        },
+        "whiteboard_pie_chart": {
+          "coords": { "x": 256, "y": 512 },
+          "size": { "w": 128, "h": 64 },
+          "type": "wall_item",
+          "z_index": 3,
+          "description": "Whiteboard (pie chart)"
+        },
+        "poster_pop_art": {
+          "coords": { "x": 0, "y": 384 },
+          "size": { "w": 128, "h": 128 },
+          "type": "wall_art",
+          "z_index": 3,
+          "description": "Large pop-art poster (4-panel)"
+        },
+        "framed_photo": {
+          "coords": { "x": 64, "y": 384 },
+          "size": { "w": 64, "h": 64 },
+          "type": "wall_art",
+          "z_index": 3,
+          "description": "Small framed photo"
+        },
+        "diploma_certificate": {
+          "coords": { "x": 256, "y": 256 },
+          "size": { "w": 64, "h": 64 },
+          "type": "wall_art",
+          "z_index": 3,
+          "description": "Framed diploma or certificate"
+        }
+      }
+    },
+
+    "office_infrastructure": {
+      "description": "Utilities, storage, and facilities.",
+      "sprites": {
+        "bookshelf_top": {
+          "coords": { "x": 192, "y": 448 },
+          "size": { "w": 128, "h": 64 },
+          "type": "storage_modular",
+          "z_index": 3,
+          "modular_group": "bookshelf_tall",
+          "placement_note": "MUST pair with bottom piece. Do not use alone.",
+          "description": "Bookshelf (top section)"
+        },
+        "bookshelf_bottom": {
+          "coords": { "x": 192, "y": 512 },
+          "size": { "w": 128, "h": 64 },
+          "type": "storage_modular",
+          "z_index": 2,
+          "modular_group": "bookshelf_tall",
+          "placement_note": "Pairs with top section. Y offset: +64px below top.",
+          "description": "Bookshelf (bottom section)"
+        },
+        "water_cooler_full": {
+          "coords": { "x": 384, "y": 448 },
+          "size": { "w": 64, "h": 128 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Water cooler (bottle installed)"
+        },
+        "water_cooler_empty": {
+          "coords": { "x": 384, "y": 512 },
+          "size": { "w": 64, "h": 128 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Water cooler (empty bottle)"
+        },
+        "printer_small": {
+          "coords": { "x": 256, "y": 576 },
+          "size": { "w": 64, "h": 64 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Small desktop inkjet printer"
+        },
+        "printer_large": {
+          "coords": { "x": 256, "y": 640 },
+          "size": { "w": 128, "h": 128 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Large floor-standing copier/printer"
+        },
+        "vending_machine_drinks": {
+          "coords": { "x": 0, "y": 768 },
+          "size": { "w": 64, "h": 128 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Glass-front drink vending machine"
+        },
+        "vending_machine_snacks": {
+          "coords": { "x": 64, "y": 768 },
+          "size": { "w": 64, "h": 128 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Snack vending machine (orange/brown)"
+        },
+        "coffee_machine": {
+          "coords": { "x": 256, "y": 1280 },
+          "size": { "w": 128, "h": 128 },
+          "type": "utility",
+          "z_index": 3,
+          "description": "Coffee/espresso station"
+        }
+      }
+    },
+
+    "clutter_and_details": {
+      "description": "Small desk items that add variety and prevent copy-paste look.",
+      "sprites": {
+        "paperwork_stack": {
+          "coords": { "x": 0, "y": 448 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Stack of papers/documents"
+        },
+        "folder": {
+          "coords": { "x": 64, "y": 448 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Open folder"
+        },
+        "clipboard": {
+          "coords": { "x": 128, "y": 448 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Clipboard with papers"
+        },
+        "money_pile_small": {
+          "coords": { "x": 384, "y": 1536 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Small pile of cash (scattered bills)"
+        },
+        "money_pile_medium": {
+          "coords": { "x": 448, "y": 1536 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 4,
+          "y_offset": -12,
+          "description": "Medium stack of money"
+        },
+        "money_pile_large": {
+          "coords": { "x": 512, "y": 1536 },
+          "size": { "w": 128, "h": 128 },
+          "type": "clutter",
+          "z_index": 4,
+          "y_offset": -20,
+          "description": "Massive money pile (high stakes/vault look)"
+        },
+        "luggage_blue": {
+          "coords": { "x": 256, "y": 1536 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 3,
+          "description": "Blue suitcase/luggage"
+        },
+        "luggage_orange": {
+          "coords": { "x": 320, "y": 1536 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 3,
+          "description": "Orange suitcase/luggage"
+        },
+        "luggage_brown": {
+          "coords": { "x": 384, "y": 1600 },
+          "size": { "w": 64, "h": 64 },
+          "type": "clutter",
+          "z_index": 3,
+          "description": "Brown suitcase/luggage"
+        }
+      }
+    }
+
+  },
+
+  "modular_groups": {
+    "tan_desk_set": {
+      "description": "Complete modular tan desk system",
+      "pieces": [
+        "desk_tan_vertical_left",
+        "desk_tan_horizontal",
+        "desk_tan_vertical_right"
+      ],
+      "assembly_rule": "Can mix and match. Horizontal desks snap together side-by-side.",
+      "color": "tan/beige"
+    },
+    "grey_desk_set": {
+      "description": "Complete modular grey desk system",
+      "pieces": [
+        "desk_grey_horizontal"
+      ],
+      "assembly_rule": "Same sizing as tan set. Interchangeable for color variety.",
+      "color": "grey"
+    },
+    "sofa_grey_3piece": {
+      "description": "3-piece modular grey sofa",
+      "pieces": [
+        "sofa_grey_left",
+        "sofa_grey_middle",
+        "sofa_grey_right"
+      ],
+      "assembly_rule": "CRITICAL: Must always have left + right ends. Middle can repeat for longer seating.",
+      "breaking_rule": "Using only middle tile breaks sofa appearance. Always include ends.",
+      "total_size": { "w": 192, "h": 64 }
+    },
+    "sofa_tan_3piece": {
+      "description": "3-piece modular tan sofa",
+      "pieces": [
+        "sofa_tan_left",
+        "sofa_tan_middle",
+        "sofa_tan_right"
+      ],
+      "assembly_rule": "CRITICAL: Must always have left + right ends.",
+      "breaking_rule": "Using only middle tile breaks sofa appearance.",
+      "total_size": { "w": 192, "h": 64 }
+    },
+    "bookshelf_tall": {
+      "description": "2-piece tall bookshelf",
+      "pieces": [
+        "bookshelf_top",
+        "bookshelf_bottom"
+      ],
+      "assembly_rule": "Top and bottom must be stacked vertically (Y offset: +64px between them).",
+      "breaking_rule": "Using either piece alone looks incomplete/floating."
+    },
+    "cubicle_pod_set": {
+      "description": "All pieces needed for cubicle divider system",
+      "pieces": [
+        "cubicle_divider_horizontal",
+        "cubicle_endcap_vertical"
+      ],
+      "assembly_rule": "Dividers sit on top of desks. End-caps close left/right sides."
+    }
+  },
+
+  "placement_rules": {
+    "desktop_items_offset": {
+      "rule": "Items placed ON desks must be Y-offset (-10 to -20px) so they appear sitting on surface, not floating in middle",
+      "examples": [
+        "monitor_dual (y_offset: -15)",
+        "desk_lamp_on_angle1 (y_offset: -16)",
+        "paperwork_stack (y_offset: -12)"
+      ]
+    },
+    "chair_placement": {
+      "rule": "Chairs placed BELOW desk (z_index 1). Standard offset: Y_desk + 64px",
+      "orientation_rule": "Use 'back' facing for standard cubicles, 'front' facing for meeting tables"
+    },
+    "divider_placement": {
+      "rule": "Dividers sit ABOVE desk surfaces (z_index 3). Placement: Y_desk - 64px",
+      "critical_note": "If divider is omitted, cubicle looks unfinished/exposed"
+    },
+    "wall_mounted_items": {
+      "rule": "Whiteboards, posters, diplomas must be placed on wall surfaces (z_index 3), not on floor",
+      "examples": [
+        "whiteboard_blank",
+        "poster_pop_art",
+        "diploma_certificate"
+      ]
+    },
+    "modular_furniture_assembly": {
+      "rule": "Modular pieces (sofas, bookshelves) must NEVER be used partially",
+      "example": "Sofa must have: [left_end + repeatable_middles + right_end]. Never place middle alone.",
+      "enforcement": "System should validate that modular groups are complete before rendering"
+    }
+  },
+
+  "room_templates": {
+    "four_person_cubicle_pod": {
+      "description": "Standard 4-person cubicle (2 vs 2, facing divider)",
+      "layout": {
+        "floor": { "sprite": "floor_tile_grey_grid", "area": "4x4 grid" },
+        "top_row": {
+          "positions": [
+            { "x": 0, "y": 0, "sprite": "desk_tan_horizontal" },
+            { "x": 128, "y": 0, "sprite": "desk_tan_horizontal" }
+          ]
+        },
+        "divider": {
+          "positions": [
+            { "x": 0, "y": -64, "sprite": "cubicle_divider_horizontal" },
+            { "x": 128, "y": -64, "sprite": "cubicle_divider_horizontal_extension" }
+          ]
+        },
+        "bottom_row": {
+          "positions": [
+            { "x": 0, "y": 128, "sprite": "desk_tan_horizontal" },
+            { "x": 128, "y": 128, "sprite": "desk_tan_horizontal" }
+          ]
+        },
+        "chairs": {
+          "top": [
+            { "x": 0, "y": 64, "sprite": "office_chair_orange_back" },
+            { "x": 128, "y": 64, "sprite": "office_chair_orange_back" }
+          ],
+          "bottom": [
+            { "x": 0, "y": 192, "sprite": "office_chair_orange_front" },
+            { "x": 128, "y": 192, "sprite": "office_chair_orange_front" }
+          ]
+        },
+        "monitors": {
+          "positions": [
+            { "x": 0, "y": -15, "sprite": "monitor_dual", "parent_z": "desk_tan_horizontal" },
+            { "x": 128, "y": -15, "sprite": "monitor_dual", "parent_z": "desk_tan_horizontal" }
+          ]
+        },
+        "end_caps": {
+          "positions": [
+            { "x": -64, "y": 0, "sprite": "cubicle_endcap_vertical" },
+            { "x": 256, "y": 0, "sprite": "cubicle_endcap_vertical" }
+          ]
+        }
+      }
+    },
+    "breakroom_with_sofa": {
+      "description": "Breakroom with sofa, coffee station, and water cooler",
+      "furniture": [
+        "sofa_tan_left",
+        "sofa_tan_middle",
+        "sofa_tan_right",
+        "coffee_machine",
+        "water_cooler_full",
+        "small_table"
+      ]
+    }
+  },
+
+  "error_prevention": {
+    "broken_sprite_scenarios": [
+      {
+        "scenario": "Using sofa middle without ends",
+        "result": "Sofa appears as armless stump or asymmetrical",
+        "fix": "Always include left_end + middle + right_end"
+      },
+      {
+        "scenario": "Monitor on 1-tile wide desk",
+        "result": "Monitor overhangs desk edges, looks misaligned",
+        "fix": "Only use single monitors on 1-tile desks; dual/triple only on wider desks"
+      },
+      {
+        "scenario": "Omitting cubicle divider",
+        "result": "Cubicle looks unfinished/exposed from back; walls visible from wrong angle",
+        "fix": "Always pair horizontal divider with desk top"
+      },
+      {
+        "scenario": "Bookshelf pieces separated vertically",
+        "result": "Floating shelves or missing sections",
+        "fix": "Keep Y offset of exactly 64px between top and bottom"
+      },
+      {
+        "scenario": "Desktop items without Y-offset",
+        "result": "Monitors/lamps float in middle of desk, not sitting on top",
+        "fix": "Apply y_offset: -12 to -20px for all desktop_items"
+      },
+      {
+        "scenario": "Chair z-index higher than desk",
+        "result": "Chair sits in front of desk instead of behind",
+        "fix": "Chair z_index must be 1; Desk z_index must be 2"
+      }
+    ]
+  }
+}

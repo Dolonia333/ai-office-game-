@@ -1,0 +1,122 @@
+{
+  "info": {
+    "purpose": "Master blueprint for LimeZu objects. Pixel-perfect x,y,w,h in sheet; placement uses bottom-center. Single logic for Gym, Bedroom, Living Room.",
+    "slice_margin_px": 2,
+    "origin": "Place (x,y) = bottom-center of sprite. origin: 'bottom' = setOrigin(0.5, 1).",
+    "decor": "Decor entries use 'parent' to inherit position of furniture + parent_offset_y (e.g. -8) so they sit on top."
+  },
+  "objects": {
+    "desk_basic": {
+      "sheet": "office_tiles",
+      "x": 320,
+      "y": 0,
+      "w": 32,
+      "h": 32,
+      "origin": "bottom",
+      "depth": 1.5,
+      "type": "surface",
+      "action": null
+    },
+    "decor_pc": {
+      "sheet": "office_tiles",
+      "x": 640,
+      "y": 0,
+      "w": 16,
+      "h": 16,
+      "origin": "bottom",
+      "depth": 2,
+      "type": "decor",
+      "action": "use_it",
+      "parent_offset_y": -8
+    },
+    "gym_treadmill": {
+      "sheet": "gym_tiles",
+      "x": 64,
+      "y": 128,
+      "w": 32,
+      "h": 48,
+      "origin": "bottom",
+      "depth": 1.5,
+      "type": "furniture"
+    },
+    "office_rug": {
+      "sheet": "floor_tiles",
+      "x": 0,
+      "y": 0,
+      "w": 32,
+      "h": 32,
+      "origin": "bottom",
+      "depth": 1.0,
+      "type": "floor",
+      "action": null
+    },
+    "living_sofa": {
+      "sheet": "living_room_tiles",
+      "x": 0,
+      "y": 160,
+      "w": 48,
+      "h": 32,
+      "origin": "bottom",
+      "depth": 1.5,
+      "type": "furniture"
+    },
+    "basement_monitor_wall": {
+      "sheet": "xp_basement_sheet",
+      "x": 0,
+      "y": 912,
+      "w": 256,
+      "h": 784,
+      "origin": "bottom",
+      "depth": 1.4,
+      "type": "furniture",
+      "action": null
+    },
+    "bed_blue": {
+      "sheet": "xp_bedroom_sheet",
+      "x": 160,
+      "y": 0,
+      "w": 32,
+      "h": 64,
+      "origin": "bottom",
+      "depth": 1.5,
+      "type": "seat",
+      "action": "sleep",
+      "interact_distance": 32,
+      "snap_offset": { "x": 0, "y": 0 }
+    },
+    "toilet_white": {
+      "sheet": "xp_bathroom_sheet",
+      "x": 0,
+      "y": 0,
+      "w": 32,
+      "h": 32,
+      "origin": "bottom",
+      "depth": 1.5,
+      "type": "furniture",
+      "action": null
+    }
+  },
+  "placements": [
+    { "id": "desk_basic", "instanceId": "desk_1", "x": 360, "y": 360 },
+    { "id": "decor_pc", "instanceId": "pc_1", "parentInstanceId": "desk_1", "parent_offset_y": -8 },
+
+    { "id": "desk_basic", "instanceId": "desk_2", "x": 440, "y": 360 },
+    { "id": "decor_pc", "instanceId": "pc_2", "parentInstanceId": "desk_2", "parent_offset_y": -8 },
+
+    { "id": "desk_basic", "instanceId": "desk_3", "x": 360, "y": 440 },
+    { "id": "decor_pc", "instanceId": "pc_3", "parentInstanceId": "desk_3", "parent_offset_y": -8 },
+
+    { "id": "desk_basic", "instanceId": "desk_4", "x": 440, "y": 440 },
+    { "id": "decor_pc", "instanceId": "pc_4", "parentInstanceId": "desk_4", "parent_offset_y": -8 },
+
+    { "id": "desk_basic", "instanceId": "desk_mgr", "x": 760, "y": 420 },
+    { "id": "decor_pc", "instanceId": "pc_mgr", "parentInstanceId": "desk_mgr", "parent_offset_y": -8 },
+
+    { "id": "desk_basic", "instanceId": "desk_5", "x": 640, "y": 360 },
+    { "id": "decor_pc", "instanceId": "pc_5", "parentInstanceId": "desk_5", "parent_offset_y": -8 }
+    ,
+    { "id": "basement_monitor_wall", "instanceId": "sec_monitors", "x": 300, "y": 690 },
+    { "id": "bed_blue", "instanceId": "top_bed_1", "x": 180, "y": 210 },
+    { "id": "toilet_white", "instanceId": "top_toilet_1", "x": 520, "y": 210 }
+  ]
+}

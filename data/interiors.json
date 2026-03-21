@@ -1,0 +1,118 @@
+{
+  "info": {
+    "purpose": "Semantic prefab catalog for LimeZu Modern Interiors used by office interior generator.",
+    "origin": "Coordinates are in pixels within their respective spritesheet images. Prefabs use a local grid with anchor points.",
+    "notes": [
+      "This catalog only defines a small, representative subset of office furniture needed for initial generation.",
+      "Prefabs are referenced by id from interior generator modules."
+    ]
+  },
+  "sheets": {
+    "mi_office_bedsheet": {
+      "imageKey": "xp_bedroom_sheet",
+      "tileSize": 32
+    },
+    "mi_office_generic": {
+      "imageKey": "xp_generic_sheet",
+      "tileSize": 32
+    },
+    "mi_office_living": {
+      "imageKey": "xp_livingroom_sheet",
+      "tileSize": 32
+    }
+  },
+  "prefabs": {
+    "desk_cluster_2x2": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 0, "y": 0, "w": 64, "h": 64 },
+      "origin": "bottom",
+      "type": "surface_cluster",
+      "anchors": {
+        "chair_1": { "x": 16, "y": 64 },
+        "chair_2": { "x": 48, "y": 64 },
+        "pc_1": { "x": 16, "y": 28 },
+        "pc_2": { "x": 48, "y": 28 }
+      }
+    },
+    "office_chair": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 128, "y": 256, "w": 32, "h": 32 },
+      "origin": "bottom",
+      "type": "seat",
+      "action": "seat",
+      "snapTo": "chair_anchor"
+    },
+    "waiting_chair": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 128, "y": 256, "w": 32, "h": 32 },
+      "origin": "bottom",
+      "type": "seat",
+      "action": "seat",
+      "snapTo": "chair_anchor"
+    },
+    "coffee_table_small": {
+      "sheet": "mi_office_living",
+      "rect": { "x": 0, "y": 256, "w": 32, "h": 32 },
+      "origin": "bottom",
+      "type": "surface"
+    },
+    "pc_monitor": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 128, "y": 896, "w": 32, "h": 32 },
+      "origin": "bottom",
+      "type": "decor",
+      "action": "use_computer",
+      "snapTo": "pc_anchor",
+      "offsetY": -8
+    },
+    "plant_pot": {
+      "sheet": "mi_office_living",
+      "rect": { "x": 0, "y": 256, "w": 32, "h": 64 },
+      "origin": "bottom",
+      "type": "decor"
+    },
+    "plant_pot_small": {
+      "sheet": "mi_office_living",
+      "rect": { "x": 0, "y": 256, "w": 32, "h": 64 },
+      "origin": "bottom",
+      "type": "decor"
+    },
+    "bookshelf": {
+      "sheet": "mi_office_living",
+      "rect": { "x": 96, "y": 576, "w": 96, "h": 96 },
+      "origin": "bottom",
+      "type": "furniture"
+    },
+    "whiteboard_wall": {
+      "sheet": "mi_office_living",
+      "rect": { "x": 96, "y": 576, "w": 96, "h": 96 },
+      "origin": "bottom",
+      "type": "furniture"
+    },
+    "printer": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 224, "y": 576, "w": 64, "h": 64 },
+      "origin": "bottom",
+      "type": "furniture"
+    },
+    "printer_large": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 224, "y": 576, "w": 64, "h": 64 },
+      "origin": "bottom",
+      "type": "furniture"
+    },
+    "water_cooler": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 192, "y": 576, "w": 32, "h": 64 },
+      "origin": "bottom",
+      "type": "utility"
+    },
+    "water_dispenser": {
+      "sheet": "mi_office_generic",
+      "rect": { "x": 192, "y": 576, "w": 32, "h": 64 },
+      "origin": "bottom",
+      "type": "utility"
+    }
+  }
+}
+

@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "tileSize": 16,
+    "sizes": [16, 32, 48],
+    "sourcePacks": ["moderninteriors", "modernoffice"],
+    "notes": [
+      "Frame indices assume 4x4 XP-style layout for base walk cycles (32x48 frames).",
+      "Exact sheet filenames can be updated later without changing animation names."
+    ]
+  },
+  "animations": {
+    "idle_down": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [0],
+      "fps": 0,
+      "loop": true
+    },
+    "idle_up": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [12],
+      "fps": 0,
+      "loop": true
+    },
+    "idle_left": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [4],
+      "fps": 0,
+      "loop": true
+    },
+    "idle_right": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [8],
+      "fps": 0,
+      "loop": true
+    },
+    "walk_down": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [1, 2, 3],
+      "fps": 8,
+      "loop": true
+    },
+    "walk_up": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [13, 14, 15],
+      "fps": 8,
+      "loop": true
+    },
+    "walk_left": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [5, 6, 7],
+      "fps": 8,
+      "loop": true
+    },
+    "walk_right": {
+      "sheet": "characters/base_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [9, 10, 11],
+      "fps": 8,
+      "loop": true
+    },
+    "sit_chair": {
+      "sheet": "characters/office_actions_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [0],
+      "fps": 0,
+      "loop": true,
+      "tags": ["interaction", "seat"]
+    },
+    "type_pc": {
+      "sheet": "characters/office_actions_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [1, 2, 3, 2],
+      "fps": 10,
+      "loop": true,
+      "tags": ["interaction", "pc"]
+    },
+    "sleep_bed": {
+      "sheet": "characters/everyday_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [8],
+      "fps": 0,
+      "loop": true,
+      "tags": ["rest"]
+    },
+    "read_book": {
+      "sheet": "characters/everyday_32x32.png",
+      "size": { "w": 32, "h": 32 },
+      "frames": [12, 13, 14, 13],
+      "fps": 8,
+      "loop": true,
+      "tags": ["interaction", "reading"]
+    }
+  }
+}
+

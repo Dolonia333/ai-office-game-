@@ -1,0 +1,9 @@
+node_modules/
+out/
+.claude/
+*.scanned.json
+_singles_batch_*.png
+_singles_catalog.png
+_sheet_preview_*.png
+_current_sprites.png
+tiles-catalog.json

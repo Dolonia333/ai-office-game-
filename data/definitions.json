@@ -1,0 +1,38 @@
+{
+  "info": {
+    "purpose": "Canonical sizes and types for objects across sheets. Update this whenever a new sheet is added. Used by object-defs and the assembler.",
+    "baseGridSize": 16,
+    "units": "width_px and height_px are in pixels; w and h are in base tiles (16px).",
+    "types": ["floor", "wall", "furniture", "surface", "decor", "flat"],
+    "pivot": "bottom = origin at bottom-center (default for tall); center = for symmetric/flat."
+  },
+  "sheets": {
+    "xp_gym_08": {
+      "file": "8_Gym.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "objects": {
+        "treadmill": { "w": 4, "h": 3, "width_px": 64, "height_px": 48, "type": "furniture", "pivot": "bottom" },
+        "weight_rack": { "w": 2, "h": 4, "width_px": 32, "height_px": 64, "type": "furniture", "pivot": "bottom" },
+        "punching_bag": { "w": 1, "h": 3, "width_px": 16, "height_px": 48, "type": "furniture", "pivot": "bottom" },
+        "blue_mat": { "w": 2, "h": 1, "width_px": 32, "height_px": 16, "type": "flat", "pivot": "bottom" },
+        "bench": { "w": 3, "h": 1, "width_px": 48, "height_px": 32, "type": "furniture", "pivot": "bottom" }
+      }
+    },
+    "xp_living_room_02": {
+      "file": "2_LivingRoom.png",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "tilesPerRow": 8,
+      "objects": {
+        "bookshelf_large": { "w": 3, "h": 3, "width_px": 48, "height_px": 48, "type": "furniture", "pivot": "bottom" },
+        "table_small": { "w": 2, "h": 2, "width_px": 32, "height_px": 32, "type": "surface", "pivot": "bottom" },
+        "sofa": { "w": 3, "h": 2, "width_px": 48, "height_px": 32, "type": "surface", "pivot": "bottom" },
+        "fruit_bowl": { "w": 1, "h": 1, "width_px": 16, "height_px": 16, "type": "decor", "pivot": "bottom", "attachToSurface": true, "surface_offset_y_px": -4 },
+        "pillows": { "w": 1, "h": 1, "width_px": 16, "height_px": 16, "type": "decor", "pivot": "bottom", "attachToSurface": true, "surface_offset_y_px": -4 },
+        "fireplace": { "w": 2, "h": 3, "width_px": 32, "height_px": 48, "type": "furniture", "pivot": "bottom" }
+      }
+    }
+  }
+}

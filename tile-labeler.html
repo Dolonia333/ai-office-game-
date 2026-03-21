@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tile Labeler – Floors/Walls tilesets</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --input-bg: #21262d;
+      --accent: #58a6ff;
+      --ok: #238636;
+      --ok2: #2ea043;
+      --warn: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
+    h1 { font-size: 1.25rem; margin: 0 0 6px; }
+    .sub { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    select, input[type="text"], input[type="search"] {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 14px;
+    }
+    input[type="search"] { width: 260px; }
+    .btn { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+    .btn:hover { background: var(--input-bg); }
+    .btn-primary { background: var(--ok); border-color: var(--ok); }
+    .btn-primary:hover { background: var(--ok2); border-color: var(--ok2); }
+    .layout { display: grid; grid-template-columns: minmax(320px, 1fr) 360px; gap: 12px; align-items: start; }
+    @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+    .canvasWrap { background: #000; border: 1px solid var(--border); border-radius: 10px; padding: 10px; overflow: auto; max-height: calc(100vh - 180px); }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+    .side { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .kv b { color: var(--text); font-weight: 600; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .preview { background: #000; border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; justify-content: center; }
+    .stats { font-size: 13px; color: var(--muted); }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .pill { display: inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>Tile Labeler</h1>
+  <p class="sub">Click a tile cell to label it (floors/walls). Exports a JSON map: <code>{ tilesetId, tileSize, labels: { \"x,y\": \"name\" } }</code>. For RPG Maker MV tilesets, tile size is usually <strong>48</strong>.</p>
+
+  <div class="toolbar">
+    <select id="tilesetSelect">
+      <option value="mv_a2_floors">Tileset: MV A2 Floors</option>
+      <option value="mv_a4_walls">Tileset: MV A4 Walls</option>
+      <option value="mv_bcde_2">Tileset: MV B/C/D/E (sheet 2)</option>
+      <option value="mv_bcde_3">Tileset: MV B/C/D/E (sheet 3)</option>
+    </select>
+    <select id="tileSizeSelect" title="Tile size in pixels">
+      <option value="48">Tile size: 48 (MV default)</option>
+      <option value="32">Tile size: 32</option>
+      <option value="16">Tile size: 16</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px;">
+      <input type="checkbox" id="showGrid" checked />
+      Show grid
+    </label>
+    <input type="search" id="filter" placeholder="Filter labels (name contains)..." />
+    <button class="btn" id="clearSelectedBtn">Clear selected label</button>
+    <button class="btn btn-primary" id="exportBtn">Export labels (download JSON)</button>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <div class="layout">
+    <div class="canvasWrap">
+      <canvas id="sheetCanvas"></canvas>
+    </div>
+    <div class="side">
+      <div class="kv">
+        <div>Selected</div><div><b id="selKey">—</b></div>
+        <div>Cell rect</div><div><b id="selRect">—</b></div>
+        <div>Current name</div><div><b id="selName">—</b></div>
+      </div>
+
+      <div class="preview"><canvas id="tilePreview"></canvas></div>
+      <div class="hint">Tip: use consistent names like <span class="pill">floor_wood_01</span>, <span class="pill">wall_white_mid</span>, <span class="pill">wall_corner_in</span>.</div>
+
+      <div class="field">
+        <label for="nameInput">Label for selected tile</label>
+        <input id="nameInput" type="text" placeholder="e.g. floor_wood_01" />
+      </div>
+      <button class="btn btn-primary" id="saveNameBtn">Save label</button>
+      <button class="btn" id="jumpNextUnlabeledBtn" style="margin-left:8px;">Jump to next unlabeled</button>
+      <p class="hint">Labels are stored in your browser (localStorage) per tileset + tileSize until you export.</p>
+    </div>
+  </div>
+
+  <script type="module">
+    // These two images were provided in-chat; for reliable use, put real files under pixel game stuff and update URLs here.
+    // For now we support loading by relative URL (served from repo root).
+    const TILESETS = {
+      mv_a2_floors: {
+        tilesetId: 'modern_office_mv_a2_floors',
+        url: 'assets/Modern_Office_MV_Floors_TILESET_A2.png'
+      },
+      mv_a4_walls: {
+        tilesetId: 'modern_office_mv_a4_walls',
+        url: 'assets/Modern_Office_MV_Walls_TILESET_A4.png'
+      },
+      mv_bcde_2: {
+        tilesetId: 'modern_office_mv_tilesets_bcde_2',
+        url: 'assets/Modern_Office_MV_2_TILESETS_B-C-D-E.png'
+      },
+      mv_bcde_3: {
+        tilesetId: 'modern_office_mv_tilesets_bcde_3',
+        url: 'assets/Modern_Office_MV_3_TILESETS_B-C-D-E.png'
+      }
+    };
+
+    const sheetCanvas = document.getElementById('sheetCanvas');
+    const ctx = sheetCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    const prevCanvas = document.getElementById('tilePreview');
+    const pctx = prevCanvas.getContext('2d');
+    pctx.imageSmoothingEnabled = false;
+
+    let img = null;
+    let tileSize = 48;
+    let selected = { x: 0, y: 0 };
+    let labels = {}; // key "x,y" -> name
+    let tilesetKey = 'mv_a2_floors';
+
+    const storageKey = () => `tile_labels__${TILESETS[tilesetKey].tilesetId}__${tileSize}`;
+
+    function key(x, y) { return `${x},${y}`; }
+
+    function loadLabels() {
+      try {
+        labels = JSON.parse(localStorage.getItem(storageKey()) || '{}') || {};
+      } catch {
+        labels = {};
+      }
+    }
+
+    function saveLabels() {
+      localStorage.setItem(storageKey(), JSON.stringify(labels));
+    }
+
+    async function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error('Failed to load ' + src));
+        im.src = src;
+      });
+    }
+
+    function draw() {
+      if (!img) return;
+      sheetCanvas.width = img.width;
+      sheetCanvas.height = img.height;
+      ctx.clearRect(0, 0, sheetCanvas.width, sheetCanvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      // overlay: labeled cells (subtle)
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#58a6ff';
+      for (const k of Object.keys(labels)) {
+        if (!labels[k]) continue;
+        const [tx, ty] = k.split(',').map(n => parseInt(n, 10));
+        ctx.fillRect(tx * tileSize, ty * tileSize, tileSize, tileSize);
+      }
+      ctx.restore();
+
+      // grid
+      if (document.getElementById('showGrid').checked) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= img.width; x += tileSize) {
+          ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, img.height); ctx.stroke();
+        }
+        for (let y = 0; y <= img.height; y += tileSize) {
+          ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(img.width, y + 0.5); ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // selected outline
+      ctx.save();
+      ctx.strokeStyle = '#d29922';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(selected.x * tileSize + 1, selected.y * tileSize + 1, tileSize - 2, tileSize - 2);
+      ctx.restore();
+    }
+
+    function updateSelectedUI() {
+      const k = key(selected.x, selected.y);
+      const name = labels[k] || '';
+      document.getElementById('selKey').textContent = `${k}`;
+      document.getElementById('selRect').textContent = `(${selected.x * tileSize},${selected.y * tileSize}) ${tileSize}×${tileSize}`;
+      document.getElementById('selName').textContent = name || '—';
+      document.getElementById('nameInput').value = name;
+
+      // preview zoom x6
+      const scale = 6;
+      prevCanvas.width = tileSize * scale;
+      prevCanvas.height = tileSize * scale;
+      pctx.clearRect(0, 0, prevCanvas.width, prevCanvas.height);
+      if (img) {
+        pctx.drawImage(img,
+          selected.x * tileSize, selected.y * tileSize, tileSize, tileSize,
+          0, 0, prevCanvas.width, prevCanvas.height
+        );
+      }
+    }
+
+    function updateStats() {
+      const count = Object.values(labels).filter(Boolean).length;
+      const cols = img ? Math.floor(img.width / tileSize) : 0;
+      const rows = img ? Math.floor(img.height / tileSize) : 0;
+      document.getElementById('stats').textContent = `${count} labeled • grid ${cols}×${rows}`;
+    }
+
+    function firstUnlabeledAfter(startX, startY) {
+      if (!img) return null;
+      const cols = Math.floor(img.width / tileSize);
+      const rows = Math.floor(img.height / tileSize);
+      const start = startY * cols + startX + 1;
+      for (let i = start; i < cols * rows; i++) {
+        const x = i % cols;
+        const y = Math.floor(i / cols);
+        if (!labels[key(x, y)]) return { x, y };
+      }
+      for (let i = 0; i <= startY * cols + startX; i++) {
+        const x = i % cols;
+        const y = Math.floor(i / cols);
+        if (!labels[key(x, y)]) return { x, y };
+      }
+      return null;
+    }
+
+    function applyFilter() {
+      // Filter is a navigation aid: it jumps selection to next tile whose label includes query
+      const q = (document.getElementById('filter').value || '').trim().toLowerCase();
+      if (!q) return;
+      const keys = Object.keys(labels).filter(k => (labels[k] || '').toLowerCase().includes(q));
+      if (!keys.length) return;
+      const [tx, ty] = keys[0].split(',').map(n => parseInt(n, 10));
+      selected = { x: tx, y: ty };
+      updateSelectedUI();
+      draw();
+    }
+
+    async function loadActiveTileset() {
+      const cfg = TILESETS[tilesetKey];
+      img = await loadImage(cfg.url);
+      loadLabels();
+      selected = { x: 0, y: 0 };
+      updateSelectedUI();
+      updateStats();
+      draw();
+    }
+
+    // UI hooks
+    document.getElementById('tilesetSelect').addEventListener('change', async (e) => {
+      tilesetKey = e.target.value;
+      await loadActiveTileset();
+    });
+    document.getElementById('tileSizeSelect').addEventListener('change', async (e) => {
+      tileSize = parseInt(e.target.value, 10) || 48;
+      loadLabels();
+      selected = { x: 0, y: 0 };
+      updateSelectedUI();
+      updateStats();
+      draw();
+    });
+    document.getElementById('showGrid').addEventListener('change', draw);
+    document.getElementById('filter').addEventListener('input', applyFilter);
+
+    sheetCanvas.addEventListener('click', (e) => {
+      const rect = sheetCanvas.getBoundingClientRect();
+      const sx = Math.floor((e.clientX - rect.left) * (sheetCanvas.width / rect.width));
+      const sy = Math.floor((e.clientY - rect.top) * (sheetCanvas.height / rect.height));
+      selected = { x: Math.floor(sx / tileSize), y: Math.floor(sy / tileSize) };
+      updateSelectedUI();
+      draw();
+    });
+
+    document.getElementById('saveNameBtn').addEventListener('click', () => {
+      const name = (document.getElementById('nameInput').value || '').trim();
+      labels[key(selected.x, selected.y)] = name;
+      saveLabels();
+      updateSelectedUI();
+      updateStats();
+      draw();
+    });
+
+    document.getElementById('clearSelectedBtn').addEventListener('click', () => {
+      delete labels[key(selected.x, selected.y)];
+      saveLabels();
+      updateSelectedUI();
+      updateStats();
+      draw();
+    });
+
+    document.getElementById('jumpNextUnlabeledBtn').addEventListener('click', () => {
+      const nxt = firstUnlabeledAfter(selected.x, selected.y);
+      if (!nxt) return;
+      selected = nxt;
+      updateSelectedUI();
+      draw();
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const payload = {
+        tilesetId: TILESETS[tilesetKey].tilesetId,
+        tileSize,
+        labels
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${payload.tilesetId}__${tileSize}.labels.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // Default selections
+    document.getElementById('tilesetSelect').value = tilesetKey;
+    document.getElementById('tileSizeSelect').value = String(tileSize);
+
+    // Note: expects images to exist at pixel-office-game/assets/*.png
+    // We'll add copies there next.
+    loadActiveTileset().catch(err => {
+      const s = document.getElementById('stats');
+      s.textContent = 'Load error: ' + err.message + ' (Put the tileset PNG under pixel-office-game/assets/ and refresh.)';
+    });
+  </script>
+</body>
+</html>
+

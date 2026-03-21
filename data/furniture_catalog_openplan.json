@@ -1,0 +1,853 @@
+{
+  "info": {
+    "purpose": "Open office furniture catalog — 48 user-verified sprite cuts from sprite cutter tool.",
+    "origin": "bottom-center anchor.",
+    "slice_margin_px": 2
+  },
+  "objects": {
+    "desk_pod": {
+      "sheet": "mo_black_shadow_32",
+      "x": 64, "y": 0, "w": 128, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 128, "display_h": 96,
+      "type": "surface", "action": "use_computer",
+      "_note": "Primary long tan horizontal desk with front panel"
+    },
+    "desk_pod_alt": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 0, "w": 128, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 128, "display_h": 96,
+      "type": "surface", "action": "use_computer",
+      "_note": "Grey horizontal desk with front panel"
+    },
+    "long_desk": {
+      "sheet": "mo_black_shadow_32",
+      "x": 288, "y": 0, "w": 32, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 128,
+      "type": "surface", "action": "use_computer",
+      "_note": "User cut — narrow vertical desk"
+    },
+    "box_desk": {
+      "sheet": "mo_black_shadow_32",
+      "x": 352, "y": 0, "w": 96, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 96, "display_h": 96,
+      "type": "surface", "action": "use_computer",
+      "_note": "User cut — square/box desk"
+    },
+    "desk_vertical_left": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 0, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "surface", "action": "use_computer"
+    },
+    "desk_vertical_right": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 0, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "surface", "action": "use_computer"
+    },
+    "desk_l_shaped": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 1088, "w": 128, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 128, "display_h": 128,
+      "type": "surface", "action": "use_computer"
+    },
+    "l_shaped_desk_small": {
+      "sheet": "mo_black_shadow_32",
+      "x": 160, "y": 1408, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "surface", "action": "use_computer",
+      "_note": "User cut — small L-shaped desk"
+    },
+    "cubicle_desk": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 896, "w": 96, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 96, "display_h": 64,
+      "type": "surface", "action": "use_computer",
+      "_note": "User cut — office desk for cubicle"
+    },
+    "cubicle_desk_back": {
+      "sheet": "mo_black_shadow_32",
+      "x": 224, "y": 960, "w": 96, "h": 32,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 96, "display_h": 32,
+      "type": "surface", "action": "use_computer",
+      "_note": "User cut — desk for back view of cubicle"
+    },
+    "cubicle_desk_front": {
+      "sheet": "mo_black_shadow_32",
+      "x": 224, "y": 992, "w": 96, "h": 32,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 96, "display_h": 32,
+      "type": "surface", "action": "use_computer",
+      "_note": "User cut — desk for front view of cubicle"
+    },
+
+    "chair_black_front": {
+      "sheet": "mo_black_shadow_32",
+      "x": 64, "y": 256, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black front-facing desk chair"
+    },
+    "chair_black_front_holes": {
+      "sheet": "mo_black_shadow_32",
+      "x": 96, "y": 256, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black front-facing chair with breathing holes"
+    },
+    "chair_orange_front_holes": {
+      "sheet": "mo_black_shadow_32",
+      "x": 96, "y": 320, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — orange front-facing chair with breathing holes"
+    },
+    "chair_orange_back_no_holes": {
+      "sheet": "mo_black_shadow_32",
+      "x": 32, "y": 320, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — orange back-facing chair no holes"
+    },
+    "chair_black_back_no_holes": {
+      "sheet": "mo_black_shadow_32",
+      "x": 32, "y": 256, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black back-facing chair no holes"
+    },
+    "chair_black_back_holes": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 256, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black back-facing chair with breathing holes"
+    },
+    "chair_black_side_right": {
+      "sheet": "mo_black_shadow_32",
+      "x": 160, "y": 256, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black side right-facing chair"
+    },
+    "chair_black_side_left": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 256, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black side left-facing chair"
+    },
+    "chair_orange_back": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 320, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.6,
+      "display_w": 64, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "Orange/boss chair facing UP (back visible)"
+    },
+
+    "waiting_row_4": {
+      "sheet": "mo_black_shadow_32",
+      "x": 96, "y": 480, "w": 128, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 128, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — 4-chair waiting room row (blue, black, white, orange)"
+    },
+    "waiting_chair_blue": {
+      "sheet": "mo_black_shadow_32",
+      "x": 96, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — blue waiting room chair"
+    },
+    "waiting_chair_black": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — black waiting room chair"
+    },
+    "waiting_chair_white": {
+      "sheet": "mo_black_shadow_32",
+      "x": 160, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — white waiting room chair"
+    },
+    "waiting_chair_yellow": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 64,
+      "type": "seat", "action": "seat",
+      "_note": "User cut — yellow waiting room chair"
+    },
+    "bucket_chair": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 512, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "seat", "action": "seat"
+    },
+
+    "sofa_left": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 576, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+    "sofa_middle": {
+      "sheet": "mo_black_shadow_32",
+      "x": 64, "y": 576, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+    "sofa_right": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 576, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+
+    "paper_large": {
+      "sheet": "mo_black_shadow_32",
+      "x": 64, "y": 448, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 2.0,
+      "display_w": 32, "display_h": 64,
+      "type": "decor", "parent_offset_y": 0,
+      "_note": "User cut — large stack of paper"
+    },
+    "paper_medium": {
+      "sheet": "mo_black_shadow_32",
+      "x": 32, "y": 480, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 2.0,
+      "display_w": 32, "display_h": 32,
+      "type": "decor", "parent_offset_y": 0,
+      "_note": "User cut — medium stack of paper"
+    },
+    "paper_small": {
+      "sheet": "mo_black_shadow_32",
+      "x": 32, "y": 448, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 2.0,
+      "display_w": 32, "display_h": 32,
+      "type": "decor", "parent_offset_y": 0,
+      "_note": "User cut — small stack of paper"
+    },
+    "books_stack": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 448, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 2.0,
+      "display_w": 32, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — stack of books"
+    },
+
+    "bookshelf_short": {
+      "sheet": "mo_black_shadow_32",
+      "x": 224, "y": 384, "w": 64, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 96,
+      "type": "furniture",
+      "_note": "User cut — bookshelf (64×96)"
+    },
+    "bookshelf_empty_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 448, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "furniture"
+    },
+    "bookshelf_full_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 448, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "furniture"
+    },
+
+    "desk_setup_monitors": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 832, "w": 96, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 96, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — double monitors + phone + keyboard + mouse + photo"
+    },
+    "desk_setup_monitors_alt": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 960, "w": 96, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 96, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — desk setup double monitors variant"
+    },
+    "desk_setup_laptop": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 832, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 64, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — laptop + paper + book + light setup"
+    },
+    "desk_setup_laptop_phone": {
+      "sheet": "mo_black_shadow_32",
+      "x": 416, "y": 832, "w": 96, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 96, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — phone + laptop + paper + book + light setup"
+    },
+    "phone": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 1472, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 2.0,
+      "display_w": 32, "display_h": 32,
+      "type": "decor", "parent_offset_y": 0,
+      "_note": "User cut — office phone"
+    },
+    "laptop_front": {
+      "sheet": "mo_black_shadow_32",
+      "x": 448, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 32, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — laptop front-facing"
+    },
+    "laptop_front_right": {
+      "sheet": "mo_black_shadow_32",
+      "x": 480, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 32, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — laptop front right-facing"
+    },
+    "laptop_front_left": {
+      "sheet": "mo_black_shadow_32",
+      "x": 416, "y": 480, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 32, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0,
+      "_note": "User cut — laptop front left-facing"
+    },
+
+    "cubicle_divider_full": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 832, "w": 224, "h": 96,
+      "origin": "bottom", "depth": 1.7,
+      "display_w": 224, "display_h": 96,
+      "type": "partition",
+      "_note": "User cut — full cubicle divider set with end caps"
+    },
+    "divider": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 832, "w": 128, "h": 64,
+      "origin": "bottom", "depth": 1.7,
+      "display_w": 128, "display_h": 64,
+      "type": "partition"
+    },
+    "cubicle_end_cap": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 896, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.7,
+      "display_w": 64, "display_h": 64,
+      "type": "partition"
+    },
+
+    "stairs": {
+      "sheet": "mo_black_shadow_32",
+      "x": 224, "y": 480, "w": 64, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 96,
+      "type": "furniture",
+      "_note": "User cut — stairs"
+    },
+
+    "whiteboard_charts": {
+      "sheet": "mo_black_shadow_32",
+      "x": 288, "y": 448, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — whiteboard with graphs and charts"
+    },
+    "whiteboard_graphs": {
+      "sheet": "mo_black_shadow_32",
+      "x": 288, "y": 384, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — whiteboard with graphs"
+    },
+    "whiteboard_blank": {
+      "sheet": "mo_black_shadow_32",
+      "x": 288, "y": 320, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — blank whiteboard"
+    },
+    "whiteboard_graph_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 384, "w": 128, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 128, "display_h": 64,
+      "type": "decor"
+    },
+    "whiteboard_blank_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 320, "w": 128, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 128, "display_h": 64,
+      "type": "decor"
+    },
+
+    "trash_can": {
+      "sheet": "mo_black_shadow_32",
+      "x": 352, "y": 416, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 64,
+      "type": "furniture",
+      "_note": "User cut — desk trash can"
+    },
+    "paper_shredder": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 448, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 32,
+      "type": "furniture",
+      "_note": "User cut — paper shredder"
+    },
+    "paper_shredder_empty": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 416, "w": 32, "h": 32,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 32,
+      "type": "furniture",
+      "_note": "User cut — empty paper shredder"
+    },
+    "water_dispenser": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 480, "w": 32, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 32, "display_h": 96,
+      "type": "furniture",
+      "_note": "User cut — water dispenser"
+    },
+    "ac_unit_small": {
+      "sheet": "mo_black_shadow_32",
+      "x": 352, "y": 352, "w": 64, "h": 32,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 32,
+      "type": "decor",
+      "_note": "User cut — small AC unit"
+    },
+
+    "vending_empty": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 736, "w": 64, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 96,
+      "type": "furniture",
+      "_note": "User cut — empty vending machine"
+    },
+    "vending_full": {
+      "sheet": "mo_black_shadow_32",
+      "x": 64, "y": 736, "w": 64, "h": 96,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 96,
+      "type": "furniture",
+      "_note": "User cut — full vending machine"
+    },
+    "mini_fridge": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 768, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture",
+      "_note": "User cut — mini fridge"
+    },
+    "vending_drinks_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 768, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "furniture"
+    },
+    "vending_snacks_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 128, "y": 768, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "furniture"
+    },
+
+    "money_large": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 1568, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.9,
+      "display_w": 64, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — large pile of money"
+    },
+    "money_medium": {
+      "sheet": "mo_black_shadow_32",
+      "x": 416, "y": 1504, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.9,
+      "display_w": 32, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — pile of money"
+    },
+    "money_small": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 1504, "w": 32, "h": 64,
+      "origin": "bottom", "depth": 1.9,
+      "display_w": 32, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — small pile of money"
+    },
+
+    "plant_tall_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 256, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.55,
+      "display_w": 64, "display_h": 64,
+      "type": "decor"
+    },
+    "plant_bush_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 320, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.55,
+      "display_w": 64, "display_h": 64,
+      "type": "decor"
+    },
+    "plant_snake_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 384, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.55,
+      "display_w": 64, "display_h": 64,
+      "type": "decor"
+    },
+
+    "monitor_dual_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 1152, "w": 128, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 128, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0
+    },
+    "laptop_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 448, "y": 512, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 64, "display_h": 64,
+      "type": "decor", "action": "use_computer",
+      "parent_offset_y": 0
+    },
+    "desk_lamp_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 320, "y": 512, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 2.1,
+      "display_w": 64, "display_h": 64,
+      "type": "decor", "parent_offset_y": 0
+    },
+    "printer_desktop_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 576, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+    "printer_large_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 704, "w": 64, "h": 128,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 128,
+      "type": "furniture"
+    },
+    "water_cooler_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 384, "y": 448, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+    "coffee_barista_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 1280, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+    "small_table_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 576, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 64, "display_h": 64,
+      "type": "furniture"
+    },
+    "pop_art_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 384, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor"
+    },
+    "gold_cert_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 256, "y": 256, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor"
+    },
+    "cork_board_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 448, "y": 64, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor"
+    },
+    "ac_unit_sheet": {
+      "sheet": "mo_black_shadow_32",
+      "x": 0, "y": 1024, "w": 128, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 128, "display_h": 64,
+      "type": "decor"
+    },
+    "conference_table": {
+      "sheet": "mo_black_shadow_32",
+      "x": 192, "y": 576, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 128, "display_h": 128,
+      "type": "surface"
+    },
+
+    "corner_sofa": {
+      "sheet": "mo_black_shadow_32",
+      "x": 72, "y": 553, "w": 81, "h": 78,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 81, "display_h": 78,
+      "type": "furniture",
+      "_note": "User cut — corner sofa"
+    },
+    "sofa_2person": {
+      "sheet": "mo_black_shadow_32",
+      "x": 3, "y": 549, "w": 61, "h": 55,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 61, "display_h": 55,
+      "type": "furniture",
+      "_note": "User cut — 2 person sofa"
+    },
+    "right_corner_sofa": {
+      "sheet": "mo_black_shadow_32",
+      "x": 70, "y": 645, "w": 85, "h": 83,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 85, "display_h": 83,
+      "type": "furniture",
+      "_note": "User cut — right corner sofa"
+    },
+    "coffee_machine": {
+      "sheet": "mo_black_shadow_32",
+      "x": 261, "y": 1228, "w": 56, "h": 72,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 56, "display_h": 72,
+      "type": "furniture",
+      "_note": "User cut — coffee machine for break room"
+    },
+    "plant_tree": {
+      "sheet": "mo_black_shadow_32",
+      "x": 191, "y": 244, "w": 35, "h": 60,
+      "origin": "bottom", "depth": 1.55,
+      "display_w": 35, "display_h": 60,
+      "type": "decor",
+      "_note": "User cut — potted plant tree"
+    },
+    "plant_potted": {
+      "sheet": "mo_black_shadow_32",
+      "x": 193, "y": 328, "w": 31, "h": 44,
+      "origin": "bottom", "depth": 1.55,
+      "display_w": 31, "display_h": 44,
+      "type": "decor",
+      "_note": "User cut — potted plant"
+    },
+    "plant_spikey": {
+      "sheet": "mo_black_shadow_32",
+      "x": 195, "y": 407, "w": 27, "h": 57,
+      "origin": "bottom", "depth": 1.55,
+      "display_w": 27, "display_h": 57,
+      "type": "decor",
+      "_note": "User cut — potted plant spikey"
+    },
+    "cork_board": {
+      "sheet": "mo_black_shadow_32",
+      "x": 288, "y": 320, "w": 64, "h": 64,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 64, "display_h": 64,
+      "type": "decor",
+      "_note": "User cut — office cork board"
+    },
+    "cert_1": {
+      "sheet": "mo_black_shadow_32",
+      "x": 225, "y": 274, "w": 32, "h": 36,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 32, "display_h": 36,
+      "type": "decor",
+      "_note": "User cut — certificate 1"
+    },
+    "cert_2": {
+      "sheet": "mo_black_shadow_32",
+      "x": 264, "y": 278, "w": 52, "h": 30,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 52, "display_h": 30,
+      "type": "decor",
+      "_note": "User cut — certificate 2"
+    },
+    "cert_3": {
+      "sheet": "mo_black_shadow_32",
+      "x": 225, "y": 340, "w": 30, "h": 34,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 30, "display_h": 34,
+      "type": "decor",
+      "_note": "User cut — certificate 3"
+    },
+    "cert_4": {
+      "sheet": "mo_black_shadow_32",
+      "x": 258, "y": 339, "w": 29, "h": 36,
+      "origin": "bottom", "depth": 1.2,
+      "display_w": 29, "display_h": 36,
+      "type": "decor",
+      "_note": "User cut — certificate 4"
+    },
+    "printer_paper": {
+      "sheet": "mo_black_shadow_32",
+      "x": 257, "y": 587, "w": 65, "h": 56,
+      "origin": "bottom", "depth": 1.5,
+      "display_w": 65, "display_h": 56,
+      "type": "furniture",
+      "_note": "User cut — printer and paper"
+    }
+  },
+  "placements": [
+    {"id": "ac_unit_small", "instanceId": "editor_ac_unit_small_1", "x": 132, "y": 64},
+    {"id": "cubicle_divider_full", "instanceId": "editor_cubicle_divider_full_3", "x": 528, "y": 196},
+    {"id": "cubicle_divider_full", "instanceId": "editor_cubicle_divider_full_5", "x": 532, "y": 352},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_6", "x": 164, "y": 192},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_7", "x": 264, "y": 192},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_8", "x": 496, "y": 196},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_9", "x": 592, "y": 196},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_10", "x": 168, "y": 324},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_11", "x": 268, "y": 324},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_12", "x": 496, "y": 352},
+    {"id": "cubicle_desk_front", "instanceId": "editor_cubicle_desk_front_13", "x": 592, "y": 352},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_14", "x": 496, "y": 288},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_15", "x": 592, "y": 288},
+    {"id": "cubicle_divider_full", "instanceId": "editor_cubicle_divider_full_16", "x": 204, "y": 320},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_17", "x": 168, "y": 256},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_18", "x": 268, "y": 256},
+    {"id": "cubicle_divider_full", "instanceId": "editor_cubicle_divider_full_19", "x": 200, "y": 188},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_20", "x": 592, "y": 132},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_21", "x": 264, "y": 124},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_22", "x": 164, "y": 124},
+    {"id": "cubicle_desk_back", "instanceId": "editor_cubicle_desk_back_23", "x": 496, "y": 132},
+    {"id": "desk_setup_monitors", "instanceId": "editor_desk_setup_monitors_25", "x": 500, "y": 352},
+    {"id": "desk_setup_monitors", "instanceId": "editor_desk_setup_monitors_26", "x": 596, "y": 352},
+    {"id": "desk_setup_laptop_phone", "instanceId": "editor_desk_setup_laptop_phone_27", "x": 260, "y": 196},
+    {"id": "desk_setup_laptop", "instanceId": "editor_desk_setup_laptop_28", "x": 496, "y": 196},
+    {"id": "desk_setup_monitors_alt", "instanceId": "editor_desk_setup_monitors_alt_29", "x": 164, "y": 192},
+    {"id": "desk_setup_monitors", "instanceId": "editor_desk_setup_monitors_30", "x": 272, "y": 324},
+    {"id": "desk_setup_laptop", "instanceId": "editor_desk_setup_laptop_31", "x": 172, "y": 324},
+    {"id": "laptop_front_left", "instanceId": "editor_laptop_front_left_33", "x": 572, "y": 204},
+    {"id": "money_small", "instanceId": "editor_money_small_34", "x": 612, "y": 200},
+    {"id": "plant_potted", "instanceId": "editor_plant_potted_35", "x": 332, "y": 156},
+    {"id": "plant_spikey", "instanceId": "editor_plant_spikey_36", "x": 428, "y": 312},
+    {"id": "pop_art_sheet", "instanceId": "editor_pop_art_sheet_37", "x": 388, "y": 76},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_39", "x": 492, "y": 280},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_40", "x": 492, "y": 124},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_41", "x": 588, "y": 124},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_42", "x": 264, "y": 120},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_43", "x": 160, "y": 120},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_44", "x": 588, "y": 280},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_50", "x": 492, "y": 228},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_52", "x": 156, "y": 364},
+    {"id": "chair_orange_back_no_holes", "instanceId": "editor_chair_orange_back_no_holes_53", "x": 592, "y": 224},
+    {"id": "chair_black_back_holes", "instanceId": "editor_chair_black_back_holes_54", "x": 268, "y": 360},
+    {"id": "chair_black_front", "instanceId": "editor_chair_black_front_55", "x": 164, "y": 252},
+    {"id": "chair_black_front", "instanceId": "editor_chair_black_front_56", "x": 264, "y": 252},
+    {"id": "chair_black_back_holes", "instanceId": "editor_chair_black_back_holes_57", "x": 596, "y": 392},
+    {"id": "chair_black_back_holes", "instanceId": "editor_chair_black_back_holes_58", "x": 496, "y": 384},
+    {"id": "right_corner_sofa", "instanceId": "editor_right_corner_sofa_59", "x": 948, "y": 140},
+    {"id": "sofa_2person", "instanceId": "editor_sofa_2person_60", "x": 1016, "y": 112},
+    {"id": "sofa_2person", "instanceId": "editor_sofa_2person_61", "x": 1076, "y": 112},
+    {"id": "plant_tree", "instanceId": "editor_plant_tree_62", "x": 904, "y": 176},
+    {"id": "cubicle_desk", "instanceId": "editor_cubicle_desk_63", "x": 1188, "y": 124},
+    {"id": "desk_setup_monitors", "instanceId": "editor_desk_setup_monitors_64", "x": 1192, "y": 124},
+    {"id": "chair_orange_back_no_holes", "instanceId": "editor_chair_orange_back_no_holes_66", "x": 1188, "y": 164},
+    {"id": "money_large", "instanceId": "editor_money_large_67", "x": 1216, "y": 256},
+    {"id": "money_medium", "instanceId": "editor_money_medium_68", "x": 1044, "y": 132},
+    {"id": "money_small", "instanceId": "editor_money_small_69", "x": 928, "y": 168},
+    {"id": "money_large", "instanceId": "editor_money_large_71", "x": 1220, "y": 236},
+    {"id": "box_desk", "instanceId": "editor_box_desk_72", "x": 1020, "y": 604},
+    {"id": "chair_black_side_left", "instanceId": "editor_chair_black_side_left_73", "x": 1084, "y": 580},
+    {"id": "chair_black_side_right", "instanceId": "editor_chair_black_side_right_74", "x": 956, "y": 584},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_75", "x": 996, "y": 528},
+    {"id": "chair_black_front_holes", "instanceId": "editor_chair_black_front_holes_76", "x": 1044, "y": 528},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_78", "x": 996, "y": 640},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_79", "x": 1044, "y": 640},
+    {"id": "coffee_machine", "instanceId": "editor_coffee_machine_80", "x": 1212, "y": 508},
+    {"id": "cubicle_desk", "instanceId": "editor_cubicle_desk_81", "x": 980, "y": 404},
+    {"id": "cubicle_desk", "instanceId": "editor_cubicle_desk_82", "x": 1168, "y": 404},
+    {"id": "chair_orange_front_holes", "instanceId": "editor_chair_orange_front_holes_83", "x": 1164, "y": 364},
+    {"id": "chair_orange_front_holes", "instanceId": "editor_chair_orange_front_holes_84", "x": 972, "y": 364},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_87", "x": 960, "y": 432},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_88", "x": 996, "y": 432},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_89", "x": 1148, "y": 436},
+    {"id": "chair_black_back_no_holes", "instanceId": "editor_chair_black_back_no_holes_90", "x": 1188, "y": 436},
+    {"id": "chair_black_side_left", "instanceId": "editor_chair_black_side_left_91", "x": 1228, "y": 408},
+    {"id": "right_corner_sofa", "instanceId": "editor_right_corner_sofa_93", "x": 100, "y": 576},
+    {"id": "sofa_2person", "instanceId": "editor_sofa_2person_94", "x": 252, "y": 548},
+    {"id": "cert_2", "instanceId": "editor_cert_2_95", "x": 172, "y": 504},
+    {"id": "waiting_row_4", "instanceId": "editor_waiting_row_4_96", "x": 572, "y": 552},
+    {"id": "water_dispenser", "instanceId": "editor_water_dispenser_97", "x": 80, "y": 668},
+    {"id": "vending_full", "instanceId": "editor_vending_full_98", "x": 416, "y": 548},
+    {"id": "trash_can", "instanceId": "editor_trash_can_99", "x": 156, "y": 564},
+    {"id": "plant_spikey", "instanceId": "editor_plant_spikey_101", "x": 212, "y": 532},
+    {"id": "cubicle_desk", "instanceId": "editor_cubicle_desk_102", "x": 172, "y": 616},
+    {"id": "bookshelf_short", "instanceId": "editor_bookshelf_short_103", "x": 920, "y": 508},
+    {"id": "bookshelf_short", "instanceId": "editor_bookshelf_short_104", "x": 308, "y": 108},
+    {"id": "bookshelf_short", "instanceId": "editor_bookshelf_short_106", "x": 812, "y": 552},
+    {"id": "bookshelf_short", "instanceId": "editor_bookshelf_short_107", "x": 808, "y": 124},
+    {"id": "cert_1", "instanceId": "editor_cert_1_108", "x": 1124, "y": 72}
+  ]
+}

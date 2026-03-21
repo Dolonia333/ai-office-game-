@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Confirm sprites – open and verify</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 16px; }
+    h1 { font-size: 1.2rem; margin-bottom: 8px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs button { padding: 8px 14px; background: #16213e; border: 1px solid #0f3460; color: #e0e0e0; cursor: pointer; border-radius: 6px; }
+    .tabs button.active { background: #0f3460; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .card { background: #16213e; border-radius: 8px; padding: 8px; text-align: center; }
+    .card canvas { display: block; margin: 0 auto 6px; image-rendering: pixelated; image-rendering: crisp-edges; max-width: 128px; max-height: 128px; }
+    .card .id { font-size: 11px; word-break: break-all; color: #a0a0a0; }
+    .card .rect { font-size: 10px; color: #808080; }
+    .loadErr { color: #f88; }
+    p { font-size: 14px; margin-bottom: 12px; color: #b0b0b0; }
+  </style>
+</head>
+<body>
+  <h1>Confirm sprites – open and verify</h1>
+  <p>Each card is one sprite from the catalog. Sheet is cropped at the stored (x,y,w,h). Use this to confirm everything matches your sheets. <strong>Wrong labels?</strong> Use <a href="sprite-labeler.html" style="color:#58a6ff">Sprite Labeler</a> to fix object IDs, or <a href="tile-labeler.html" style="color:#58a6ff">Tile Labeler</a> to label floors/walls tilesets.</p>
+  <div class="tabs">
+    <button data-panel="openplan" class="active" id="btn-openplan">Openplan</button>
+    <button data-panel="interiors" id="btn-interiors">Interiors prefabs</button>
+  </div>
+
+  <div id="panel-openplan" class="panel active">
+    <p><strong>These crops use the (x,y,w,h) in the catalog.</strong> If the image doesn’t match the label (e.g. “bookshelf” shows a couch, “water_cooler” wrong), the catalog rects are wrong for this sheet. Use <a href="sprite-labeler.html" style="color:#58a6ff">Sprite Labeler</a> to pick the correct sprite for each ID. Source: <code>furniture_catalog_openplan.json</code> → sheet <code>mo_black_shadow_32</code>.</p>
+    <div id="grid-openplan" class="grid"></div>
+  </div>
+
+  <div id="panel-interiors" class="panel">
+    <p>From <code>interiors.json</code> → XP Generic / Living sheets. (Sheets must be under same server so images load.)</p>
+    <div id="grid-interiors" class="grid"></div>
+  </div>
+
+  <script type="module">
+    const sheetBase = '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff';
+    const moBlack32 = sheetBase + '/Modern_Office_Revamped_v1.2/2_Modern_Office_Black_Shadow/Modern_Office_Black_Shadow_32x32.png';
+    const xpGeneric = sheetBase + '/Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/1_Generic.png';
+    const xpLiving = sheetBase + '/Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/2_LivingRoom.png';
+
+    function drawCrop(img, x, y, w, h) {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+      return c;
+    }
+
+    function addCard(parent, id, rectLabel, canvas) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      if (canvas) card.appendChild(canvas);
+      const idEl = document.createElement('div');
+      idEl.className = 'id';
+      idEl.textContent = id;
+      card.appendChild(idEl);
+      const rectEl = document.createElement('div');
+      rectEl.className = 'rect';
+      rectEl.textContent = rectLabel;
+      card.appendChild(rectEl);
+      parent.appendChild(card);
+    }
+
+    async function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to load ' + src));
+        img.src = src;
+      });
+    }
+
+    async function runOpenplan() {
+      const grid = document.getElementById('grid-openplan');
+      let catalog;
+      try {
+        const r = await fetch('./data/furniture_catalog_openplan.json');
+        catalog = await r.json();
+      } catch (e) {
+        grid.innerHTML = '<span class="loadErr">Could not load catalog: ' + e.message + '</span>';
+        return;
+      }
+      let img;
+      try {
+        img = await loadImage(moBlack32);
+      } catch (e) {
+        grid.innerHTML = '<span class="loadErr">Could not load sheet. Serve from repo root (e.g. python -m http.server 8000 from multbot). ' + e.message + '</span>';
+        return;
+      }
+      const ids = Object.keys(catalog.objects || {});
+      document.getElementById('btn-openplan').textContent = 'Openplan (' + ids.length + ')';
+      for (const [id, def] of Object.entries(catalog.objects)) {
+        const x = def.x || 0;
+        const y = def.y || 0;
+        const w = Math.max(1, def.w || 32);
+        const h = Math.max(1, def.h || 32);
+        const canvas = drawCrop(img, x, y, w, h);
+        addCard(grid, id, `(${x},${y}) ${w}×${h}`, canvas);
+      }
+    }
+
+    async function runInteriors() {
+      const grid = document.getElementById('grid-interiors');
+      let catalog;
+      try {
+        const r = await fetch('./data/interiors.json');
+        catalog = await r.json();
+      } catch (e) {
+        grid.innerHTML = '<span class="loadErr">Could not load catalog: ' + e.message + '</span>';
+        return;
+      }
+      const prefabs = [
+        { id: 'desk_cluster_2x2', sheetKey: 'mi_office_generic', path: xpGeneric },
+        { id: 'office_chair', sheetKey: 'mi_office_generic', path: xpGeneric },
+        { id: 'pc_monitor', sheetKey: 'mi_office_generic', path: xpGeneric },
+        { id: 'plant_pot', sheetKey: 'mi_office_living', path: xpLiving },
+        { id: 'bookshelf', sheetKey: 'mi_office_living', path: xpLiving },
+        { id: 'printer', sheetKey: 'mi_office_generic', path: xpGeneric }
+      ];
+      let interiorsCount = 0;
+      const loaded = {};
+      for (const p of prefabs) {
+        const def = catalog.prefabs[p.id];
+        if (!def || !def.rect) continue;
+        const path = p.path;
+        if (!loaded[path]) {
+          try {
+            loaded[path] = await loadImage(path);
+          } catch (e) {
+            addCard(grid, p.id, 'Sheet failed to load: ' + path, null);
+            continue;
+          }
+        }
+        const img = loaded[path];
+        const r = def.rect;
+        const x = r.x || 0, y = r.y || 0, w = Math.max(1, r.w || 32), h = Math.max(1, r.h || 32);
+        const canvas = drawCrop(img, x, y, w, h);
+        addCard(grid, p.id, `(${x},${y}) ${w}×${h}`, canvas);
+        interiorsCount++;
+      }
+      document.getElementById('btn-interiors').textContent = 'Interiors prefabs (' + interiorsCount + ')';
+    }
+
+    document.querySelectorAll('.tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
+      });
+    });
+
+    runOpenplan();
+    runInteriors();
+  </script>
+</body>
+</html>

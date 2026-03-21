@@ -1,0 +1,71 @@
+{
+  "info": {
+    "purpose": "Semantic catalog for LimeZu Modern Exteriors tiles used by the city generator.",
+    "notes": [
+      "This file is engine-agnostic. It groups tiles by semantic role (roads, pavements, facades, props).",
+      "tileIndex refers to a 16x16 tile index in the underlying spritesheet (RPG Maker MV A2/A4/Tileset_10x).",
+      "The exact indices here are examples and should be refined against your chosen tileset image."
+    ]
+  },
+  "tilesets": {
+    "modern_exteriors_a2_floors": {
+      "type": "ground",
+      "imageKey": "me_a2_floors",
+      "tileSize": 16
+    },
+    "modern_exteriors_a4_walls": {
+      "type": "walls",
+      "imageKey": "me_a4_walls",
+      "tileSize": 16
+    },
+    "modern_exteriors_tileset_100": {
+      "type": "objects",
+      "imageKey": "me_tileset_100",
+      "tileSize": 16
+    }
+  },
+  "categories": {
+    "road_straight": [
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 0, "orientation": "horizontal" },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 1, "orientation": "vertical" }
+    ],
+    "road_corner": [
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 2, "orientation": "ne" },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 3, "orientation": "nw" },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 4, "orientation": "se" },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 5, "orientation": "sw" }
+    ],
+    "road_intersection": [
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 6, "kind": "t" },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 7, "kind": "cross" }
+    ],
+    "pavement": [
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 16 },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 17 }
+    ],
+    "grass": [
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 32 },
+      { "tileset": "modern_exteriors_a2_floors", "tileIndex": 33 }
+    ],
+    "building_facade_office": [
+      { "tileset": "modern_exteriors_a4_walls", "tileIndex": 0 },
+      { "tileset": "modern_exteriors_a4_walls", "tileIndex": 1 }
+    ],
+    "building_roof_flat": [
+      { "tileset": "modern_exteriors_a4_walls", "tileIndex": 16 },
+      { "tileset": "modern_exteriors_a4_walls", "tileIndex": 17 }
+    ],
+    "tree": [
+      { "tileset": "modern_exteriors_tileset_100", "tileIndex": 0 },
+      { "tileset": "modern_exteriors_tileset_100", "tileIndex": 1 }
+    ],
+    "street_lamp": [
+      { "tileset": "modern_exteriors_tileset_100", "tileIndex": 16 }
+    ],
+    "car": [
+      { "tileset": "modern_exteriors_tileset_100", "tileIndex": 32 },
+      { "tileset": "modern_exteriors_tileset_100", "tileIndex": 33 }
+    ]
+  }
+}
+

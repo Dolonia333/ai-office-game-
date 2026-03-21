@@ -1,0 +1,43 @@
+{
+  "info": {
+    "sourceScreenshot": "assets/c__Users_zionv_AppData_Roaming_Cursor_User_workspaceStorage_06bc28a3e042804d7a2fb430663bb35d_images_y5X8s_-3fa4-4b72-8429-49ae31e063e8.png",
+    "note": "Links high-level reference office objects to auto-extracted Modern Office catalog objects. catalogId entries refer to catalog_modern_office_*.auto.json."
+  },
+  "objects": {
+    "water_cooler_blue": {
+      "catalogId": "modern_office_16__g1_30__3x3",
+      "role": "machine",
+      "layer": "floor"
+    },
+    "coffee_station_counter": {
+      "catalogId": "modern_office_16__g4_30__3x3",
+      "role": "machine",
+      "layer": "floor"
+    },
+    "waiting_sofa_blue": {
+      "catalogId": null,
+      "role": "seat",
+      "layer": "floor",
+      "pending": true
+    },
+    "poster_pop_art_three_faces": {
+      "catalogId": null,
+      "role": "decor_wall",
+      "layer": "wall",
+      "pending": true
+    },
+    "bookshelf_office": {
+      "catalogId": null,
+      "role": "storage",
+      "layer": "floor",
+      "pending": true
+    },
+    "wall_screen_large": {
+      "catalogId": null,
+      "role": "decor_wall",
+      "layer": "wall",
+      "pending": true
+    }
+  }
+}
+

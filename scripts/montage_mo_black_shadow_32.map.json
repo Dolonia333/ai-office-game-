@@ -1,0 +1,13 @@
+{
+  "source": {
+    "scanPath": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel-office-game\\scripts\\modern_office_black_shadow.scan32.json",
+    "imagePath": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\2_Modern_Office_Black_Shadow\\Modern_Office_Black_Shadow_32x32.png",
+    "width": 512,
+    "height": 1696
+  },
+  "cell": 96,
+  "pad": 6,
+  "cols": 12,
+  "count": 0,
+  "items": []
+}

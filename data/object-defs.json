@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "purpose": "Defines multi-tile objects (desks, computers, etc.) for LimeZu 16x16 base grid.",
+    "baseGridSize": 16,
+    "tileUnits": "w/h are in base tiles (1 = 16px). Sheet tiles are 32x32 so 2 base tiles = 1 sheet tile.",
+    "notes": [
+      "sheetId must match tilesheets-config.json",
+      "topLeftIndex = tile index in sheet (row-major, 32x32 per tile)",
+      "type: furniture = lower depth (1.5), decor = higher depth (2) so decor draws on top",
+      "render_offset: pixel offset for decor so it sits on furniture (e.g. computer on desk)",
+      "pivot: 'bottom' (default) = origin at bottom-center so tall objects (tents, gym racks) stand on the floor; use 'center' for symmetric objects",
+      "attachToSurface: for decor (fruit bowl, pillows) snap to nearest surface with surface_offset_y_px (e.g. -4); see ASSEMBLY.md and data/definitions.json"
+    ]
+  },
+  "objects": {
+    "desk_basic": {
+      "sheetId": "mv_classroom_library_01",
+      "topLeftIndex": 10,
+      "w": 2,
+      "h": 2,
+      "type": "furniture",
+      "depth": 1.5
+    },
+    "computer_basic": {
+      "sheetId": "mv_classroom_library_01",
+      "topLeftIndex": 20,
+      "w": 2,
+      "h": 2,
+      "type": "decor",
+      "depth": 2,
+      "render_offset": { "x": 0, "y": -8 }
+    }
+  }
+}
+
