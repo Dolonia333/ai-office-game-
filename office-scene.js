@@ -72,6 +72,29 @@ class OfficeScene extends Phaser.Scene {
       { frameWidth: 32, frameHeight: 64 }
     );
 
+    // Dolo phone animation (32x64 per frame, 12 frames, single row)
+    this.load.spritesheet(
+      'dolo_phone',
+      'assets/Dolo_phone.png',
+      { frameWidth: 32, frameHeight: 64 }
+    );
+
+    // Dolo sit animation (16x32 per frame, 12 frames = 6 poses × 2 directions)
+    // Each pair: [left-facing, right-facing]
+    this.load.spritesheet(
+      'dolo_sit',
+      'assets/Dolo_sit.png',
+      { frameWidth: 16, frameHeight: 32 }
+    );
+
+    // Robber: security threat visualization NPC (16x32 per frame, 24 cols x 1 row)
+    // Character Generator 2.0 format — smaller scale, needs 2x display
+    this.load.spritesheet(
+      'robber',
+      'assets/rober.png',
+      { frameWidth: 16, frameHeight: 32 }
+    );
+
     // All distinct XP characters available in the pack (32x48 per frame, 4x4 grid)
     // Reduced NPC list to keep total preload under 32 files (prevent loader stall)
     const xpNames = [
@@ -188,10 +211,54 @@ class OfficeScene extends Phaser.Scene {
     cutRBTile('wall_tjunc_r',    64,  64);   // T-junction right — tile (2,2)
     cutRBTile('wall_fill',       320, 0);    // Solid white fill — tile (10,0) for thick walls
 
-    // --- Wall Face textures (bottom half — gives walls visible height) ---
+    // --- Wall Face textures (Room Builder bottom rows — designed for simple tiling) ---
     cutRBTile('wall_face_grey',  0,   224);  // Grey/concrete — standard office wall
     cutRBTile('wall_face_purple', 0,  160);  // Purple/patterned — decorative/feature walls
     cutRBTile('wall_shadow',     96,  160);  // Shadow strip — right side of vertical walls for 3D
+
+    // --- Procedural wall trim + face textures matching the reference ---
+    // Reference colors sampled: trim=#3a3a50, face=#c3dee6 (lavender-blue)
+    // We create simple colored canvas textures for consistent appearance.
+    const makeWallTex = (key, w, h, fillFn) => {
+      if (this.textures.exists(key)) this.textures.remove(key);
+      const t = this.textures.createCanvas(key, w, h);
+      fillFn(t.context, w, h);
+      t.refresh();
+    };
+
+    // Horizontal wall trim — dark navy-blue strip (top of wall)
+    makeWallTex('wall_trim_h', 32, 32, (ctx, w, h) => {
+      ctx.fillStyle = '#3a3a50';
+      ctx.fillRect(0, 0, w, h);
+      // Subtle bottom edge highlight
+      ctx.fillStyle = '#4a4a62';
+      ctx.fillRect(0, h - 2, w, 2);
+    });
+
+    // Wall face tile — lavender/blue-grey surface (body of wall)
+    makeWallTex('wall_face', 32, 32, (ctx, w, h) => {
+      // Base lavender
+      ctx.fillStyle = '#c3d0e6';
+      ctx.fillRect(0, 0, w, h);
+      // Subtle horizontal line texture (like mortar lines)
+      ctx.fillStyle = '#b8c4db';
+      for (let y = 7; y < h; y += 8) {
+        ctx.fillRect(0, y, w, 1);
+      }
+      // Slight vertical variation
+      ctx.fillStyle = '#cddaec';
+      ctx.fillRect(0, 0, w, 2);
+    });
+
+    // Vertical wall face (same color, subtle vertical mortar lines)
+    makeWallTex('wall_face_v', 32, 32, (ctx, w, h) => {
+      ctx.fillStyle = '#c3d0e6';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#b8c4db';
+      for (let x = 7; x < w; x += 8) {
+        ctx.fillRect(x, 0, 1, h);
+      }
+    });
 
     // --- Floor tiles from Room Builder ---
     cutRBTile('floor_rb_office', 320, 160);  // Grey grid/tile — standard office
@@ -612,38 +679,36 @@ class OfficeScene extends Phaser.Scene {
       const T = 32; // tile size
 
       // -- Helper: draw a horizontal wall segment --
-      // Renders: wall outline on top row, wall face below, with corners at ends
-      // y = top edge of wall outline. Total height = 64px (2 tiles).
+      // Reference style: dark navy trim on top + lavender wall face below
+      // y = top edge of wall. Total height = 64px (trim + face).
       const drawHWall = (startX, y, endX) => {
-        const tiles = Math.ceil((endX - startX) / T);
-        for (let i = 0; i < tiles; i++) {
-          const px = startX + i * T;
-          // LAYER 3: Wall top outline (Z=5)
-          this.add.image(px, y, 'wall_top_h').setOrigin(0, 0).setDepth(5);
-          // LAYER 2: Wall face below outline (Z=3)
-          this.add.image(px, y + T, 'wall_face_grey').setOrigin(0, 0).setDepth(3);
-        }
-        // Collision for the full wall (2 tiles tall)
         const w = endX - startX;
+        if (w <= 0) return;
+        // Dark trim strip on top (8px tall)
+        this.add.rectangle(startX + w / 2, y + 4, w, 8, 0x3a3a50, 1).setDepth(5);
+        // Lavender wall face below trim
+        const faceH = T * 2 - 8;
+        this.add.tileSprite(startX + w / 2, y + 8 + faceH / 2, w, faceH, 'wall_face').setDepth(3);
+        // Bottom edge shadow
+        this.add.rectangle(startX + w / 2, y + T * 2 - 1, w, 2, 0x9a9ab0, 0.5).setDepth(3.1);
+        // Collision
         const obs = this.add.rectangle(startX + w / 2, y + T, w, T * 2, 0x000000, 0);
         this.physics.add.existing(obs, true);
         this._obstacles.push(obs);
       };
 
       // -- Helper: draw a vertical wall segment --
-      // Renders: wall outline tiles + shadow strip on right side for 3D depth
-      // x = left edge of wall outline. Total width = 64px (outline + shadow).
+      // Dark trim on left edge + lavender wall face
       const drawVWall = (x, startY, endY) => {
-        const tiles = Math.ceil((endY - startY) / T);
-        for (let i = 0; i < tiles; i++) {
-          const py = startY + i * T;
-          // LAYER 3: Wall outline (Z=5)
-          this.add.image(x, py, 'wall_top_v').setOrigin(0, 0).setDepth(5);
-          // LAYER 2: Shadow on the right side (Z=3) for 3D depth
-          this.add.image(x + T, py, 'wall_shadow').setOrigin(0, 0).setDepth(3);
-        }
-        // Collision for wall (1 tile wide)
         const h = endY - startY;
+        if (h <= 0) return;
+        // Dark trim line on left edge (6px wide)
+        this.add.rectangle(x + 3, startY + h / 2, 6, h, 0x3a3a50, 1).setDepth(5);
+        // Wall face body
+        this.add.tileSprite(x + 6 + (T - 6) / 2, startY + h / 2, T - 6, h, 'wall_face_v').setDepth(3);
+        // Subtle shadow on right edge
+        this.add.rectangle(x + T - 1, startY + h / 2, 2, h, 0x9a9ab0, 0.4).setDepth(3.1);
+        // Collision
         const obs = this.add.rectangle(x + T / 2, startY + h / 2, T, h, 0x000000, 0);
         this.physics.add.existing(obs, true);
         this._obstacles.push(obs);
@@ -651,13 +716,11 @@ class OfficeScene extends Phaser.Scene {
 
       // -- Helper: place a corner piece --
       const drawCorner = (x, y, type) => {
-        const texKey = type === 'tl' ? 'wall_corner_tl'
-                     : type === 'tr' ? 'wall_corner_tr'
-                     : type === 'tjl' ? 'wall_tjunc_l'
-                     : 'wall_tjunc_r';
-        this.add.image(x, y, texKey).setOrigin(0, 0).setDepth(5.1);
-        // Face tile below corner
-        this.add.image(x, y + T, 'wall_face_grey').setOrigin(0, 0).setDepth(3);
+        // Dark trim on top
+        this.add.rectangle(x + T / 2, y + 4, T, 8, 0x3a3a50, 1).setDepth(5.1);
+        // Face tile below
+        const faceH = T * 2 - 8;
+        this.add.tileSprite(x + T / 2, y + 8 + faceH / 2, T, faceH, 'wall_face').setDepth(3);
       };
 
       // ============================
@@ -847,6 +910,100 @@ class OfficeScene extends Phaser.Scene {
     };
     this._playerAnimKey = registerDoloAnims();
 
+    // --- Dolo phone animations (3 phases) ---
+    // phone_open: pull out phone (frames 0-5), play once
+    this.anims.create({
+      key: 'dolo:phone_open',
+      frames: this.anims.generateFrameNumbers('dolo_phone', { start: 0, end: 5 }),
+      frameRate: 8,
+      repeat: 0
+    });
+    // phone_idle: looking at phone (frames 4-5), loop
+    this.anims.create({
+      key: 'dolo:phone_idle',
+      frames: this.anims.generateFrameNumbers('dolo_phone', { frames: [4, 5] }),
+      frameRate: 3,
+      repeat: -1
+    });
+    // phone_close: put phone away (frames 6-11), play once
+    this.anims.create({
+      key: 'dolo:phone_close',
+      frames: this.anims.generateFrameNumbers('dolo_phone', { start: 6, end: 11 }),
+      frameRate: 8,
+      repeat: 0
+    });
+
+    // --- Dolo sit animations (16x32 frames, 12 total = 6 poses × 2 dirs) ---
+    // Pairs: [left, right] for each pose. Poses 0-2 = sit down, 3-4 = idle, 5 = variant
+    // sit_down_left: frames 0,2,4 (even = left), play once
+    this.anims.create({
+      key: 'dolo:sit_down_left',
+      frames: this.anims.generateFrameNumbers('dolo_sit', { frames: [0, 2, 4] }),
+      frameRate: 6,
+      repeat: 0
+    });
+    // sit_down_right: frames 1,3,5 (odd = right), play once
+    this.anims.create({
+      key: 'dolo:sit_down_right',
+      frames: this.anims.generateFrameNumbers('dolo_sit', { frames: [1, 3, 5] }),
+      frameRate: 6,
+      repeat: 0
+    });
+    // sit_idle_left: last left pose loops
+    this.anims.create({
+      key: 'dolo:sit_idle_left',
+      frames: this.anims.generateFrameNumbers('dolo_sit', { frames: [4, 6, 8] }),
+      frameRate: 2,
+      repeat: -1
+    });
+    // sit_idle_right: last right pose loops
+    this.anims.create({
+      key: 'dolo:sit_idle_right',
+      frames: this.anims.generateFrameNumbers('dolo_sit', { frames: [5, 7, 9] }),
+      frameRate: 2,
+      repeat: -1
+    });
+    // stand_up_left: reverse of sit down
+    this.anims.create({
+      key: 'dolo:stand_up_left',
+      frames: this.anims.generateFrameNumbers('dolo_sit', { frames: [4, 2, 0] }),
+      frameRate: 6,
+      repeat: 0
+    });
+    // stand_up_right: reverse of sit down
+    this.anims.create({
+      key: 'dolo:stand_up_right',
+      frames: this.anims.generateFrameNumbers('dolo_sit', { frames: [5, 3, 1] }),
+      frameRate: 6,
+      repeat: 0
+    });
+
+    // --- Robber: Character Generator 2.0 (same layout as Dolo) ---
+    // 4 dirs × 6 frames: RIGHT(0-5), UP(6-11), LEFT(12-17), DOWN(18-23)
+    const registerRobberAnims = () => {
+      const texKey = 'robber';
+      const makeKey = (k) => `${texKey}:${k}`;
+      const defs = {
+        idle_right: { frames: [2],                     fps: 1 },
+        idle_up:    { frames: [8],                     fps: 1 },
+        idle_left:  { frames: [14],                    fps: 1 },
+        idle_down:  { frames: [20],                    fps: 1 },
+        walk_right: { frames: [0, 1, 2, 3, 4, 5],     fps: 10 },
+        walk_up:    { frames: [6, 7, 8, 9, 10, 11],   fps: 10 },
+        walk_left:  { frames: [12, 13, 14, 15, 16, 17], fps: 10 },
+        walk_down:  { frames: [18, 19, 20, 21, 22, 23], fps: 10 },
+      };
+      Object.entries(defs).forEach(([name, def]) => {
+        this.anims.create({
+          key: makeKey(name),
+          frames: this.anims.generateFrameNumbers(texKey, { frames: def.frames }),
+          frameRate: def.fps,
+          repeat: -1,
+        });
+      });
+    };
+    registerRobberAnims();
+
     // --- Player character (Dolo) ---
     // Character Generator 2.0 sprites are 16x32, designed for LimeZu 32x32 tileset
     this.player = this.physics.add.sprite(310, 200, 'dolo', 0);
@@ -1028,8 +1185,10 @@ class OfficeScene extends Phaser.Scene {
           const interactable = { id: pl.id, instanceId, sprite: s, def: { ...def, _placement: pl }, obstacle: null, parentInstanceId: null };
 
           // Auto-collision box: only large furniture blocks movement (not chairs/seats/small items).
+          // Cap collision width at 64px to prevent wide desk groups from creating invisible walls.
           if (def.type !== 'decor' && def.type !== 'seat' && s.displayWidth >= 48) {
-            const obstacle = this.add.rectangle(pl.x, pl.y, s.displayWidth, 16, 0x000000, 0);
+            const collW = Math.min(s.displayWidth, 64);
+            const obstacle = this.add.rectangle(pl.x, pl.y, collW, 16, 0x000000, 0);
             obstacle.setOrigin(0.5, 1);
             this.physics.add.existing(obstacle, true);
             this._obstacles.push(obstacle);
@@ -1197,6 +1356,160 @@ class OfficeScene extends Phaser.Scene {
         });
       }
     }
+
+    // --- Security Monitor + Robber Controller ---
+    if (window.SecurityMonitor && window.RobberController) {
+      this._securityMonitor = new window.SecurityMonitor();
+      this._robberCtrl = new window.RobberController(this, this._securityMonitor);
+      this._robberCtrl.init();
+      this._securityMonitor.connect();
+      console.log('[OfficeScene] Security Monitor + Robber Controller initialized');
+
+      // Hook into OpenClaw agent events for security checking
+      if (this._gatewayBridge) {
+        this._gatewayBridge.addEventListener('gateway-event', (evt) => {
+          const { event, payload } = evt.detail || {};
+          if (event === 'agent' && payload) {
+            // The server-side monitor checks these, but we can also
+            // do client-side detection for agent tool use
+            if (payload.stream === 'tool' && payload.data) {
+              const toolName = (payload.data.name || '').toLowerCase();
+              const dangerTools = ['bash', 'shell', 'exec', 'eval', 'rm', 'del'];
+              if (dangerTools.some(t => toolName.includes(t))) {
+                this._securityMonitor.injectThreat({
+                  category: 'shell_exec',
+                  severity: 'high',
+                  source: `agent:${payload.agentId || 'unknown'}`,
+                  target: toolName,
+                  detail: `Agent executing: ${toolName}`,
+                });
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // Phone animation toggle (P key) — 3 phases: open → idle → close
+    this._playerOnPhone = false;
+    this._phonePhase = 'none'; // none | opening | idle | closing
+    this.input.keyboard.on('keydown-P', () => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (!this._playerOnPhone) {
+        // Start phone: play open animation, then transition to idle loop
+        this._playerOnPhone = true;
+        this._phonePhase = 'opening';
+        this.player.setTexture('dolo_phone');
+        this.player.play('dolo:phone_open');
+        this.player.once('animationcomplete-dolo:phone_open', () => {
+          if (this._playerOnPhone) {
+            this._phonePhase = 'idle';
+            this.player.play('dolo:phone_idle');
+          }
+        });
+      } else {
+        // Close phone: play close animation, then return to normal
+        this._phonePhase = 'closing';
+        this.player.play('dolo:phone_close');
+        this.player.once('animationcomplete-dolo:phone_close', () => {
+          this._playerOnPhone = false;
+          this._phonePhase = 'none';
+          this.player.setTexture('dolo');
+          this.player.setFrame(20); // idle down
+        });
+      }
+    });
+
+    // Sit interaction — find nearest chair/seat, sit down or stand up
+    this._playerSitting = false;
+    this._sitPhase = 'none'; // none | sitting_down | idle | standing_up
+    this._sitChair = null; // reference to chair we're sitting on
+    this._sitReturnPos = null; // where to stand up to
+
+    // Sit interaction (F key) — find nearest chair/seat, sit down or stand up
+    this.input.keyboard.on('keydown-F', () => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (this._playerOnPhone) return; // can't sit while on phone
+
+      if (!this._playerSitting) {
+        // Find nearest seat within 40px
+        const seats = (this._interactables || []).filter(i => {
+          const def = i.def;
+          return def && (def.type === 'seat' || (def.name && /chair|couch|sofa|seat|bench/i.test(def.name)));
+        });
+        let nearest = null;
+        let nearDist = 60;
+        seats.forEach(s => {
+          const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.sprite.x, s.sprite.y);
+          if (d < nearDist) { nearDist = d; nearest = s; }
+        });
+
+        if (!nearest) return; // no seat nearby
+
+        // Save return position and start sitting
+        this._sitReturnPos = { x: this.player.x, y: this.player.y };
+        this._sitChair = nearest;
+        this._playerSitting = true;
+        this._sitPhase = 'sitting_down';
+
+        // Determine sit direction based on chair position relative to player
+        const chairX = nearest.sprite.x;
+        const sitDir = chairX < this.player.x ? 'left' : 'right';
+        this._sitDir = sitDir;
+
+        // Snap player to chair position with offset based on chair type
+        this.player.body.setVelocity(0, 0);
+        this.player.x = nearest.sprite.x;
+
+        // Front-facing chairs (chair_*_front_*): player sits slightly below chair center
+        // Back-facing chairs (chair_*_back_*): player sits at chair center
+        const isFront = /front/i.test(nearest.id);
+        const yOffset = isFront ? 12 : 0;
+        this.player.y = nearest.sprite.y + yOffset;
+
+        // Switch to sit sprite (16x32 frames, scale 2x to match 32x64 walk sprite)
+        this.player.setTexture('dolo_sit');
+        this.player.setScale(2);
+        // Save original depth and adjust for sitting
+        this._sitOrigDepth = this.player.depth;
+        if (isFront) {
+          // Front-facing chair: Dolo renders behind chair sprite
+          this.player.setDepth(nearest.sprite.depth - 0.1);
+        }
+        this.player.play(`dolo:sit_down_${sitDir}`);
+        this.player.once(`animationcomplete-dolo:sit_down_${sitDir}`, () => {
+          if (this._playerSitting) {
+            this._sitPhase = 'idle';
+            this.player.play(`dolo:sit_idle_${sitDir}`);
+          }
+        });
+      } else {
+        // Stand up
+        this._sitPhase = 'standing_up';
+        const dir = this._sitDir || 'right';
+        this.player.play(`dolo:stand_up_${dir}`);
+        this.player.once(`animationcomplete-dolo:stand_up_${dir}`, () => {
+          this._playerSitting = false;
+          this._sitPhase = 'none';
+          this._sitChair = null;
+
+          // Restore walk sprite, scale, and depth
+          this.player.setTexture('dolo');
+          this.player.setScale(1);
+          this.player.setFrame(20); // idle down
+          if (this._sitOrigDepth !== undefined) {
+            this.player.setDepth(this._sitOrigDepth);
+          }
+
+          // Move player slightly away from chair so they don't re-trigger
+          if (this._sitReturnPos) {
+            this.player.x = this._sitReturnPos.x;
+            this.player.y = this._sitReturnPos.y;
+            this._sitReturnPos = null;
+          }
+        });
+      }
+    });
   }
 
   showNpcDialog(title, body) {
@@ -1343,7 +1656,7 @@ class OfficeScene extends Phaser.Scene {
     this.dialogBox.setDepth(1000);
   }
 
-  update() {
+  update(time, delta) {
     if (!this.cursors) return;
     const speed = 220;
     const body = this.player.body;
@@ -1482,11 +1795,20 @@ class OfficeScene extends Phaser.Scene {
       if (!left && !right) this.facing = 'down';
     }
 
-    if (moving) {
+    if (this._playerSitting) {
+      // Sitting — stop all movement, let sit animation play
+      this.player.body.setVelocity(0, 0);
+    } else if (this._playerOnPhone) {
+      // Phone animation active — stop movement, let animation phases play
+      this.player.body.setVelocity(0, 0);
+    } else if (moving) {
+      // Cancel phone if player starts moving
       const baseKey = (dir) => {
         const fn = this._playerAnimKey;
         return fn ? fn(`walk_${dir}`) : `player_xp:walk_${dir}`;
       };
+      // Ensure walk texture is active
+      if (this.player.texture.key !== 'dolo') this.player.setTexture('dolo');
       if (this.facing === 'up') {
         this.player.anims.play(baseKey('up'), true);
       } else if (this.facing === 'down') {
@@ -1498,6 +1820,7 @@ class OfficeScene extends Phaser.Scene {
       }
     } else {
       // Idle: play idle animation or hold first walk frame for that direction.
+      if (this.player.texture.key !== 'dolo') this.player.setTexture('dolo');
       const idleKey = (dir) => {
         const fn = this._playerAnimKey;
         return fn ? fn(`idle_${dir}`) : `player_xp:idle_${dir}`;
@@ -1511,6 +1834,36 @@ class OfficeScene extends Phaser.Scene {
       } else if (this.facing === 'right') {
         this.player.anims.play(idleKey('right'), true);
       }
+    }
+
+    // --- Sit prompt: show "Press F" when near a chair ---
+    if (!this._playerSitting && !this._playerOnPhone) {
+      const seats = (this._interactables || []).filter(i => {
+        const def = i.def;
+        return def && (def.type === 'seat' || (def.name && /chair|couch|sofa|seat|bench/i.test(def.name)));
+      });
+      let nearSeat = null;
+      let nearDist = 60;
+      seats.forEach(s => {
+        const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.sprite.x, s.sprite.y);
+        if (d < nearDist) { nearDist = d; nearSeat = s; }
+      });
+      if (nearSeat && !this._sitPrompt) {
+        this._sitPrompt = this.add.text(0, 0, '[F] Sit', {
+          fontSize: '10px', fontFamily: 'monospace', color: '#ffffff',
+          backgroundColor: '#00000088', padding: { x: 3, y: 2 }
+        }).setDepth(9999).setOrigin(0.5, 1);
+      }
+      if (this._sitPrompt) {
+        if (nearSeat) {
+          this._sitPrompt.setVisible(true);
+          this._sitPrompt.setPosition(nearSeat.sprite.x, nearSeat.sprite.y - 20);
+        } else {
+          this._sitPrompt.setVisible(false);
+        }
+      }
+    } else if (this._sitPrompt) {
+      this._sitPrompt.setVisible(false);
     }
 
     // --- NPC AI ---
@@ -1600,6 +1953,11 @@ class OfficeScene extends Phaser.Scene {
     // Update agent controller bubbles
     if (this._npcAgentCtrl) {
       this._npcAgentCtrl.updateBubbles();
+    }
+
+    // Update robber controller (security threat visualization)
+    if (this._robberCtrl) {
+      this._robberCtrl.update(this.time.now, delta);
     }
   }
 }
