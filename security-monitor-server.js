@@ -267,7 +267,7 @@ class SecurityMonitorServer {
         // Check Windows Security Event Log for failed logons (Event ID 4625)
         exec(
           'powershell -Command "Get-WinEvent -FilterHashtable @{LogName=\'Security\';Id=4625} -MaxEvents 5 2>$null | Select-Object TimeCreated,Message | ConvertTo-Json"',
-          { timeout: 5000 },
+          { timeout: 5000, windowsHide: true },
           (err, stdout) => {
             if (err || !stdout.trim()) return;
             try {
@@ -295,7 +295,7 @@ class SecurityMonitorServer {
         // Check for suspicious new processes
         exec(
           'powershell -Command "Get-Process | Where-Object {$_.StartTime -gt (Get-Date).AddSeconds(-10)} | Select-Object Name,Id,Path | ConvertTo-Json"',
-          { timeout: 5000 },
+          { timeout: 5000, windowsHide: true },
           (err, stdout) => {
             if (err || !stdout.trim()) return;
             try {
@@ -322,7 +322,7 @@ class SecurityMonitorServer {
         // Linux/Mac: check auth.log for failed SSH attempts
         exec(
           'tail -20 /var/log/auth.log 2>/dev/null || tail -20 /var/log/secure 2>/dev/null',
-          { timeout: 3000 },
+          { timeout: 3000, windowsHide: true },
           (err, stdout) => {
             if (err || !stdout) return;
             const lines = stdout.split('\n');
