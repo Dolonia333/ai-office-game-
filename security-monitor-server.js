@@ -353,7 +353,7 @@ class SecurityMonitorServer {
         ? 'netstat -an | findstr ESTABLISHED'
         : 'netstat -an 2>/dev/null | grep ESTABLISHED || ss -tn state established 2>/dev/null';
 
-      exec(cmd, { timeout: 5000 }, (err, stdout) => {
+      exec(cmd, { timeout: 5000, windowsHide: true }, (err, stdout) => {
         if (err || !stdout) return;
 
         const connections = new Map(); // IP → count
