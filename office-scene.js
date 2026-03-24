@@ -103,7 +103,17 @@ class OfficeScene extends Phaser.Scene {
       'Bob',
       'Dan',
       'Jenny',
-      'Lucy'
+      'Lucy',
+      'Bouncer',
+      'Conference_man',
+      'Conference_woman',
+      'Edward',
+      'Josh',
+      'Molly',
+      'Oscar',
+      'Pier',
+      'Rob',
+      'Roki'
     ];
 
     xpNames.forEach((name) => {
@@ -1035,19 +1045,31 @@ class OfficeScene extends Phaser.Scene {
       'xp_bob',
       'xp_dan',
       'xp_jenny',
-      'xp_lucy'
+      'xp_lucy',
+      'xp_bouncer',
+      'xp_conference_man',
+      'xp_conference_woman',
+      'xp_edward',
+      'xp_josh',
+      'xp_molly',
+      'xp_oscar',
+      'xp_pier',
+      'xp_rob',
+      'xp_roki'
     ];
 
     // Spawn NPCs at desk chairs in the open office and spread others around rooms.
     const deskSpawns = [
       { x: 128, y: 156 }, { x: 196, y: 156 }, { x: 388, y: 156 }, { x: 456, y: 156 },
       { x: 648, y: 156 }, { x: 716, y: 156 }, { x: 128, y: 296 }, { x: 196, y: 296 },
-      { x: 388, y: 406 }, { x: 456, y: 406 }
+      { x: 388, y: 296 }, { x: 456, y: 296 }, { x: 648, y: 296 }, { x: 716, y: 296 },
+      { x: 388, y: 406 }, { x: 456, y: 406 }, { x: 648, y: 406 }, { x: 716, y: 406 }
     ];
     const otherSpawns = [
-      { x: 1060, y: 160 }, { x: 140, y: 630 }, { x: 580, y: 610 }, { x: 1040, y: 390 }
+      { x: 1060, y: 160 }, { x: 140, y: 630 }, { x: 580, y: 610 }, { x: 1040, y: 390 },
+      { x: 200, y: 550 }, { x: 700, y: 550 }, { x: 1100, y: 550 }, { x: 440, y: 530 }
     ];
-    const npcCount = layoutParam === 'reference_office' ? 2 : Math.min(12, npcKeys.length);
+    const npcCount = layoutParam === 'reference_office' ? 2 : Math.min(20, npcKeys.length);
     npcKeys.slice(0, npcCount).forEach((texKey, i) => {
       const spawn = i < deskSpawns.length ? deskSpawns[i] : otherSpawns[i - deskSpawns.length] || { x: Phaser.Math.Between(120, 1100), y: Phaser.Math.Between(120, 600) };
       const x = spawn.x + Phaser.Math.Between(-10, 10);
@@ -1558,121 +1580,49 @@ class OfficeScene extends Phaser.Scene {
   }
 
   showNpcDialog(title, body) {
+    // Clean up any previous dialog + listeners
     if (this.dialogBox) {
       this.dialogBox.destroy();
       this.dialogBox = null;
     }
+    if (this._dialogCloseClick) {
+      this.input.off('pointerdown', this._dialogCloseClick);
+      this._dialogCloseClick = null;
+    }
+    if (this._dialogCloseKey) {
+      this.input.keyboard.off('keydown-E', this._dialogCloseKey);
+      this._dialogCloseKey = null;
+    }
+    if (this._dialogAutoClose) {
+      this._dialogAutoClose.remove(false);
+      this._dialogAutoClose = null;
+    }
 
-    const panelW = 520;
-    const panelH = 170;
+    const panelW = 300;
+    const panelH = 80;
     const cx = 1280 / 2;
-    const cy = 720 - panelH / 2 - 24;
+    const cy = 720 - panelH / 2 - 16;
 
     const children = [];
 
-    // Try to use Modern UI Style 2 panel tiles for the background.
-    // The ui_style2 sheet (32x32 tiles) has a clean gray window panel starting at pixel (0,0).
-    // We build the dialog background using 9 canvas slices: 4 corners + 4 edges + 1 center.
-    const uiImg = this.textures.exists('ui_style2')
-      ? this.textures.get('ui_style2').getSourceImage()
-      : null;
-
-    if (uiImg) {
-      // 9-slice panel using Room Builder UI tiles at 32x32.
-      // From Style_2_32x32: the second gray panel (medium gray) starts at approximately px (0, 64).
-      // Corner size: 32x32. Edge tiles: same. Center: stretches to fill.
-      const T = 32; // tile size
-      // Panel origin in the sheet — the medium-gray dialog panel
-      const PX = 0, PY = 64;
-      // Panel layout: top-left corner, top edge, top-right corner, etc.
-      const slices = [
-        // corners
-        { name: 'dlg_tl', sx: PX,      sy: PY,      sw: T, sh: T, dx: cx - panelW/2,          dy: cy - panelH/2 },
-        { name: 'dlg_tr', sx: PX+T*2,  sy: PY,      sw: T, sh: T, dx: cx + panelW/2 - T,       dy: cy - panelH/2 },
-        { name: 'dlg_bl', sx: PX,      sy: PY+T*2,  sw: T, sh: T, dx: cx - panelW/2,          dy: cy + panelH/2 - T },
-        { name: 'dlg_br', sx: PX+T*2,  sy: PY+T*2,  sw: T, sh: T, dx: cx + panelW/2 - T,       dy: cy + panelH/2 - T },
-      ];
-
-      // Build canvas textures for each slice piece
-      slices.forEach(({ name, sx, sy, sw, sh, dx, dy }) => {
-        if (!this.textures.exists(name)) {
-          const ct = this.textures.createCanvas(name, sw, sh);
-          ct.context.imageSmoothingEnabled = false;
-          ct.context.drawImage(uiImg, sx, sy, sw, sh, 0, 0, sw, sh);
-          ct.refresh();
-        }
-        children.push(this.add.image(dx + sw/2, dy + sh/2, name).setOrigin(0.5, 0.5));
-      });
-
-      // Center fill: edge tile (PX+T, PY+T) tiled across the interior
-      const innerX = cx - panelW/2 + T;
-      const innerY = cy - panelH/2 + T;
-      const innerW = panelW - T*2;
-      const innerH = panelH - T*2;
-      if (!this.textures.exists('dlg_center')) {
-        const ct = this.textures.createCanvas('dlg_center', T, T);
-        ct.context.imageSmoothingEnabled = false;
-        ct.context.drawImage(uiImg, PX+T, PY+T, T, T, 0, 0, T, T);
-        ct.refresh();
-      }
-      children.push(this.add.tileSprite(innerX + innerW/2, innerY + innerH/2, innerW, innerH, 'dlg_center'));
-
-      // Top bar strip
-      if (!this.textures.exists('dlg_top_edge')) {
-        const ct = this.textures.createCanvas('dlg_top_edge', T, T);
-        ct.context.imageSmoothingEnabled = false;
-        ct.context.drawImage(uiImg, PX+T, PY, T, T, 0, 0, T, T);
-        ct.refresh();
-      }
-      children.push(this.add.tileSprite(cx, cy - panelH/2 + T/2, panelW - T*2, T, 'dlg_top_edge'));
-
-      // Bottom edge
-      if (!this.textures.exists('dlg_bot_edge')) {
-        const ct = this.textures.createCanvas('dlg_bot_edge', T, T);
-        ct.context.imageSmoothingEnabled = false;
-        ct.context.drawImage(uiImg, PX+T, PY+T*2, T, T, 0, 0, T, T);
-        ct.refresh();
-      }
-      children.push(this.add.tileSprite(cx, cy + panelH/2 - T/2, panelW - T*2, T, 'dlg_bot_edge'));
-
-      // Left edge
-      if (!this.textures.exists('dlg_left_edge')) {
-        const ct = this.textures.createCanvas('dlg_left_edge', T, T);
-        ct.context.imageSmoothingEnabled = false;
-        ct.context.drawImage(uiImg, PX, PY+T, T, T, 0, 0, T, T);
-        ct.refresh();
-      }
-      children.push(this.add.tileSprite(cx - panelW/2 + T/2, cy, T, panelH - T*2, 'dlg_left_edge'));
-
-      // Right edge
-      if (!this.textures.exists('dlg_right_edge')) {
-        const ct = this.textures.createCanvas('dlg_right_edge', T, T);
-        ct.context.imageSmoothingEnabled = false;
-        ct.context.drawImage(uiImg, PX+T*2, PY+T, T, T, 0, 0, T, T);
-        ct.refresh();
-      }
-      children.push(this.add.tileSprite(cx + panelW/2 - T/2, cy, T, panelH - T*2, 'dlg_right_edge'));
-
-    } else {
-      // Fallback: plain styled rectangle if UI sheet not loaded
-      children.push(this.add.rectangle(cx + 4, cy + 4, panelW, panelH, 0x000000, 0.5));
-      children.push(
-        this.add.rectangle(cx, cy, panelW, panelH, 0x0f172a, 0.97)
-          .setStrokeStyle(2, 0x3b82f6)
-      );
-    }
+    // Semi-transparent dark panel background (simple, compact)
+    children.push(this.add.rectangle(cx + 2, cy + 2, panelW, panelH, 0x000000, 0.4));
+    children.push(
+      this.add.rectangle(cx, cy, panelW, panelH, 0x0f172a, 0.92)
+        .setStrokeStyle(1, 0x3b82f6)
+    );
 
     // Title bar background
     children.push(
-      this.add.rectangle(cx, cy - panelH/2 + 18, panelW - 8, 28, 0x1e3a5f, 0.85)
+      this.add.rectangle(cx, cy - panelH/2 + 12, panelW - 4, 20, 0x1e3a5f, 0.85)
         .setOrigin(0.5, 0.5)
     );
 
     // Title text
     children.push(
-      this.add.text(cx - panelW/2 + 16, cy - panelH/2 + 7, title, {
+      this.add.text(cx - panelW/2 + 10, cy - panelH/2 + 4, title, {
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        fontSize: '15px',
+        fontSize: '11px',
         fontStyle: 'bold',
         color: '#93c5fd'
       })
@@ -1680,25 +1630,57 @@ class OfficeScene extends Phaser.Scene {
 
     // Body text
     children.push(
-      this.add.text(cx - panelW/2 + 16, cy - panelH/2 + 40, body, {
+      this.add.text(cx - panelW/2 + 10, cy - panelH/2 + 26, body, {
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        fontSize: '13px',
+        fontSize: '10px',
         color: '#e2e8f0',
-        wordWrap: { width: panelW - 32 }
+        wordWrap: { width: panelW - 20 }
       })
     );
 
     // Close hint
     children.push(
-      this.add.text(cx + panelW/2 - 16, cy + panelH/2 - 12, '[E] Close', {
+      this.add.text(cx + panelW/2 - 8, cy + panelH/2 - 6, 'click to close', {
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        fontSize: '11px',
+        fontSize: '8px',
         color: '#64748b'
       }).setOrigin(1, 1)
     );
 
     this.dialogBox = this.add.container(0, 0, children);
     this.dialogBox.setDepth(1000);
+
+    // Close on click anywhere (after a small delay so the opening click doesn't immediately close it)
+    const closeDialog = () => {
+      if (this.dialogBox) {
+        this.dialogBox.destroy();
+        this.dialogBox = null;
+      }
+      if (this._dialogCloseClick) {
+        this.input.off('pointerdown', this._dialogCloseClick);
+        this._dialogCloseClick = null;
+      }
+      if (this._dialogCloseKey) {
+        this.input.keyboard.off('keydown-E', this._dialogCloseKey);
+        this._dialogCloseKey = null;
+      }
+      if (this._dialogAutoClose) {
+        this._dialogAutoClose.remove(false);
+        this._dialogAutoClose = null;
+      }
+    };
+
+    this.time.delayedCall(200, () => {
+      this._dialogCloseClick = closeDialog;
+      this.input.on('pointerdown', this._dialogCloseClick);
+    });
+
+    // Close on E key
+    this._dialogCloseKey = closeDialog;
+    this.input.keyboard.on('keydown-E', this._dialogCloseKey);
+
+    // Auto-dismiss after 4 seconds
+    this._dialogAutoClose = this.time.delayedCall(4000, closeDialog);
   }
 
   update(time, delta) {

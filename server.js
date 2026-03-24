@@ -168,6 +168,8 @@ agentWss.on('connection', (ws) => {
               text: response,
             });
             if (ws.readyState === 1) ws.send(reply);
+            // Save significant conversations to MEMORY.md
+            npcBrains.saveMemory(msg.npcName, `${msg.fromName} said: "${msg.text}" — I replied: "${response}"`);
           })
           .catch(err => console.warn('[NpcBrains] Response error:', err.message));
       } else {
