@@ -38,6 +38,14 @@ class AgentOfficeManager {
       it_support: { label: 'IT Support', color: '#fbbf24', idleArea: 'roaming' },
       stock_trader: { label: 'Trader', color: '#a78bfa', idleArea: 'desk' },
       cofounder: { label: 'CTO', color: '#f97316', idleArea: 'roaming' },
+      security: { label: 'Security', color: '#ef4444', idleArea: 'reception' },
+      project_mgr: { label: 'Project Mgr', color: '#8b5cf6', idleArea: 'roaming' },
+      product_mgr: { label: 'Product Mgr', color: '#ec4899', idleArea: 'roaming' },
+      qa_engineer: { label: 'QA Engineer', color: '#14b8a6', idleArea: 'desk' },
+      devops: { label: 'DevOps', color: '#f59e0b', idleArea: 'desk' },
+      designer: { label: 'Designer', color: '#a855f7', idleArea: 'desk' },
+      data_engineer: { label: 'Data Engineer', color: '#06b6d4', idleArea: 'desk' },
+      intern: { label: 'Intern', color: '#84cc16', idleArea: 'roaming' },
     };
 
     // NPC key to display name mapping
@@ -48,6 +56,16 @@ class AgentOfficeManager {
       xp_dan: 'Dan',
       xp_jenny: 'Jenny',
       xp_lucy: 'Lucy',
+      xp_bouncer: 'Bouncer',
+      xp_conference_man: 'Marcus',
+      xp_conference_woman: 'Sarah',
+      xp_edward: 'Edward',
+      xp_josh: 'Josh',
+      xp_molly: 'Molly',
+      xp_oscar: 'Oscar',
+      xp_pier: 'Pier',
+      xp_rob: 'Rob',
+      xp_roki: 'Roki',
     };
   }
 
@@ -65,6 +83,16 @@ class AgentOfficeManager {
       xp_dan: 'it_support',
       xp_jenny: 'desk_worker',
       xp_lucy: 'receptionist',
+      xp_bouncer: 'security',
+      xp_conference_man: 'project_mgr',
+      xp_conference_woman: 'product_mgr',
+      xp_edward: 'desk_worker',
+      xp_josh: 'desk_worker',
+      xp_molly: 'qa_engineer',
+      xp_oscar: 'devops',
+      xp_pier: 'data_engineer',
+      xp_rob: 'designer',
+      xp_roki: 'intern',
     };
 
     // Register agents with their roles
@@ -522,25 +550,35 @@ class AgentOfficeManager {
         this.actions.setIdle(npcKey);
         break;
       case 'speakTo': {
-        // Find target NPC key
+        // Stagger speech so bubbles don't overlap
+        this._speechQueue = this._speechQueue || 0;
+        const staggerDelay = this._speechQueue * 3500; // 3.5s between speeches
+        this._speechQueue++;
+        // Reset queue after batch completes
+        clearTimeout(this._speechQueueReset);
+        this._speechQueueReset = setTimeout(() => { this._speechQueue = 0; }, 1000);
+
         const targetName = params.target || params.targetAgent;
         const targetKey = Object.entries(this.NPC_NAMES).find(
           ([k, v]) => v.toLowerCase() === targetName?.toLowerCase()
         )?.[0] || `xp_${targetName?.toLowerCase()}`;
-        this.actions.speakTo(npcKey, targetKey, params.text);
 
-        // Request a response from the target NPC's brain
-        const speakerName = this.NPC_NAMES[npcKey] || agentId;
-        if (targetName) {
-          this.scene.time.delayedCall(2500, () => {
-            this._send({
-              type: 'npc_conversation',
-              npcName: targetName,
-              fromName: speakerName,
-              text: params.text,
+        this.scene.time.delayedCall(staggerDelay, () => {
+          this.actions.speakTo(npcKey, targetKey, params.text);
+
+          // Request a response from the target NPC's brain
+          const speakerName = this.NPC_NAMES[npcKey] || agentId;
+          if (targetName) {
+            this.scene.time.delayedCall(2500, () => {
+              this._send({
+                type: 'npc_conversation',
+                npcName: targetName,
+                fromName: speakerName,
+                text: params.text,
+              });
             });
-          });
-        }
+          }
+        });
         break;
       }
       case 'goToRoom':
@@ -549,19 +587,43 @@ class AgentOfficeManager {
       case 'joinMeeting':
         this.actions.joinMeeting(npcKey);
         break;
+      case 'attendMeeting':
+        this.actions.attendMeeting(npcKey);
+        break;
+      case 'leaveMeeting':
+        this.actions.leaveMeeting(npcKey);
+        break;
       case 'callMeeting': {
-        // CTO calls a meeting — specified attendees go to conference room
+        // Leadership sits in chairs, lower-rank staff stands in rows
+        const CHAIR_RANKS = new Set([
+          'abby', 'marcus', 'sarah', 'alex', 'jenny', 'bob', 'dan'
+        ]);
         const attendees = params.attendees || [];
-        attendees.forEach(name => {
+
+        // Caller (usually leadership) sits
+        const callerName = (this.NPC_NAMES[npcKey] || '').toLowerCase();
+        if (CHAIR_RANKS.has(callerName)) {
+          this.actions.joinMeeting(npcKey);
+        } else {
+          this.actions.attendMeeting(npcKey);
+        }
+
+        // Route each attendee: leaders sit, others stand
+        attendees.forEach((name, i) => {
           const aKey = Object.entries(this.NPC_NAMES).find(
             ([k, v]) => v.toLowerCase() === name.toLowerCase()
           )?.[0];
           if (aKey) {
-            this.actions.joinMeeting(aKey);
+            const isLeader = CHAIR_RANKS.has(name.toLowerCase());
+            setTimeout(() => {
+              if (isLeader) {
+                this.actions.joinMeeting(aKey);
+              } else {
+                this.actions.attendMeeting(aKey);
+              }
+            }, (i + 1) * 1500);
           }
         });
-        // The caller also joins
-        this.actions.joinMeeting(npcKey);
         break;
       }
     }

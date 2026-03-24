@@ -578,13 +578,16 @@ class AgentActions {
   _findConferenceChairs() {
     if (!this.scene._interactables) return [];
     const room = this.ROOMS.conference;
-    return this.scene._interactables.filter(it => {
+    const chairs = this.scene._interactables.filter(it => {
       if (!it.sprite || !it.def) return false;
       const isSeat = it.def.type === 'seat' || (it.id && /chair|seat|stool/i.test(it.id));
       if (!isSeat) return false;
       const x = it.sprite.x, y = it.sprite.y;
       return x >= room.xMin && x <= room.xMax && y >= room.yMin && y <= room.yMax;
     });
+    // Sort by position so we can spread NPCs out (alternate sides of table)
+    chairs.sort((a, b) => a.sprite.x - b.sprite.x || a.sprite.y - b.sprite.y);
+    return chairs;
   }
 
   /**
@@ -596,7 +599,7 @@ class AgentActions {
     }
 
     const chairs = this._findConferenceChairs();
-    // Find a chair not occupied by another NPC
+    // Find chairs not occupied by another NPC
     const occupiedChairs = new Set();
     this._sittingNpcs.forEach((data) => {
       if (data.chairSprite) occupiedChairs.add(data.chairSprite);
@@ -604,13 +607,99 @@ class AgentActions {
 
     const available = chairs.filter(c => !occupiedChairs.has(c.sprite));
     if (available.length === 0) {
-      // No chairs available — just walk to conference room center
       return this.goToRoom(npcKey, 'conference');
     }
 
-    // Pick a random available chair
-    const chair = available[Math.floor(Math.random() * available.length)];
-    return this.sitAt(npcKey, chair.instanceId || chair.id);
+    // Spread out: pick the chair farthest from any occupied chair
+    let bestChair = available[0];
+    if (occupiedChairs.size > 0) {
+      let bestMinDist = -1;
+      for (const chair of available) {
+        let minDist = Infinity;
+        occupiedChairs.forEach(occ => {
+          const d = Math.hypot(chair.sprite.x - occ.x, chair.sprite.y - occ.y);
+          if (d < minDist) minDist = d;
+        });
+        if (minDist > bestMinDist) {
+          bestMinDist = minDist;
+          bestChair = chair;
+        }
+      }
+    }
+
+    return this.sitAt(npcKey, bestChair.instanceId || bestChair.id);
+  }
+
+  /**
+   * attendMeeting(npcKey) - Walk to conference room and stand in rows (for lower-rank staff)
+   * Standing NPCs form rows behind the seated leadership, facing the table.
+   */
+  attendMeeting(npcKey) {
+    if (this._sittingNpcs.has(npcKey)) {
+      this._standUpNpc(npcKey);
+    }
+
+    return this.queueAction(npcKey, () => {
+      return new Promise((resolve) => {
+        const npc = this._getNpc(npcKey);
+        if (!npc) { resolve(); return; }
+
+        const room = this.ROOMS.conference;
+        // Standing positions: rows behind the chairs, spread across the room
+        // Track how many are already standing so we can stagger them
+        if (!this._standingMeetingNpcs) this._standingMeetingNpcs = new Set();
+        this._standingMeetingNpcs.add(npcKey);
+        const standIndex = [...this._standingMeetingNpcs].indexOf(npcKey);
+
+        // Arrange in 2 rows of up to 5, spread across the conference room width
+        const cols = 5;
+        const row = Math.floor(standIndex / cols);
+        const col = standIndex % cols;
+        const startX = room.xMin + 40;
+        const spacingX = (room.xMax - room.xMin - 80) / (cols - 1);
+        const startY = room.yMax - 20 + (row * 28); // Below the chairs, in rows
+
+        const targetX = startX + col * spacingX;
+        const targetY = startY;
+
+        npc.ai.mode = 'agent_task';
+        npc.ai.taskTarget = { x: targetX, y: targetY };
+        npc.ai.taskState = 'walking';
+
+        const checkInterval = this.scene.time.addEvent({
+          delay: 100,
+          loop: true,
+          callback: () => {
+            const dist = Math.hypot(targetX - npc.x, targetY - npc.y);
+            if (dist <= 16) {
+              checkInterval.remove();
+              npc.body.setVelocity(0, 0);
+              npc.ai.taskState = 'attending_meeting';
+              // Face upward toward the table/presenters
+              npc.anims.stop();
+              npc.setFrame(0); // facing up/front
+              resolve();
+            }
+          }
+        });
+
+        this.scene.time.delayedCall(12000, () => {
+          checkInterval.remove();
+          npc.body.setVelocity(0, 0);
+          resolve();
+        });
+      });
+    });
+  }
+
+  /**
+   * leaveMeeting(npcKey) - Clean up standing meeting state when NPC leaves
+   */
+  leaveMeeting(npcKey) {
+    if (this._standingMeetingNpcs) {
+      this._standingMeetingNpcs.delete(npcKey);
+    }
+    return this.standUp(npcKey);
   }
 
   /**
