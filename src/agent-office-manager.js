@@ -191,6 +191,8 @@ class AgentOfficeManager {
    * Start initial agent behaviors
    */
   _startInitialBehaviors() {
+    // Skip initial behaviors if demo mode is active
+    if (this._demoMode) return;
     this.agents.forEach((agent, npcKey) => {
       switch (agent.role) {
         case 'cofounder':
@@ -257,6 +259,7 @@ class AgentOfficeManager {
    * Cofounder patrol behavior (walks around checking on agents)
    */
   _cofounderPatrol(npcKey) {
+    if (this._demoMode) return;
     const agent = this.agents.get(npcKey);
     if (!agent) return;
 
@@ -291,6 +294,7 @@ class AgentOfficeManager {
    * Cofounder check-in: stand up, walk to devs, talk, they respond, then return to desk
    */
   _cofounderCheckIn(npcKey) {
+    if (this._demoMode) return;
     const agent = this.agents.get(npcKey);
     if (!agent) return;
     if (agent.status === 'task_override') return;
@@ -455,6 +459,8 @@ class AgentOfficeManager {
    * Handle messages from the server (cofounder agent commands)
    */
   _handleServerMessage(msg) {
+    // In demo mode, only handle player_chat_response — block all other server commands
+    if (this._demoMode && msg.type !== 'player_chat_response') return;
     console.log('[AgentManager] Server message:', msg.type, msg);
 
     switch (msg.type) {
@@ -482,6 +488,29 @@ class AgentOfficeManager {
           this.actions.speak(responderKey, msg.text);
           console.log(`[AgentManager] ${msg.npcName} responds to ${msg.fromName}: "${msg.text}"`);
         }
+        break;
+      }
+      case 'player_chat_response': {
+        // NPC responding to the CEO (player) — route to PlayerChat UI
+        const respondingKey = Object.entries(this.NPC_NAMES).find(
+          ([k, v]) => v.toLowerCase() === msg.npcName?.toLowerCase()
+        )?.[0];
+
+        // Tell PlayerChat whether there are actions (so it knows whether to auto-resume)
+        const hasActions = Array.isArray(msg.actions) && msg.actions.length > 0;
+        if (this.scene._playerChat) {
+          this.scene._playerChat._hasActions = hasActions;
+          this.scene._playerChat.handleNpcResponse(msg.npcName, msg.text, msg.delegation);
+        } else if (respondingKey) {
+          this.actions.speak(respondingKey, msg.text);
+        }
+
+        // Execute any actions the NPC decided to take
+        if (respondingKey && hasActions) {
+          this._executeNpcActions(respondingKey, msg.npcName, msg.actions);
+        }
+
+        console.log(`[AgentManager] ${msg.npcName} responds to CEO: "${msg.text}"${msg.delegation ? ` [delegating to ${msg.delegation.delegateTo}]` : ''}${msg.actions?.length ? ` [${msg.actions.length} actions]` : ''}`);
         break;
       }
       default:
@@ -767,6 +796,78 @@ class AgentOfficeManager {
       if (agent.role === role) return npcKey;
     }
     return null;
+  }
+
+  /**
+   * Execute actions that an NPC decided to take after talking to the CEO.
+   * Actions come from the NPC brain as parsed [ACTION:...] tags.
+   */
+  _executeNpcActions(npcKey, npcName, actions) {
+    let delay = 2000; // Start actions after speech bubble shows
+
+    actions.forEach(act => {
+      this.scene.time.delayedCall(delay, () => {
+        console.log(`[AgentManager] ${npcName} executing: ${act.action}`, act.params);
+
+        switch (act.action) {
+          case 'useComputer': {
+            const agent = this.agents.get(npcKey);
+            this.actions.useComputer(npcKey, agent?.assignedDesk);
+            break;
+          }
+          case 'goToBreakroom':
+            this.actions.goToBreakroom(npcKey);
+            break;
+
+          case 'goToRoom': {
+            const room = act.params[0] || 'open_office';
+            this.actions.goToRoom(npcKey, room);
+            break;
+          }
+          case 'checkBookshelf':
+            this.actions.checkBookshelf(npcKey);
+            break;
+
+          case 'standUp':
+            this.actions.standUp(npcKey);
+            break;
+
+          case 'speakTo': {
+            const targetName = act.params[0];
+            const spkText = act.params[1] || 'Hey, got a minute?';
+            const targetKey = Object.entries(this.NPC_NAMES).find(
+              ([k, v]) => v.toLowerCase() === targetName?.toLowerCase()
+            )?.[0] || `xp_${targetName?.toLowerCase()}`;
+
+            this.actions.speakTo(npcKey, targetKey, spkText);
+
+            // Also send to NPC brain so the target can respond
+            this.scene.time.delayedCall(3000, () => {
+              this._send({
+                type: 'npc_conversation',
+                npcName: targetName,
+                fromName: npcName,
+                text: spkText,
+              });
+            });
+            break;
+          }
+          case 'callMeeting': {
+            const attendeeStr = act.params[0] || '';
+            const attendees = attendeeStr.split(',').map(n => n.trim()).filter(Boolean);
+            this._executeAgentCommand({
+              agentId: npcName,
+              action: 'callMeeting',
+              params: { attendees },
+            });
+            break;
+          }
+          default:
+            console.log(`[AgentManager] Unknown NPC action: ${act.action}`);
+        }
+      });
+      delay += 2500; // Stagger multiple actions
+    });
   }
 
   /**

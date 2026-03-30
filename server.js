@@ -8,6 +8,14 @@ const CofounderAgent = require('./src/cofounder-agent');
 const NpcBrainManager = require('./src/npc-brains');
 
 const PORT = process.env.PORT || 8080;
+
+// Prevent unhandled errors from crashing the server
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception (kept alive):', err.message);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[Server] Unhandled rejection (kept alive):', err?.message || err);
+});
 // Serve from the parent directory so ../pixel game stuff/ paths resolve correctly
 const ROOT = path.resolve(__dirname, '..');
 
@@ -102,7 +110,9 @@ const server = http.createServer((req, res) => {
   }
 
   // Default to the game's index.html
-  if (urlPath === '/') urlPath = '/pixel-office-game/index.html';
+  if (urlPath === '/' || urlPath === '/pixel-office-game/' || urlPath === '/pixel-office-game') {
+    urlPath = '/pixel-office-game/index.html';
+  }
   const filePath = path.join(ROOT, urlPath);
 
   // Prevent directory traversal above ROOT
@@ -172,6 +182,33 @@ agentWss.on('connection', (ws) => {
             npcBrains.saveMemory(msg.npcName, `${msg.fromName} said: "${msg.text}" — I replied: "${response}"`);
           })
           .catch(err => console.warn('[NpcBrains] Response error:', err.message));
+      } else if (msg.type === 'player_chat') {
+        // CEO (player) is talking directly to an NPC
+        const npcName = msg.npcName;
+        console.log(`[PlayerChat] CEO → ${npcName}: "${msg.text}"`);
+        npcBrains.getPlayerResponse(npcName, msg.text)
+          .then(result => {
+            const reply = JSON.stringify({
+              type: 'player_chat_response',
+              npcName: npcName,
+              text: result.text,
+              delegation: result.delegation || null,
+              actions: result.actions || [],
+            });
+            if (ws.readyState === 1) ws.send(reply);
+            // Save to memory
+            npcBrains.saveMemory(npcName, `CEO said: "${msg.text}" — I replied: "${result.text}"${result.delegation ? ` [delegated to ${result.delegation.delegateTo}]` : ''}`);
+          })
+          .catch(err => {
+            console.warn('[PlayerChat] Response error:', err.message);
+            const fallback = JSON.stringify({
+              type: 'player_chat_response',
+              npcName: npcName,
+              text: 'Got it, I\'ll look into that.',
+              delegation: null,
+            });
+            if (ws.readyState === 1) ws.send(fallback);
+          });
       } else {
         cofounderAgent.handleClientMessage(msg);
       }

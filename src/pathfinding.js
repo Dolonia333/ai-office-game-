@@ -339,6 +339,9 @@ class NpcPathFollower {
     this._stuckTimer = 0;
     this._stuckThreshold = 1500; // ms before considered stuck
     this._rerouting = false;
+    this._rerouteCount = 0;      // how many times we've rerouted for this destination
+    this._maxReroutes = 3;       // give up after this many reroutes
+    this._totalStuckTime = 0;    // cumulative time stuck on this path
   }
 
   /**
@@ -355,6 +358,8 @@ class NpcPathFollower {
       this.waypointIndex = 0;
       this._stuckTimer = 0;
       this._rerouting = false;
+      this._rerouteCount = 0;
+      this._totalStuckTime = 0;
       return true;
     }
 
@@ -408,9 +413,29 @@ class NpcPathFollower {
 
       if (movedDist < 4) {
         this._stuckCount = (this._stuckCount || 0) + 1;
+        this._totalStuckTime += 500;
+
+        // If stuck for too long overall (4s+), give up entirely
+        if (this._totalStuckTime >= 4000) {
+          this.waypoints = null;
+          this._stuckCount = 0;
+          this._totalStuckTime = 0;
+          return null;
+        }
+
         // Stuck for 3 checks (1.5s) — try rerouting
         if (this._stuckCount >= 3) {
           this._stuckCount = 0;
+          this._rerouteCount++;
+
+          // Too many reroutes — destination is unreachable, give up
+          if (this._rerouteCount >= this._maxReroutes) {
+            this.waypoints = null;
+            this._rerouteCount = 0;
+            this._totalStuckTime = 0;
+            return null;
+          }
+
           const finalTarget = this.waypoints[this.waypoints.length - 1];
 
           // Try skipping to the next waypoint first
@@ -421,12 +446,15 @@ class NpcPathFollower {
           }
 
           // Last resort: reroute from current position
-          const rerouted = this.navigateTo(finalTarget.x, finalTarget.y);
-          if (!rerouted) {
-            // Can't find any path — give up and let wander pick a new target
+          const rerouted = this.pathfinder.findPath(this.npc.x, this.npc.y, finalTarget.x, finalTarget.y);
+          if (!rerouted || rerouted.length === 0) {
             this.waypoints = null;
+            this._totalStuckTime = 0;
             return null;
           }
+          this.waypoints = rerouted;
+          this.waypointIndex = 0;
+          this._stuckTimer = 0;
           return this.update(speed, delta);
         }
       } else {

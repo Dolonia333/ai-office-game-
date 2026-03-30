@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Competitive Analysis — AI Agent Observability | Denizen</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .report {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 48px 40px;
+  }
+
+  .report-header {
+    border-bottom: 1px solid #334155;
+    padding-bottom: 32px;
+    margin-bottom: 40px;
+  }
+
+  .report-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #4ade80;
+    margin-bottom: 12px;
+  }
+
+  .report-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+
+  .report-subtitle {
+    font-size: 16px;
+    color: #94a3b8;
+  }
+
+  .report-meta {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .report-meta span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    display: inline-block;
+  }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #f8fafc;
+    margin-bottom: 20px;
+    margin-top: 40px;
+  }
+
+  .summary-box {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 32px;
+  }
+
+  .summary-box p {
+    color: #cbd5e1;
+    font-size: 15px;
+  }
+
+  .competitors {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .competitor-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 24px;
+    transition: border-color 0.2s;
+  }
+
+  .competitor-card:hover {
+    border-color: #475569;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .card-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f8fafc;
+  }
+
+  .card-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .tag-log { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
+  .tag-trace { background: #f59e0b22; color: #fbbf24; border: 1px solid #f59e0b44; }
+  .tag-request { background: #3b82f622; color: #60a5fa; border: 1px solid #3b82f644; }
+
+  .card-desc {
+    color: #94a3b8;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+
+  .card-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .feature {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    color: #64748b;
+  }
+
+  .feature.missing {
+    color: #ef4444;
+    border-color: #ef444444;
+  }
+
+  .feature.has {
+    color: #4ade80;
+    border-color: #4ade8044;
+  }
+
+  .gap-section {
+    background: linear-gradient(135deg, #4ade8010, #22c55e08);
+    border: 1px solid #4ade8033;
+    border-radius: 12px;
+    padding: 28px;
+    margin: 40px 0;
+  }
+
+  .gap-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #4ade80;
+    margin-bottom: 12px;
+  }
+
+  .gap-text {
+    color: #cbd5e1;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 13px;
+  }
+
+  .comparison-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid #334155;
+    color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .comparison-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #1e293b;
+    color: #cbd5e1;
+  }
+
+  .comparison-table tr:hover td {
+    background: #1e293b;
+  }
+
+  .check { color: #4ade80; }
+  .cross { color: #ef4444; }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 40px;
+    padding-top: 32px;
+    border-top: 1px solid #334155;
+  }
+
+  .btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: #4ade80;
+    color: #0f172a;
+  }
+
+  .btn-primary:hover {
+    background: #22c55e;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid #334155;
+  }
+
+  .btn-secondary:hover {
+    border-color: #64748b;
+    color: #e2e8f0;
+  }
+
+  .footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid #334155;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #475569;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  @media print {
+    body { background: white; color: #1e293b; }
+    .report { padding: 24px; }
+    .report-header { border-color: #e2e8f0; }
+    .report-label { color: #16a34a; }
+    .report-title { color: #0f172a; }
+    .summary-box, .competitor-card { border-color: #e2e8f0; background: #f8fafc; }
+    .gap-section { background: #f0fdf4; border-color: #16a34a44; }
+    .actions { display: none; }
+    .card-name { color: #0f172a; }
+    .card-desc, .gap-text, .summary-box p { color: #334155; }
+  }
+</style>
+</head>
+<body>
+<div class="report">
+
+  <div class="report-header">
+    <div class="report-label">Research Report</div>
+    <h1 class="report-title">Competitive Analysis</h1>
+    <p class="report-subtitle">AI Agent Observability Tools — Market Gap Assessment</p>
+    <div class="report-meta">
+      <span><span class="dot"></span> Prepared by: Bob (Research Analyst)</span>
+      <span>Denizen AI</span>
+      <span id="report-date"></span>
+    </div>
+  </div>
+
+  <div class="summary-box">
+    <p>Analyzed the three leading platforms in the AI agent monitoring space. All current solutions rely on log-based, after-the-fact debugging. <strong>No existing tool provides real-time visual observability</strong> — the ability to watch agents work in a spatial, legible environment as tasks happen.</p>
+  </div>
+
+  <h2 class="section-title">Competitor Profiles</h2>
+
+  <div class="competitors">
+    <div class="competitor-card">
+      <div class="card-header">
+        <span class="card-name">Datadog</span>
+        <span class="card-tag tag-log">Log-based APM</span>
+      </div>
+      <p class="card-desc">Industry-standard application performance monitoring. Provides dashboards, metrics, and log aggregation for distributed systems including AI/ML pipelines.</p>
+      <div class="card-features">
+        <span class="feature has">Log aggregation</span>
+        <span class="feature has">Dashboards</span>
+        <span class="feature has">Alerting</span>
+        <span class="feature missing">No live agent view</span>
+        <span class="feature missing">No spatial awareness</span>
+        <span class="feature missing">Post-hoc only</span>
+      </div>
+    </div>
+
+    <div class="competitor-card">
+      <div class="card-header">
+        <span class="card-name">LangSmith</span>
+        <span class="card-tag tag-trace">Trace-focused</span>
+      </div>
+      <p class="card-desc">LangChain's debugging and evaluation platform. Captures LLM traces, prompt histories, and chain-of-thought for post-hoc debugging and evaluation.</p>
+      <div class="card-features">
+        <span class="feature has">LLM traces</span>
+        <span class="feature has">Prompt history</span>
+        <span class="feature has">Evaluation</span>
+        <span class="feature missing">No real-time view</span>
+        <span class="feature missing">No multi-agent view</span>
+        <span class="feature missing">Debug after crash</span>
+      </div>
+    </div>
+
+    <div class="competitor-card">
+      <div class="card-header">
+        <span class="card-name">Helicone</span>
+        <span class="card-tag tag-request">Request logging</span>
+      </div>
+      <p class="card-desc">LLM request proxy and analytics platform. Tracks API calls, costs, latency, and rate limits across providers with a clean dashboard interface.</p>
+      <div class="card-features">
+        <span class="feature has">Request tracking</span>
+        <span class="feature has">Cost analytics</span>
+        <span class="feature has">Multi-provider</span>
+        <span class="feature missing">No agent behavior</span>
+        <span class="feature missing">No task awareness</span>
+        <span class="feature missing">No live monitoring</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Feature Comparison</h2>
+
+  <table class="comparison-table">
+    <thead>
+      <tr>
+        <th>Capability</th>
+        <th>Datadog</th>
+        <th>LangSmith</th>
+        <th>Helicone</th>
+        <th>Denizen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Real-time agent monitoring</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="check">Yes</td>
+      </tr>
+      <tr>
+        <td>Visual/spatial awareness</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="check">Yes</td>
+      </tr>
+      <tr>
+        <td>Multi-agent orchestration view</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="check">Yes</td>
+      </tr>
+      <tr>
+        <td>Direct agent interaction</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="cross">No</td>
+        <td class="check">Yes</td>
+      </tr>
+      <tr>
+        <td>Task delegation chains</td>
+        <td class="cross">No</td>
+        <td class="cross">Partial</td>
+        <td class="cross">No</td>
+        <td class="check">Yes</td>
+      </tr>
+      <tr>
+        <td>Log/trace capture</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+      </tr>
+      <tr>
+        <td>Cost tracking</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+        <td class="cross">Planned</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="gap-section">
+    <div class="gap-title">Market Gap Confirmed</div>
+    <p class="gap-text">
+      Every existing tool in the AI agent observability space is <strong>log-first</strong>. They show you what happened after the fact — traces, request logs, error dumps. None of them let you <em>watch your agents work in real time</em>. None provide spatial context for where agents are, what they're doing right now, or how they're coordinating with each other.
+      <br><br>
+      <strong>Denizen fills this gap.</strong> It's the only platform that gives engineering teams a live, visual, interactive view of their AI agent workforce.
+    </p>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="window.print()">Download as PDF</button>
+    <button class="btn btn-secondary" onclick="window.close()">Close Report</button>
+  </div>
+
+  <div class="footer">
+    <span>Denizen Research Division</span>
+    <span>Confidential</span>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('report-date').textContent = new Date().toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+</script>
+</body>
+</html>
