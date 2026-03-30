@@ -404,7 +404,7 @@ class SecurityMonitorServer {
     this.config.watchDirs.forEach(dir => {
       try {
         if (!fs.existsSync(dir)) return;
-        const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
+        const watcher = fs.watch(dir, { recursive: true, persistent: false }, (eventType, filename) => {
           if (!filename) return;
           const filePath = path.join(dir, filename);
 

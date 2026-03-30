@@ -462,11 +462,11 @@ class AgentActions {
   /**
    * speak(npcKey, text) - Show speech bubble above NPC
    */
-  speak(npcKey, text) {
+  speak(npcKey, text, duration) {
     return this.queueAction(npcKey, () => {
       const npc = this._getNpc(npcKey);
       if (!npc) return;
-      this._showSpeechBubble(npc, npcKey, text, 'speech');
+      this._showSpeechBubble(npc, npcKey, text, 'speech', duration);
     });
   }
 
@@ -777,7 +777,7 @@ class AgentActions {
 
   // ---- Visual Helpers ----
 
-  _showSpeechBubble(npc, npcKey, text, style) {
+  _showSpeechBubble(npc, npcKey, text, style, duration) {
     this._clearBubble(npcKey, this._speechBubbles);
 
     const truncated = text.length > 60 ? text.slice(0, 57) + '...' : text;
@@ -802,9 +802,11 @@ class AgentActions {
     bubbleText.x = npc.x;
     bubbleText.y = npc.y - 48;
 
-    const timer = this.scene.time.delayedCall(5000, () => {
+    // duration=0 means persist forever (no auto-clear), undefined defaults to 5s
+    const dur = duration !== undefined ? duration : 5000;
+    const timer = dur > 0 ? this.scene.time.delayedCall(dur, () => {
       this._clearBubble(npcKey, this._speechBubbles);
-    });
+    }) : null;
 
     this._speechBubbles.set(npcKey, { text: bubbleText, timer, npc });
   }

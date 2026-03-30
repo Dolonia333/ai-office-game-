@@ -73,7 +73,17 @@ class NpcBrainManager {
 
       console.log(`[NpcBrains] Loaded providers: ${Object.keys(this.providers).join(', ')}`);
     } catch (err) {
-      console.warn('[NpcBrains] Failed to load providers:', err.message);
+      console.warn('[NpcBrains] No openclaw.json found — running in demo mode (no API keys needed)');
+    }
+
+    // Always register a 'demo' provider as ultimate fallback
+    // This ensures NPCs load even with zero API keys configured
+    if (!this.providers.demo) {
+      this.providers.demo = { type: 'demo', baseUrl: null, apiKey: null, model: null };
+    }
+    this._demoMode = Object.keys(this.providers).length <= 2; // only demo + maybe lmstudio
+    if (this._demoMode) {
+      console.log('[NpcBrains] Demo mode active — NPCs use smart scripted responses (no API keys required)');
     }
   }
 
@@ -115,8 +125,7 @@ class NpcBrainManager {
       const provider = providerMatch?.[1] || 'claude';
       const role = roleMatch?.[1]?.trim() || 'Employee';
 
-      const providerConfig = this.providers[provider] || this.providers.claude;
-      if (!providerConfig) continue;
+      const providerConfig = this.providers[provider] || this.providers.claude || this.providers.demo;
 
       this.brains[name] = {
         provider,
@@ -232,12 +241,10 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
           console.warn(`[NpcBrains] ${npcName} fallback also failed: ${e2.message}`);
         }
       }
-      // Last resort: canned response
-      const canned = [
-        'Got it, on it!', 'Sure thing.', 'Working on that.',
-        'Sounds good.', 'Let me check.', 'Almost done.',
-      ];
-      return canned[Math.floor(Math.random() * canned.length)];
+      // Last resort: context-aware canned response
+      const response = this._cannedResponse(npcName, fromName, message);
+      this.memories[npcName].push({ from: npcName, text: response });
+      return response;
     }
   }
 
@@ -245,6 +252,10 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
    * Call an AI provider API
    */
   _callProvider(config, systemPrompt, messages) {
+    if (!config || config.type === 'demo') {
+      // Demo mode — return null so fallback logic kicks in
+      return Promise.reject(new Error('Demo mode — no API configured'));
+    }
     if (config.type === 'anthropic') {
       return this._callAnthropic(config, systemPrompt, messages);
     } else if (config.type === 'google') {
@@ -489,6 +500,450 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     if (mem.length === 0) return 'No recent conversations.';
     const recent = mem.slice(-5).map(m => `${m.from}: "${m.text}"`).join(' | ');
     return `Recent: ${recent}`;
+  }
+
+  /**
+   * Generate a response for the CEO (player) talking to an NPC.
+   * Includes delegation logic — NPC decides if they should handle it
+   * or escalate to their superior.
+   *
+   * Returns { text, delegation? } where delegation is null or
+   * { delegateTo, reason, originalMessage }
+   */
+  async getPlayerResponse(npcName, message) {
+    const brain = this.brains[npcName];
+    if (!brain) return { text: `(${npcName} nods)`, delegation: null };
+
+    const h = this._hierarchy[npcName];
+    const rawMemory = brain.longTermMemory || '';
+    const memorySection = rawMemory.length > 50
+      ? `\n\n## Your Memories\n${this._sanitize(rawMemory.slice(-800))}`
+      : '';
+
+    const coworkerContext = this._getCoworkerContext(npcName, 'CEO');
+
+    // Build role-specific action list
+    const roleActions = this._getRoleActions(npcName, h);
+
+    const systemPrompt = `${brain.personality}${memorySection}
+
+## Your Coworkers
+${coworkerContext}
+
+## Your Role & What You Can Do
+You are ${npcName}, ${h?.title || brain.role}. The CEO (your ultimate boss) is talking to you directly.
+${h?.reportsTo === 'CEO' ? 'You report directly to the CEO.' : `You report to ${h?.reportsTo}.`}
+${h?.manages?.length > 0 ? `You manage: ${h.manages.join(', ')}.` : ''}
+
+### Actions you can take (append tags at the END of your response):
+${roleActions}
+
+### General actions ANY employee can do:
+- Go work at your desk: [ACTION:useComputer]
+- Go to the break room: [ACTION:goToBreakroom]
+- Go to a room: [ACTION:goToRoom:open_office] or conference, breakroom, manager_office, storage, reception
+- Talk to a coworker: [ACTION:speakTo:CoworkerName:message to say]
+- Call a meeting with people: [ACTION:callMeeting:Name1,Name2,Name3]
+- Check a bookshelf/do research: [ACTION:checkBookshelf]
+- Stand up from desk: [ACTION:standUp]
+
+### Delegation (for tasks outside your scope):
+- Delegate to the right person: [DELEGATE:PersonName:reason]
+  Example: "I'll get Alex on that. [DELEGATE:Alex:frontend bug needs senior dev]"
+
+## Rules
+- When the CEO asks you to DO something, always include an [ACTION:...] or [DELEGATE:...] tag.
+- When just chatting/answering a question, no tag needed.
+- You can chain multiple actions: "On it! [ACTION:speakTo:Josh:CEO wants the homepage fixed] [DELEGATE:Josh:frontend task]"
+- Keep your spoken text under 60 characters. Be natural and professional.
+- Respond in character as ${npcName}. Dialogue text first, then tags at the end.`;
+
+    // Add to memory
+    this.memories[npcName].push({ from: 'CEO', text: this._sanitize(message) });
+    if (this.memories[npcName].length > 20) {
+      this.memories[npcName] = this.memories[npcName].slice(-20);
+    }
+
+    const messages = this.memories[npcName].map(m => ({
+      role: m.from === npcName ? 'assistant' : 'user',
+      content: m.from === npcName ? m.text : `${m.from} says: "${m.text}"`,
+    }));
+
+    let responseText;
+    try {
+      responseText = await this._callProvider(brain.providerConfig, systemPrompt, messages);
+    } catch (err) {
+      const now = Date.now();
+      const lastErr = this._lastErrorLog?.[npcName] || 0;
+      if (now - lastErr > 60000) {
+        console.warn(`[NpcBrains] ${npcName} player-chat provider failed: ${err.message.slice(0, 80)}`);
+        if (!this._lastErrorLog) this._lastErrorLog = {};
+        this._lastErrorLog[npcName] = now;
+      }
+      // Try fallback provider
+      if (brain.fallbackConfig && brain.fallbackConfig !== brain.providerConfig) {
+        try {
+          responseText = await this._callProvider(brain.fallbackConfig, systemPrompt, messages);
+        } catch (e2) {
+          responseText = null;
+        }
+      }
+      // If all providers failed, use smart fallback that infers actions from the message
+      if (!responseText) {
+        responseText = this._smartFallback(npcName, message, h);
+      }
+    }
+
+    // Parse action tags [ACTION:...]
+    let actions = [];
+    const actionRegex = /\[ACTION:([^\]]+)\]/g;
+    let actionMatch;
+    while ((actionMatch = actionRegex.exec(responseText)) !== null) {
+      const parts = actionMatch[1].split(':');
+      const actionName = parts[0].trim();
+      const actionParams = parts.slice(1).map(p => p.trim());
+      actions.push({ action: actionName, params: actionParams });
+    }
+    // Remove action tags from displayed text
+    responseText = responseText.replace(/\s*\[ACTION:[^\]]+\]/g, '').trim();
+
+    // Parse delegation tag [DELEGATE:...]
+    let delegation = null;
+    const delegateMatch = responseText.match(/\[DELEGATE:([^:]+):([^\]]+)\]/);
+    if (delegateMatch) {
+      const delegateTo = delegateMatch[1].trim();
+      const reason = delegateMatch[2].trim();
+      if (this._hierarchy[delegateTo]) {
+        delegation = { delegateTo, reason, originalMessage: message };
+      }
+      responseText = responseText.replace(/\s*\[DELEGATE:[^\]]+\]/, '').trim();
+    }
+
+    // If the AI responded but didn't include any actions or delegation,
+    // and the player's message looks like a task request, inject smart fallback actions
+    if (actions.length === 0 && !delegation) {
+      const isTaskRequest = /fix|build|code|go|check|test|deploy|research|call|meet|talk|tell|ask|schedule|design|review|run|look|find|make|create|set up|update|push|ship/i.test(message);
+      if (isTaskRequest) {
+        const fallbackText = this._smartFallback(npcName, message, h);
+        // Extract actions from the fallback text
+        const fbActionRegex = /\[ACTION:([^\]]+)\]/g;
+        let fbMatch;
+        while ((fbMatch = fbActionRegex.exec(fallbackText)) !== null) {
+          const parts = fbMatch[1].split(':');
+          actions.push({ action: parts[0].trim(), params: parts.slice(1).map(p => p.trim()) });
+        }
+        // Extract delegation from fallback
+        const fbDelegateMatch = fallbackText.match(/\[DELEGATE:([^:]+):([^\]]+)\]/);
+        if (fbDelegateMatch && this._hierarchy[fbDelegateMatch[1].trim()]) {
+          delegation = { delegateTo: fbDelegateMatch[1].trim(), reason: fbDelegateMatch[2].trim(), originalMessage: message };
+        }
+        console.log(`[NpcBrains] Smart fallback for ${npcName}: ${actions.length} actions, delegation=${delegation?.delegateTo || 'none'}`);
+      }
+    }
+
+    // Store response in memory (clean text only)
+    this.memories[npcName].push({ from: npcName, text: this._sanitize(responseText) });
+
+    return { text: responseText, delegation, actions };
+  }
+
+  /**
+   * Get role-specific actions an NPC knows they can perform
+   */
+  /**
+   * Generate a context-aware canned response for NPC-to-NPC conversation.
+   * Used when no AI provider is available (demo mode or all providers down).
+   */
+  _cannedResponse(npcName, fromName, message) {
+    const h = this._hierarchy[npcName];
+    const title = (h?.title || '').toLowerCase();
+    const msg = message.toLowerCase();
+
+    // Role-specific responses based on what was said
+    if (/bug|fix|error|broken|crash/i.test(msg)) {
+      if (/developer|frontend|backend/i.test(title)) return 'On it, checking the code now.';
+      if (/qa|test/i.test(title)) return 'I\'ll write a test for that.';
+      if (/devops/i.test(title)) return 'Let me check the logs.';
+      return 'I\'ll flag that for the team.';
+    }
+    if (/deploy|ship|release|push/i.test(msg)) {
+      if (/devops/i.test(title)) return 'Running the pipeline now.';
+      if (/developer/i.test(title)) return 'My PR is ready to merge.';
+      return 'I\'ll prep my part for release.';
+    }
+    if (/meeting|standup|sync/i.test(msg)) {
+      return 'I\'ll be there. Let me wrap this up.';
+    }
+    if (/review|pr|code review/i.test(msg)) {
+      if (/developer/i.test(title)) return 'I\'ll review it this afternoon.';
+      return 'Sure, send it over.';
+    }
+    if (/design|mockup|ui|ux/i.test(msg)) {
+      if (/designer/i.test(title)) return 'I have some ideas. Let me sketch it.';
+      return 'Let\'s loop in Rob on the design.';
+    }
+    if (/research|data|analysis/i.test(msg)) {
+      if (/researcher|data/i.test(title)) return 'I\'ll dig into the data.';
+      return 'Good call. Let me look into it.';
+    }
+    if (/help|stuck|blocked/i.test(msg)) {
+      if (h?.manages?.includes(fromName)) return 'Show me what you\'ve got so far.';
+      return 'Sure, what do you need?';
+    }
+    if (/status|update|progress|how/i.test(msg)) {
+      const statuses = [
+        'Making good progress. Almost done.',
+        'About 80% done. Wrapping up.',
+        'Just finishing up the last part.',
+        'On track. Should be done soon.',
+      ];
+      return statuses[Math.floor(Math.random() * statuses.length)];
+    }
+    if (/good|great|nice|thanks|awesome/i.test(msg)) {
+      const thanks = ['Thanks!', 'Appreciate it.', 'Sure thing.', 'Happy to help.'];
+      return thanks[Math.floor(Math.random() * thanks.length)];
+    }
+    if (/morning|hello|hi |hey/i.test(msg)) {
+      const greets = ['Morning!', 'Hey, what\'s up?', 'Hi! Ready to go.', 'Hey there.'];
+      return greets[Math.floor(Math.random() * greets.length)];
+    }
+
+    // Generic role-based responses
+    const roleResponses = {
+      'cto': ['Got it. I\'ll coordinate the team.', 'Let me think about the approach.', 'Good idea. Let\'s prioritize that.'],
+      'project manager': ['I\'ll update the board.', 'Let me check the timeline.', 'I\'ll sync with the team.'],
+      'product manager': ['That aligns with our roadmap.', 'Let me check with users.', 'Good insight.'],
+      'senior developer': ['I\'ll architect a solution.', 'Let me review the codebase.', 'Solid approach.'],
+      'frontend developer': ['I\'ll update the UI.', 'Working on the components.', 'Let me check the styles.'],
+      'backend developer': ['I\'ll handle the API side.', 'Checking the database now.', 'Let me write the endpoint.'],
+      'qa engineer': ['I\'ll test that scenario.', 'Writing test cases now.', 'Let me verify that.'],
+      'devops engineer': ['I\'ll check the infra.', 'Monitoring looks good.', 'Pipeline is green.'],
+      'data engineer': ['Let me run the query.', 'Checking the data pipeline.', 'I\'ll analyze that.'],
+      'ui/ux designer': ['I\'ll mock that up.', 'Let me sketch some options.', 'Good UX call.'],
+      'researcher': ['I\'ll look into it.', 'Interesting finding.', 'Let me check the research.'],
+      'it support': ['I\'ll take a look at that.', 'Restarting the service.', 'Should be fixed now.'],
+      'receptionist': ['I\'ll note that down.', 'Let me check the schedule.', 'I\'ll pass that along.'],
+      'security guard': ['All clear here.', 'I\'ll keep an eye out.', 'Security check done.'],
+      'intern': ['On it! Learning a lot.', 'I\'ll give it a try.', 'Can you show me how?'],
+    };
+
+    const responses = roleResponses[title] || ['Got it.', 'Sure thing.', 'Working on it.', 'Sounds good.'];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  _getRoleActions(npcName, h) {
+    const title = (h?.title || '').toLowerCase();
+    const lines = [];
+
+    if (/developer|frontend|backend|senior/i.test(title)) {
+      lines.push('- Write/review code at your desk: [ACTION:useComputer]');
+      lines.push('- Fix a bug or build a feature: [ACTION:useComputer] (go code it)');
+      lines.push('- Review someone\'s code: [ACTION:speakTo:TheirName:I\'ll review your code]');
+    }
+    if (/cto|manager|lead/i.test(title)) {
+      lines.push('- Check on the team: [ACTION:speakTo:PersonName:Status update?]');
+      lines.push('- Call a team meeting: [ACTION:callMeeting:Name1,Name2,Name3]');
+      lines.push('- Assign a task to someone: [ACTION:speakTo:PersonName:task description]');
+    }
+    if (/qa|test/i.test(title)) {
+      lines.push('- Run tests: [ACTION:useComputer]');
+      lines.push('- Report a bug to a dev: [ACTION:speakTo:DevName:Found a bug in...]');
+    }
+    if (/devops/i.test(title)) {
+      lines.push('- Check deployments/servers: [ACTION:useComputer]');
+      lines.push('- Fix infrastructure: [ACTION:useComputer]');
+    }
+    if (/designer|ui|ux/i.test(title)) {
+      lines.push('- Work on designs: [ACTION:useComputer]');
+      lines.push('- Show designs to a dev: [ACTION:speakTo:DevName:Check out this design]');
+    }
+    if (/researcher|r&d/i.test(title)) {
+      lines.push('- Do research: [ACTION:checkBookshelf]');
+      lines.push('- Look things up online: [ACTION:useComputer]');
+    }
+    if (/receptionist/i.test(title)) {
+      lines.push('- Check the schedule: [ACTION:useComputer]');
+      lines.push('- Greet visitors: [ACTION:goToRoom:reception]');
+      lines.push('- Page someone: [ACTION:speakTo:PersonName:CEO needs you at reception]');
+    }
+    if (/it support/i.test(title)) {
+      lines.push('- Fix a computer issue: [ACTION:useComputer]');
+      lines.push('- Check server room: [ACTION:goToRoom:storage]');
+      lines.push('- Help someone with IT: [ACTION:speakTo:PersonName:Let me fix that for you]');
+    }
+    if (/security/i.test(title)) {
+      lines.push('- Patrol the office: [ACTION:goToRoom:reception]');
+      lines.push('- Check the entrance: [ACTION:goToRoom:reception]');
+    }
+    if (/data engineer/i.test(title)) {
+      lines.push('- Work on data pipelines: [ACTION:useComputer]');
+      lines.push('- Analyze data: [ACTION:useComputer]');
+    }
+    if (/intern/i.test(title)) {
+      lines.push('- Work on assigned tasks: [ACTION:useComputer]');
+      lines.push('- Ask your mentor for help: [ACTION:speakTo:Alex:Need some guidance]');
+    }
+
+    if (lines.length === 0) {
+      lines.push('- Do your work: [ACTION:useComputer]');
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Smart fallback when all AI providers fail.
+   * Parses the player's message and generates a reasonable response + actions.
+   */
+  _smartFallback(npcName, message, h) {
+    const msg = message.toLowerCase();
+    const title = (h?.title || '').toLowerCase();
+    const manages = h?.manages || [];
+    const reportsTo = h?.reportsTo || 'Abby';
+
+    // All NPC names for detecting who the player wants them to talk to
+    const allNames = Object.keys(this._hierarchy);
+
+    // Find if the message mentions another NPC name
+    let mentionedPerson = null;
+    for (const name of allNames) {
+      if (name.toLowerCase() !== npcName.toLowerCase() && msg.includes(name.toLowerCase())) {
+        mentionedPerson = name;
+        break;
+      }
+    }
+
+    // --- Meeting requests ---
+    if (/meeting|meet up|gather|huddle|standup|stand-up|sync up/i.test(msg)) {
+      if (/everyone|all|whole team|everybody/i.test(msg)) {
+        const team = manages.length > 0 ? manages.join(',') : 'Alex,Josh,Edward,Jenny';
+        return `On it, calling a team meeting. [ACTION:callMeeting:${team}]`;
+      }
+      if (mentionedPerson) {
+        return `Sure, I'll set up a meeting with ${mentionedPerson}. [ACTION:callMeeting:${mentionedPerson}]`;
+      }
+      const team = manages.length > 0 ? manages.slice(0, 4).join(',') : 'Alex,Marcus,Sarah';
+      return `I'll gather the team. [ACTION:callMeeting:${team}]`;
+    }
+
+    // --- Talk to / tell / ask someone ---
+    if (/talk to|tell |ask |speak to|speak with|go tell|let .* know|inform |check with|check on/i.test(msg) && mentionedPerson) {
+      // Extract what to say — get text after the person's name
+      const nameIdx = msg.indexOf(mentionedPerson.toLowerCase());
+      let what = message.slice(nameIdx + mentionedPerson.length).trim();
+      // Clean up connectors
+      what = what.replace(/^(to |that |about |if |whether )/i, '').trim();
+      if (!what || what.length < 3) what = 'CEO needs to talk to you';
+      if (what.length > 50) what = what.slice(0, 50);
+      return `Sure, I'll talk to ${mentionedPerson}. [ACTION:speakTo:${mentionedPerson}:${what}]`;
+    }
+
+    // --- Fix / build / code / work on / implement ---
+    if (/fix|bug|code|build|implement|develop|program|write|deploy|push|ship|release|update/i.test(msg)) {
+      // If this NPC is a developer type, they go do it
+      if (/developer|frontend|backend|senior|devops|engineer/i.test(title)) {
+        // If they manage people and another dev would be better suited, delegate
+        if (manages.length > 0 && mentionedPerson && manages.includes(mentionedPerson)) {
+          const task = message.replace(new RegExp(npcName, 'gi'), '').trim().slice(0, 50);
+          return `I'll assign that to ${mentionedPerson}. [ACTION:speakTo:${mentionedPerson}:${task}]`;
+        }
+        return `On it, heading to my desk to work on that. [ACTION:useComputer]`;
+      }
+      // Non-dev: delegate to a developer
+      const devTarget = manages.find(n => {
+        const th = this._hierarchy[n];
+        return th && /developer|frontend|backend/i.test(th.title);
+      }) || (this._hierarchy['Alex'] ? 'Alex' : reportsTo);
+      const task = message.replace(new RegExp(npcName, 'gi'), '').trim().slice(0, 50);
+      return `That's a dev task. I'll get ${devTarget} on it. [ACTION:speakTo:${devTarget}:${task}] [DELEGATE:${devTarget}:${task}]`;
+    }
+
+    // --- Research / look into / investigate ---
+    if (/research|look into|investigate|find out|analyze|study|explore|read up/i.test(msg)) {
+      if (/researcher|data|r&d/i.test(title)) {
+        return `I'll dig into that right away. [ACTION:checkBookshelf]`;
+      }
+      return `I'll research that now. [ACTION:useComputer]`;
+    }
+
+    // --- Test / QA / check / verify ---
+    if (/test|qa|check|verify|validate|review|inspect/i.test(msg)) {
+      if (/qa|test/i.test(title)) {
+        return `Running tests on it now. [ACTION:useComputer]`;
+      }
+      if (this._hierarchy['Molly']) {
+        return `That's QA work, I'll get Molly on it. [ACTION:speakTo:Molly:CEO wants tests on this] [DELEGATE:Molly:testing task]`;
+      }
+      return `I'll check on that. [ACTION:useComputer]`;
+    }
+
+    // --- Design / UI / mockup ---
+    if (/design|ui|ux|mockup|wireframe|layout|prototype/i.test(msg)) {
+      if (/designer|ui|ux/i.test(title)) {
+        return `I'll start working on designs. [ACTION:useComputer]`;
+      }
+      if (this._hierarchy['Rob']) {
+        return `That's a design task. I'll get Rob on it. [ACTION:speakTo:Rob:CEO wants a design for this] [DELEGATE:Rob:design task]`;
+      }
+    }
+
+    // --- Go somewhere ---
+    if (/go to|head to|walk to|move to|check out/i.test(msg)) {
+      if (/break\s?room|kitchen|coffee|lunch/i.test(msg)) {
+        return `Heading to the break room. [ACTION:goToBreakroom]`;
+      }
+      if (/conference|meeting room/i.test(msg)) {
+        return `Going to the conference room. [ACTION:goToRoom:conference]`;
+      }
+      if (/reception|front desk|lobby/i.test(msg)) {
+        return `Heading to reception. [ACTION:goToRoom:reception]`;
+      }
+      if (/server|storage|it room/i.test(msg)) {
+        return `Going to check the server room. [ACTION:goToRoom:storage]`;
+      }
+      if (/office|desk/i.test(msg)) {
+        return `Going back to my desk. [ACTION:useComputer]`;
+      }
+    }
+
+    // --- Schedule / organize / coordinate ---
+    if (/schedule|organize|coordinate|plan|arrange/i.test(msg)) {
+      if (/receptionist/i.test(title)) {
+        return `I'll check the schedule now. [ACTION:useComputer]`;
+      }
+      if (this._hierarchy['Lucy']) {
+        return `I'll have Lucy handle scheduling. [ACTION:speakTo:Lucy:CEO needs help with scheduling] [DELEGATE:Lucy:scheduling task]`;
+      }
+    }
+
+    // --- IT / server / network / computer issue ---
+    if (/server|network|computer|wifi|internet|it issue|tech support|restart/i.test(msg)) {
+      if (/it support|devops/i.test(title)) {
+        return `I'll take a look at that. [ACTION:goToRoom:storage]`;
+      }
+      if (this._hierarchy['Dan']) {
+        return `That's an IT issue. I'll get Dan on it. [ACTION:speakTo:Dan:CEO reported a tech issue] [DELEGATE:Dan:IT support task]`;
+      }
+    }
+
+    // --- Security ---
+    if (/security|patrol|guard|watch|protect|lock/i.test(msg)) {
+      if (/security/i.test(title)) {
+        return `On patrol, I'll check it out. [ACTION:goToRoom:reception]`;
+      }
+      if (this._hierarchy['Bouncer']) {
+        return `I'll let Bouncer know. [ACTION:speakTo:Bouncer:CEO wants a security check] [DELEGATE:Bouncer:security task]`;
+      }
+    }
+
+    // --- Delegate to someone mentioned ---
+    if (mentionedPerson) {
+      const task = message.replace(new RegExp(npcName, 'gi'), '').replace(new RegExp(mentionedPerson, 'gi'), '').trim().slice(0, 50) || 'handle this task';
+      return `I'll pass that to ${mentionedPerson}. [ACTION:speakTo:${mentionedPerson}:${task}]`;
+    }
+
+    // --- Generic: just go work on it ---
+    return `On it, heading to my desk. [ACTION:useComputer]`;
   }
 }
 

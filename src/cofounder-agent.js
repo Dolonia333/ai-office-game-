@@ -30,6 +30,7 @@ class CofounderAgent {
     // Think interval
     this._thinkInterval = null;
     this._thinkCount = 0;
+    this._consecutiveErrors = 0;
 
     // CEO message queue
     this._ceoMessages = [];
@@ -192,14 +193,17 @@ YOUR JOB — create a LIVING office:
    */
   start() {
     if (!this.apiKey) {
-      console.warn('[CofounderAgent] Cannot start without API key');
+      console.warn('[CofounderAgent] No API key — starting demo think loop');
+      this._startDemoLoop();
       return;
     }
 
     console.log('[CofounderAgent] Starting autonomous thinking loop');
+    this._usingDemoLoop = false;
 
     // Think every 15-30 seconds
     const scheduleNextThink = () => {
+      if (this._usingDemoLoop) return;
       const delay = 15000 + Math.random() * 15000;
       this._thinkInterval = setTimeout(async () => {
         await this._think();
@@ -211,6 +215,85 @@ YOUR JOB — create a LIVING office:
     setTimeout(() => {
       this._think().then(() => scheduleNextThink());
     }, 5000);
+  }
+
+  /**
+   * Demo think loop — pre-scripted office behaviors that run without any API.
+   * Cycles through realistic work scenarios so the office looks alive.
+   */
+  _startDemoLoop() {
+    const scripts = [
+      // Abby checks in with Alex
+      [{ action: 'speakTo', agentId: 'Abby', params: { target: 'Alex', text: 'How\'s the sprint going?' } }],
+      // Alex responds and goes to work
+      [{ action: 'speak', agentId: 'Alex', params: { text: 'On track. Finishing auth module.' } },
+       { action: 'useComputer', agentId: 'Alex', params: {} }],
+      // Josh works on frontend
+      [{ action: 'speak', agentId: 'Josh', params: { text: 'Updating the dashboard...' } },
+       { action: 'useComputer', agentId: 'Josh', params: {} }],
+      // Edward works on backend
+      [{ action: 'speak', agentId: 'Edward', params: { text: 'Deploying API changes.' } },
+       { action: 'useComputer', agentId: 'Edward', params: {} }],
+      // Molly runs tests
+      [{ action: 'speak', agentId: 'Molly', params: { text: 'Running test suite...' } },
+       { action: 'useComputer', agentId: 'Molly', params: {} }],
+      // Bob researches
+      [{ action: 'speak', agentId: 'Bob', params: { text: 'Researching competitor APIs.' } },
+       { action: 'useComputer', agentId: 'Bob', params: {} }],
+      // Abby talks to Marcus
+      [{ action: 'speakTo', agentId: 'Abby', params: { target: 'Marcus', text: 'Update me on the timeline.' } }],
+      // Marcus responds
+      [{ action: 'speak', agentId: 'Marcus', params: { text: 'We\'re on schedule for Friday.' } }],
+      // Jenny reviews code
+      [{ action: 'speak', agentId: 'Jenny', params: { text: 'Reviewing Alex\'s PR...' } },
+       { action: 'useComputer', agentId: 'Jenny', params: {} }],
+      // Oscar checks servers
+      [{ action: 'speak', agentId: 'Oscar', params: { text: 'All systems green.' } },
+       { action: 'useComputer', agentId: 'Oscar', params: {} }],
+      // Rob works on designs
+      [{ action: 'speak', agentId: 'Rob', params: { text: 'Working on the new mockups.' } },
+       { action: 'useComputer', agentId: 'Rob', params: {} }],
+      // Pier runs data pipeline
+      [{ action: 'speak', agentId: 'Pier', params: { text: 'ETL pipeline running smooth.' } },
+       { action: 'useComputer', agentId: 'Pier', params: {} }],
+      // Dan does IT
+      [{ action: 'speak', agentId: 'Dan', params: { text: 'Updating security patches.' } },
+       { action: 'goToRoom', agentId: 'Dan', params: { room: 'storage' } }],
+      // Roki asks Alex for help
+      [{ action: 'speakTo', agentId: 'Roki', params: { target: 'Alex', text: 'Can you review my code?' } }],
+      // Alex helps Roki
+      [{ action: 'speak', agentId: 'Alex', params: { text: 'Sure, let me take a look.' } }],
+      // Lucy greets
+      [{ action: 'speak', agentId: 'Lucy', params: { text: 'Good morning, welcome in!' } }],
+      // Bouncer patrols
+      [{ action: 'speak', agentId: 'Bouncer', params: { text: 'Perimeter secure.' } },
+       { action: 'goToRoom', agentId: 'Bouncer', params: { room: 'reception' } }],
+      // Sarah checks product
+      [{ action: 'speak', agentId: 'Sarah', params: { text: 'Reviewing user feedback.' } },
+       { action: 'useComputer', agentId: 'Sarah', params: {} }],
+      // Abby calls standup
+      [{ action: 'speak', agentId: 'Abby', params: { text: 'Quick standup in 5 everyone.' } }],
+      // Team responds
+      [{ action: 'speak', agentId: 'Josh', params: { text: 'Be right there.' } },
+       { action: 'speak', agentId: 'Edward', params: { text: 'Coming.' } }],
+    ];
+
+    let idx = 0;
+    const runNext = () => {
+      const commands = scripts[idx % scripts.length];
+      idx++;
+      // Broadcast to all connected game clients
+      const msg = JSON.stringify({ type: 'agent_commands', commands });
+      this.wsClients.forEach(ws => {
+        if (ws.readyState === 1) ws.send(msg);
+      });
+      // Next script in 20-40 seconds
+      const delay = 20000 + Math.random() * 20000;
+      this._thinkInterval = setTimeout(runNext, delay);
+    };
+
+    // Start after 8 seconds
+    setTimeout(runNext, 8000);
   }
 
   /**
@@ -290,11 +373,19 @@ YOUR JOB — create a LIVING office:
     try {
       const response = await this._callClaude(userMessage);
       if (response) {
+        this._consecutiveErrors = 0;
         this.conversationHistory.push({ role: 'assistant', content: response });
         this._parseAndDispatch(response);
       }
     } catch (err) {
+      this._consecutiveErrors++;
       console.warn('[CofounderAgent] Think error:', err.message, err.stack ? err.stack.split('\n')[1] : '');
+      if (this._consecutiveErrors >= 2 && !this._usingDemoLoop) {
+        console.warn('[CofounderAgent] API failing — switching to demo think loop');
+        this._usingDemoLoop = true;
+        this.stop();
+        this._startDemoLoop();
+      }
     }
   }
 

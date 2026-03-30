@@ -1200,7 +1200,7 @@ class OfficeScene extends Phaser.Scene {
           if (pl.parentInstanceId) return; // decor placed after
           let def = catalogObjects[pl.id];
           if (!def && masterObjs[pl.id]) def = masterObjs[pl.id];
-          
+
           let texKey = `cat_${pl.id}`;
           if (def && def.source_type === 'single_file') texKey = `single_${def.single_id || pl.id}`;
 
@@ -1255,6 +1255,26 @@ class OfficeScene extends Phaser.Scene {
           this.furnitureDecorSprites.push({ sprite: s, depth });
           const instanceId = pl.instanceId || pl.id;
           this._interactables.push({ id: pl.id, instanceId, sprite: s, def: { ...def, _placement: pl }, obstacle: null, parentInstanceId: pl.parentInstanceId || null });
+        });
+
+        // Fix decor depth: ensure decor items (laptops, monitors, etc.) render above
+        // any surface (desk) they visually sit on. Checks if decor is above and near a surface.
+        const surfaces = this._interactables.filter(it => it.def?.type === 'surface');
+        const decors = this._interactables.filter(it => it.def?.type === 'decor');
+        decors.forEach(decor => {
+          if (!decor.sprite) return;
+          const dx = decor.sprite.x, dy = decor.sprite.y;
+          surfaces.forEach(surf => {
+            if (!surf.sprite) return;
+            const sx = surf.sprite.x, sy = surf.sprite.y;
+            const sw = surf.sprite.displayWidth / 2 + 40;
+            // Decor is above the surface (up to 100px) and horizontally overlapping
+            if (Math.abs(dx - sx) < sw && dy < sy && dy > sy - 100) {
+              if (decor.sprite.depth <= surf.sprite.depth) {
+                decor.sprite.setDepth(surf.sprite.depth + 0.5);
+              }
+            }
+          });
         });
       };
       
@@ -1384,7 +1404,8 @@ class OfficeScene extends Phaser.Scene {
       if (window.OpenClawChat) {
         this._openclawChat = new window.OpenClawChat(this._gatewayBridge);
         this.input.keyboard.on('keydown-C', () => {
-          // Don't toggle if typing in the chat input
+          // Don't toggle if typing in any input
+          if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
           if (document.activeElement?.id === 'openclaw-chat-input') return;
           this._openclawChat.toggle();
         });
@@ -1395,16 +1416,51 @@ class OfficeScene extends Phaser.Scene {
     if (window.AgentActions && window.AgentOfficeManager) {
       this._agentActions = new window.AgentActions(this);
       this._agentManager = new window.AgentOfficeManager(this, this._agentActions);
+      // If demo mode, flag it before init so initial behaviors are skipped
+      const demoCheck = new URLSearchParams(window.location.search);
+      if (demoCheck.get('demo') === 'investor') {
+        this._agentManager._demoMode = true;
+      }
       this._agentManager.init();
       console.log('[OfficeScene] Agent Office Manager initialized');
 
-      // T key: talk to CTO (cofounder agent)
-      this.input.keyboard.on('keydown-T', () => {
-        if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-        const text = prompt('Say to CTO:');
-        if (text && this._agentManager) {
-          this._agentManager.ceoSpeak(text);
-        }
+      // --- Player Chat System (talk to NPCs) ---
+      if (window.PlayerChat) {
+        this._playerChat = new window.PlayerChat(this, this._agentManager);
+
+        // Enter key: open/toggle player chat
+        this.input.keyboard.on('keydown-ENTER', () => {
+          if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+          this._playerChat.open();
+        });
+
+        // T key: also opens player chat (legacy shortcut)
+        this.input.keyboard.on('keydown-T', () => {
+          if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+          this._playerChat.open();
+        });
+
+        console.log('[OfficeScene] Player Chat initialized (press Enter or T to talk to NPCs)');
+      } else {
+        // Fallback: T key uses old prompt dialog
+        this.input.keyboard.on('keydown-T', () => {
+          if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+          const text = prompt('Say to CTO:');
+          if (text && this._agentManager) {
+            this._agentManager.ceoSpeak(text);
+          }
+        });
+      }
+    }
+
+    // --- Demo Mode ---
+    const demoParams = new URLSearchParams(window.location.search);
+    if (demoParams.get('demo') === 'investor' && window.DemoScene) {
+      // Wait for desks to be assigned and NPCs to settle, then start demo
+      this.time.delayedCall(3000, () => {
+        const demo = new window.DemoScene(this, this._agentManager);
+        demo.start();
+        console.log('[OfficeScene] Investor demo triggered via ?demo=investor');
       });
     }
 
@@ -1805,7 +1861,7 @@ class OfficeScene extends Phaser.Scene {
           this.facing = 'down';
         }
       }
-    } else if (justPressed && this.playerLocked) {
+    } else if (justPressed && this.playerLocked && !chatOpen) {
       standUp();
     }
 
@@ -1814,42 +1870,46 @@ class OfficeScene extends Phaser.Scene {
     const rightKey = this.cursors.right.isDown;
     const upKey = this.cursors.up.isDown;
     const downKey = this.cursors.down.isDown;
-    if (this.playerLocked && (leftKey || rightKey || upKey || downKey)) {
+    // If player is locked (chat open, sitting, etc.) only unlock if arrow keys pressed
+    // AND it's NOT from the chat being open (chat uses its own Esc to close)
+    const chatOpen = this._playerChat?.isOpen;
+    if (this.playerLocked && !chatOpen && (leftKey || rightKey || upKey || downKey)) {
       standUp();
     }
 
+    // Stop player movement when locked, but DON'T return early —
+    // NPC AI, physics, bubbles, etc. all need to keep running below
+    let moving = false;
     if (this.playerLocked) {
       body.setVelocity(0, 0);
       this.player.anims.stop();
-      return;
-    }
+    } else {
+      body.setVelocity(0);
 
-    body.setVelocity(0);
-    let moving = false;
+      const left = leftKey;
+      const right = rightKey;
+      const up = upKey;
+      const down = downKey;
 
-    const left = leftKey;
-    const right = rightKey;
-    const up = upKey;
-    const down = downKey;
+      if (left) {
+        body.setVelocityX(-speed);
+        moving = true;
+        this.facing = 'left';
+      } else if (right) {
+        body.setVelocityX(speed);
+        moving = true;
+        this.facing = 'right';
+      }
 
-    if (left) {
-      body.setVelocityX(-speed);
-      moving = true;
-      this.facing = 'left';
-    } else if (right) {
-      body.setVelocityX(speed);
-      moving = true;
-      this.facing = 'right';
-    }
-
-    if (up) {
-      body.setVelocityY(-speed);
-      moving = true;
-      if (!left && !right) this.facing = 'up';
-    } else if (down) {
-      body.setVelocityY(speed);
-      moving = true;
-      if (!left && !right) this.facing = 'down';
+      if (up) {
+        body.setVelocityY(-speed);
+        moving = true;
+        if (!left && !right) this.facing = 'up';
+      } else if (down) {
+        body.setVelocityY(speed);
+        moving = true;
+        if (!left && !right) this.facing = 'down';
+      }
     }
 
     if (this._playerSitting) {
@@ -1923,6 +1983,27 @@ class OfficeScene extends Phaser.Scene {
       this._sitPrompt.setVisible(false);
     }
 
+    // --- Talk prompt: show "[Enter] Talk" when near an NPC and facing them ---
+    if (this._playerChat && !this._playerChat.isOpen) {
+      let talkNpc = this._playerChat._findFacingNpc();
+      if (talkNpc && !this._talkPrompt) {
+        this._talkPrompt = this.add.text(0, 0, '[Enter] Talk', {
+          fontSize: '10px', fontFamily: 'monospace', color: '#4ade80',
+          backgroundColor: '#00000088', padding: { x: 3, y: 2 }
+        }).setDepth(9999).setOrigin(0.5, 1);
+      }
+      if (this._talkPrompt) {
+        if (talkNpc) {
+          this._talkPrompt.setVisible(true);
+          this._talkPrompt.setPosition(talkNpc.x, talkNpc.y - 56);
+        } else {
+          this._talkPrompt.setVisible(false);
+        }
+      }
+    } else if (this._talkPrompt) {
+      this._talkPrompt.setVisible(false);
+    }
+
     // --- NPC AI ---
     if (Array.isArray(this.npcs)) {
       const now = this.time.now;
@@ -1942,9 +2023,25 @@ class OfficeScene extends Phaser.Scene {
         const b = npc.body.blocked;
         if (!b.none && (b.left || b.right || b.up || b.down)) {
           ai._physicsStuckTime = (ai._physicsStuckTime || 0) + delta;
-          if (ai._physicsStuckTime > 400) {
+          ai._totalPhysicsStuck = (ai._totalPhysicsStuck || 0) + delta;
+
+          // If stuck on physics for 5+ seconds total, abandon current task
+          if (ai._totalPhysicsStuck > 5000) {
+            npc.body.setVelocity(0, 0);
+            if (pf) pf.stop();
+            ai._totalPhysicsStuck = 0;
+            ai._physicsStuckTime = 0;
+            if (ai.mode === 'agent_task') {
+              ai.taskState = 'idle';
+              ai.mode = 'wander';
+              ai.nextWanderAt = now + 2000;
+            } else if (ai.mode === 'wander') {
+              ai.wanderTarget = null;
+              ai.nextWanderAt = now + 1000;
+            }
+          } else if (ai._physicsStuckTime > 400) {
             // Nudge perpendicular to the blocked direction
-            const nudge = 30;
+            const nudge = 20;
             if (b.left || b.right) {
               npc.y += (Math.random() > 0.5 ? nudge : -nudge);
             }
@@ -1962,6 +2059,7 @@ class OfficeScene extends Phaser.Scene {
           }
         } else {
           ai._physicsStuckTime = 0;
+          ai._totalPhysicsStuck = 0;
         }
 
         if (ai.mode === 'agent_task') {
@@ -2028,14 +2126,30 @@ class OfficeScene extends Phaser.Scene {
             if (pf) pf.stop();
           }
         } else {
-          // Wander mode — pick a new random destination and pathfind to it
+          // Wander mode — pick a new random walkable destination
           if (now >= ai.nextWanderAt) {
             ai.nextWanderAt = now + Phaser.Math.Between(2500, 6000);
-            const wx = Phaser.Math.Between(120, 1160);
-            const wy = Phaser.Math.Between(160, 600);
+            let wx, wy, attempts = 0;
+            // Try up to 5 times to find a walkable target
+            do {
+              wx = Phaser.Math.Between(120, 1160);
+              wy = Phaser.Math.Between(160, 600);
+              attempts++;
+            } while (
+              attempts < 5 &&
+              this._pathfinder &&
+              !this._pathfinder.isWalkable(
+                Math.floor(wx / this._pathfinder.cellSize),
+                Math.floor(wy / this._pathfinder.cellSize)
+              )
+            );
             ai.wanderTarget = { x: wx, y: wy };
             if (usePathfinding) {
-              pf.navigateTo(wx, wy);
+              const found = pf.navigateTo(wx, wy);
+              if (!found) {
+                // No path to this spot — try again soon
+                ai.nextWanderAt = now + 500;
+              }
             }
           }
 
@@ -2097,6 +2211,11 @@ class OfficeScene extends Phaser.Scene {
     // Update agent office manager (AI agent coordination)
     if (this._agentManager) {
       this._agentManager.update();
+    }
+
+    // Update player chat bubbles
+    if (this._playerChat) {
+      this._playerChat.updateBubbles();
     }
 
     // Update robber controller (security threat visualization)
