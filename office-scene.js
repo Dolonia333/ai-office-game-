@@ -193,6 +193,9 @@ class OfficeScene extends Phaser.Scene {
   }
 
   create() {
+    // Depth-sort dirty flag — only re-sort when something has moved
+    this._depthSortDirty = true;
+
     // Remove loading screen UI
     if (this._loadingUI) {
       this._loadingUI.forEach(obj => obj.destroy());
@@ -1791,6 +1794,8 @@ class OfficeScene extends Phaser.Scene {
     }
 
     // Automated Z-sorting (Y-sorting): sort ALL sprites by bottom_y and assign depth.
+    // Only re-sort when the dirty flag is set (i.e., something moved).
+    if (this._depthSortDirty) {
     // This is the “brain”: if character.bottom_y < desk.bottom_y they draw behind; if > they draw in front.
     // Characters get a small Y bias (+1) so they render IN FRONT of furniture at the same Y level
     // (e.g., standing behind a chair — the character should be visible over the chair back).
@@ -1829,6 +1834,8 @@ class OfficeScene extends Phaser.Scene {
         npc.setDepth(chairDepth + 0.5);
       }
     });
+    this._depthSortDirty = false;
+    } // end depth-sort dirty check
 
     // Interaction: press E/Space near object in front of player.
     const interactPressed = (this.interactKeys?.E?.isDown || this.interactKeys?.SPACE?.isDown);
@@ -1926,20 +1933,24 @@ class OfficeScene extends Phaser.Scene {
         body.setVelocityX(-speed);
         moving = true;
         this.facing = 'left';
+        this._depthSortDirty = true;
       } else if (right) {
         body.setVelocityX(speed);
         moving = true;
         this.facing = 'right';
+        this._depthSortDirty = true;
       }
 
       if (up) {
         body.setVelocityY(-speed);
         moving = true;
         if (!left && !right) this.facing = 'up';
+        this._depthSortDirty = true;
       } else if (down) {
         body.setVelocityY(speed);
         moving = true;
         if (!left && !right) this.facing = 'down';
+        this._depthSortDirty = true;
       }
     }
 
@@ -2214,6 +2225,8 @@ class OfficeScene extends Phaser.Scene {
         const vy = npc.body.velocity.y;
         const npcMoving = Math.abs(vx) > 2 || Math.abs(vy) > 2;
         if (npcMoving) {
+          this._depthSortDirty = true;
+          npc._lastIdleFrame = undefined; // reset so idle frame is re-applied when NPC stops
           if (Math.abs(vx) > Math.abs(vy)) {
             ai.facing = vx < 0 ? 'left' : 'right';
           } else {
@@ -2225,10 +2238,12 @@ class OfficeScene extends Phaser.Scene {
           else npc.anims.play(npc._animKey('walk_right'), true);
         } else {
           // idle frames: up=12 down=0 left=4 right=8
-          if (ai.facing === 'up') npc.setFrame(12);
-          else if (ai.facing === 'down') npc.setFrame(0);
-          else if (ai.facing === 'left') npc.setFrame(4);
-          else npc.setFrame(8);
+          // Only call setFrame() if the idle frame actually changed
+          const idleFrame = ai.facing === 'up' ? 12 : ai.facing === 'down' ? 0 : ai.facing === 'left' ? 4 : 8;
+          if (npc._lastIdleFrame !== idleFrame) {
+            npc.setFrame(idleFrame);
+            npc._lastIdleFrame = idleFrame;
+          }
           npc.anims.stop();
         }
       });
