@@ -1168,7 +1168,23 @@ class OfficeScene extends Phaser.Scene {
     const furnitureCatalog = skipCatalogPlacements
       ? null
       : this.cache.json.get('furniture_catalog_openplan');
-    const placements = furnitureCatalog?.placements;
+
+    // Try to restore saved layout from server (overrides default placements)
+    let placements = furnitureCatalog?.placements;
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/layout', false); // synchronous
+      xhr.send();
+      if (xhr.status === 200) {
+        const saved = JSON.parse(xhr.responseText);
+        if (saved && Array.isArray(saved.placements)) {
+          placements = saved.placements;
+          console.log('[OfficeScene] Restored saved layout from server (' + placements.length + ' placements)');
+        }
+      }
+    } catch (e) {
+      console.warn('[OfficeScene] Could not load saved layout, using default:', e.message);
+    }
     const catalogObjects = furnitureCatalog?.objects;
     const sliceMargin = (furnitureCatalog?.info?.slice_margin_px !== undefined) ? furnitureCatalog.info.slice_margin_px : 0;
 
@@ -2801,6 +2817,17 @@ window.game = new Phaser.Game(config);
 
     const output = JSON.stringify({ ...catalog, placements: updated }, null, 2);
 
+    // Persist layout to server
+    fetch('/api/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: output,
+    }).then(r => {
+      if (r.ok) syncInfo('Layout saved to server');
+      else syncInfo('Failed to save layout to server');
+    }).catch(() => syncInfo('Failed to save layout to server'));
+
+    // Also keep existing clipboard + download behavior
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(output).then(() => {
         syncInfo('Copied updated catalog JSON to clipboard');

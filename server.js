@@ -90,6 +90,41 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // --- Layout save/load API ---
+  const layoutDir = path.join(ROOT, 'layouts');
+  const layoutFile = path.join(layoutDir, 'office-layout.json');
+
+  if (urlPath === '/api/layout' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        JSON.parse(body); // validate JSON
+        fs.mkdirSync(layoutDir, { recursive: true });
+        fs.writeFileSync(layoutFile, body, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  if (urlPath === '/api/layout' && req.method === 'GET') {
+    fs.readFile(layoutFile, 'utf8', (err, data) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No saved layout' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(data);
+    });
+    return;
+  }
+
   // --- Security test endpoint: simulate threats for testing ---
   if (urlPath === '/security-test') {
     const category = new URL(req.url, `http://localhost:${PORT}`).searchParams.get('type') || 'network_scan';
