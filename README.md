@@ -1,6 +1,6 @@
 # AI Office Game
 
-A pixel art office simulation where AI-powered NPCs work autonomously in a virtual office. Each NPC has its own AI brain (Claude, Grok, Gemini, or LM Studio), personality, and role. A CTO agent (Claude) directs the team in real-time, assigning tasks, calling meetings, and coordinating work — all visualized as a top-down RPG.
+A pixel art office simulation where AI-powered NPCs work autonomously in a virtual office. Each NPC has its own AI brain (Claude, Grok, Gemini, Kimi, or LM Studio), personality, and role. A CTO agent (Claude) directs the team in real-time, assigning tasks, calling meetings, and coordinating work — all visualized as a top-down RPG.
 
 Built with **Phaser 3** using the [LimeZu Modern Office](https://limezu.itch.io/) asset pack.
 
@@ -8,13 +8,15 @@ Built with **Phaser 3** using the [LimeZu Modern Office](https://limezu.itch.io/
 
 ## Features
 
-- **6 AI-powered NPCs** — each with a unique personality, role, and AI provider
-- **Autonomous CTO** — Claude-powered director that thinks every 15-30s and commands the team
+- **16 AI-powered NPCs** — each with a unique personality, role, and AI provider
+- **Zero-config demo mode** — works out of the box without any API keys; NPCs use smart scripted responses
+- **Autonomous CTO** — Claude-powered director that thinks every 15-30s and commands the team (falls back to demo loop if API unavailable)
 - **Multi-provider AI** — NPCs use Claude, Grok, Gemini, Kimi, or LM Studio (local)
-- **Real-time conversations** — click NPCs to talk; they respond with their AI brain
+- **Player chat system** — press `Enter` to talk to NPCs; they walk over, respond, and execute tasks
+- **A* pathfinding** — NPCs navigate around furniture using grid-based pathfinding with stuck detection
 - **Security monitor** — live threat detection dashboard (file access, network scans, injection attempts)
+- **Meeting system** — call meetings, NPCs walk to conference room, sit in chairs, discuss, return to work
 - **OpenClaw integration** — connect to the OpenClaw gateway for full AI agent workflows
-- **Embedded chat UI** — press `C` to open the OpenClaw chat panel inside the game
 
 ## Quick Start
 
@@ -74,17 +76,31 @@ Bob (Researcher) and Dan (IT Support) use **LM Studio** by default — no API ke
 | NPC | Role | AI Provider | Model |
 |-----|------|-------------|-------|
 | **Abby** | CTO | Claude (Anthropic) | claude-3-haiku |
-| **Alex** | Developer | Grok (XAI) | grok-3-mini |
+| **Alex** | Senior Developer | Grok (XAI) | grok-3-mini |
 | **Bob** | Researcher | LM Studio (local) | dolphin3.0-llama3.1-8b |
-| **Jenny** | Developer | Claude (Anthropic) | claude-3-haiku |
+| **Jenny** | Code Review | Claude (Anthropic) | claude-3-haiku |
 | **Dan** | IT Support | LM Studio (local) | dolphin3.0-llama3.1-8b |
 | **Lucy** | Receptionist | Claude (Anthropic) | claude-3-haiku |
+| **Bouncer** | Security Guard | LM Studio (local) | dolphin3.0-llama3.1-8b |
+| **Marcus** | Project Manager | Claude (Anthropic) | claude-3-haiku |
+| **Sarah** | Product Manager | Claude (Anthropic) | claude-3-haiku |
+| **Edward** | Backend Developer | LM Studio (local) | dolphin3.0-llama3.1-8b |
+| **Josh** | Frontend Developer | Grok (XAI) | grok-3-mini |
+| **Molly** | QA Engineer | Claude (Anthropic) | claude-3-haiku |
+| **Oscar** | DevOps Engineer | LM Studio (local) | dolphin3.0-llama3.1-8b |
+| **Pier** | Data Engineer | LM Studio (local) | dolphin3.0-llama3.1-8b |
+| **Rob** | UI/UX Designer | Claude (Anthropic) | claude-3-haiku |
+| **Roki** | Intern | Grok (XAI) | grok-3-mini |
 
-> NPCs fall back to Claude if their primary provider is unavailable, then to canned responses if Claude also fails.
+> NPCs fall back to Claude if their primary provider fails, then to smart scripted responses if all providers fail.
 
-### Minimal Setup (No API Keys)
+### Zero-Config Demo Mode (No API Keys Needed)
 
-The game works with just LM Studio running locally. Bob and Dan will respond via LM Studio, while other NPCs will use canned fallback responses.
+The game works immediately after cloning — no API keys required. In demo mode:
+- All 16 NPCs load and respond with context-aware scripted responses
+- The CTO agent runs pre-scripted office behaviors (standups, code reviews, meetings)
+- Smart fallback infers actions from player messages (e.g. "fix the bug" triggers coding behavior)
+- If API keys are configured but fail (e.g. exhausted credits), the system auto-falls back to demo mode
 
 ## Controls
 
@@ -94,6 +110,10 @@ The game works with just LM Studio running locally. Bob and Dan will respond via
 | `A` / `Arrow Left` | Move left |
 | `S` / `Arrow Down` | Move down |
 | `D` / `Arrow Right` | Move right |
+| `Enter` | Open chat — talk to NPCs (say their name or face them) |
+| `Esc` | Close chat panel |
+| `F` | Sit in nearby chair |
+| `E` | Toggle furniture editor mode |
 | `C` | Toggle OpenClaw chat panel |
 
 ### OpenClaw Panel
@@ -150,6 +170,8 @@ Browser (Phaser 3)                    Server (Node.js :8080)              Extern
 | `src/openclaw-chat.js` | Embedded OpenClaw UI panel (iframe, session management) |
 | `src/security-monitor.js` | Client-side security dashboard (receives threats from server) |
 | `security-monitor-server.js` | Server-side threat detection (file, network, API, system) |
+| `src/player-chat.js` | CEO-to-NPC chat system (targeting, walk-over, delegation) |
+| `src/demo-scene.js` | Investor demo cutscene (20-second scripted sequence) |
 | `src/pathfinding.js` | A* pathfinding for NPC movement |
 | `src/robber-controller.js` | Optional robber NPC visualization |
 | `src/RoomAssembly.js` | Phaser integration for room layouts (validation, Z-sorting) |
@@ -195,7 +217,8 @@ npcs/
   alex/
     SOUL.md
     MEMORY.md
-  bob/ jenny/ dan/ lucy/
+  bob/ jenny/ dan/ lucy/ bouncer/ marcus/ sarah/
+  edward/ josh/ molly/ oscar/ pier/ rob/ roki/
     ...
 ```
 
@@ -225,7 +248,7 @@ Each NPC has an individual AI brain managed by `src/npc-brains.js`:
 - **Persistent memory** — conversations saved to `MEMORY.md`, survives restarts
 - **Conversation context** — each NPC remembers recent interactions (up to 20 messages per session)
 - **Multi-provider support** — different NPCs can use different AI backends
-- **Fallback chain** — Primary provider -> Claude -> Canned response
+- **Fallback chain** — Primary provider -> Claude -> Smart scripted fallback (infers actions from message context)
 
 ### Meeting System
 
@@ -298,7 +321,7 @@ The player character uses `Dolo.png` — a 768x64 sprite sheet generated with [C
 - **Idle frame:** 3rd pose (index 2) of each direction group
 - **Walk animation:** All 6 frames per direction at 10fps
 
-NPCs use individual XP-style character sheets (Abby, Alex, Bob, Dan, Jenny, Lucy) at 32x48 per frame.
+All 16 NPCs use individual XP-style character sheets at 32x48 per frame (4x4 grid: 4 directions, 4 frames each).
 
 ## Office Furniture System
 
@@ -311,13 +334,14 @@ Furniture is placed using a catalog-driven system:
 
 ## Asset Pack
 
-Uses the [LimeZu Modern Office Revamped](https://limezu.itch.io/) asset pack (not included — purchase separately):
+Uses the [LimeZu Modern Office Revamped](https://limezu.itch.io/) asset pack. All required assets are bundled in the `assets/` directory:
 
-- `Modern_Office_MV_Walls_TILESET_A4.png` — Wall tiles
-- `Modern_Office_MV_Floors_TILESET_A2.png` — Floor tiles
-- `Modern_Office_MV_2_TILESETS_B-C-D-E.png` — Furniture tileset
-- `Modern_Office_MV_3_TILESETS_B-C-D-E.png` — Additional furniture
-- `modern_office_singles_16/*.png` — Individual furniture sprites (350+ items)
+- `assets/Walls_TILESET_A4.png` — Wall tiles
+- `assets/Floors_TILESET_A2.png` — Floor tiles
+- `assets/Modern_Office_Black_Shadow_32x32.png` — Main furniture spritesheet
+- `assets/Room_Builder_Office_32x32.png` — Floor and wall builder tiles
+- `assets/modern_office_singles_16/*.png` — Individual furniture sprites (350+ items)
+- `assets/*.png` — Player character (Dolo) + 16 NPC character sheets
 
 ## Development Tools
 
@@ -351,14 +375,12 @@ node server.js
 
 ### WebSocket errors (404 on /agent-ws or /security-ws)
 
-You're running the wrong `server.js`. Make sure you're in the `pixel-office-game/` directory:
+Make sure you're running the server from the project directory:
 
 ```bash
 cd pixel-office-game
 node server.js
 ```
-
-The root-level `server.js` is a simple static file server without WebSocket support.
 
 ### NPCs don't respond / blank speech bubbles
 

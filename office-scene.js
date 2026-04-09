@@ -4,13 +4,40 @@ class OfficeScene extends Phaser.Scene {
   }
 
   preload() {
+    // --- Loading screen ---
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    this.add.text(w / 2, h / 2 - 50, 'DOLONIA', {
+      fontSize: '24px', fontFamily: 'monospace', color: '#4ade80', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.add.text(w / 2, h / 2 - 25, 'AI Office Simulator', {
+      fontSize: '11px', fontFamily: 'monospace', color: '#64748b',
+    }).setOrigin(0.5);
+    const barBg = this.add.rectangle(w / 2, h / 2 + 10, 260, 14, 0x1e293b).setOrigin(0.5);
+    barBg.setStrokeStyle(1, 0x334155);
+    const barFill = this.add.rectangle(w / 2 - 128, h / 2 + 10, 0, 10, 0x4ade80).setOrigin(0, 0.5);
+    const pctText = this.add.text(w / 2, h / 2 + 32, '0%', {
+      fontSize: '10px', fontFamily: 'monospace', color: '#94a3b8',
+    }).setOrigin(0.5);
+    const statusText = this.add.text(w / 2, h / 2 + 48, '', {
+      fontSize: '9px', fontFamily: 'monospace', color: '#475569',
+    }).setOrigin(0.5);
+    this._loadingUI = [barBg, barFill, pctText, statusText];
+
+    this.load.on('progress', (v) => {
+      barFill.width = 256 * v;
+      pctText.setText(Math.round(v * 100) + '%');
+    });
+    this.load.on('fileprogress', (file) => {
+      statusText.setText(file.key || '');
+    });
+
     // Helpful in-browser diagnostics so missing assets don't look like a silent blue screen.
     this._loadErrors = [];
     this.load.on('loaderror', (file) => {
       const key = file?.key || '(unknown-key)';
       const src = file?.src || file?.url || '(unknown-src)';
       this._loadErrors.push({ key, src });
-      // Also log to devtools console.
       // eslint-disable-next-line no-console
       console.error('ASSET LOAD ERROR', key, src);
     });
@@ -18,22 +45,22 @@ class OfficeScene extends Phaser.Scene {
     // Interior floor tileset (MV-style, treated as 32x32 grid)
     this.load.image(
       'floor_tiles',
-      '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_MV/Floors_TILESET_A2_.png'
+      'assets/Floors_TILESET_A2.png'
     );
     // Modern Office Room Builder — floor + wall tiles matching the furniture art style
     this.load.image(
       'room_builder',
-      '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Office_Revamped_v1.2/1_Room_Builder_Office/Room_Builder_Office_32x32.png'
+      'assets/Room_Builder_Office_32x32.png'
     );
     // Modern UI Style 2 — gray UI panels for dialog boxes
     this.load.image(
       'ui_style2',
-      '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/modernuserinterface-win/32x32/Modern_UI_Style_2_32x32.png'
+      'assets/Modern_UI_Style_2_32x32.png'
     );
     // Interior walls tileset (used for office walls/trim when needed)
     this.load.image(
       'wall_tiles',
-      '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_MV/Walls_TILESET_A4_.png'
+      'assets/Walls_TILESET_A4.png'
     );
     // Core JSON catalogs
     const cacheBust = Date.now();
@@ -44,7 +71,7 @@ class OfficeScene extends Phaser.Scene {
     // Modern Office Revamped — main spritesheet for ALL furniture
     this.load.image(
       'mo_black_shadow_32',
-      '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Office_Revamped_v1.2/2_Modern_Office_Black_Shadow/Modern_Office_Black_Shadow_32x32.png?v=2'
+      'assets/Modern_Office_Black_Shadow_32x32.png?v=2'
     );
     // Unused sheets removed to prevent loader stall (were loading 90+ files)
 
@@ -54,14 +81,14 @@ class OfficeScene extends Phaser.Scene {
     singleIds.forEach(id => {
       this.load.image(
         `single_${id}`,
-        `../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Office_Revamped_v1.2/4_Modern_Office_singles/32x32/Modern_Office_Singles_32x32_${id}.png`
+        `assets/modern_office_singles_16/Modern_Office_Singles_32x32_${id}.png`
       );
     });
 
     // Player: full 4-direction sheet from paid RPG Maker XP (32x48 per frame)
     this.load.spritesheet(
       'player_xp',
-      '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/Characters/Adam.png',
+      'assets/Adam.png',
       { frameWidth: 32, frameHeight: 48 }
     );
 
@@ -119,7 +146,7 @@ class OfficeScene extends Phaser.Scene {
     xpNames.forEach((name) => {
       this.load.spritesheet(
         `xp_${name.toLowerCase()}`,
-        `../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version/RPG_MAKER_XP/Characters/${name}.png`,
+        `assets/${name}.png`,
         { frameWidth: 32, frameHeight: 48 }
       );
     });
@@ -149,11 +176,8 @@ class OfficeScene extends Phaser.Scene {
         cat.placements.forEach(pl => {
              const def = master.objects[pl.id];
              if(def && def.source_type === 'single_file') {
-                 // The url_path is something like "assets/Modern_Exteriors/.../foo.png"
-                 // Our root is C:\...\pixel game stuff\pixel game assets and stuff\
-                 // The index.html is in C:\...\pixel-office-game\
-                 const cleanPath = def.url_path.replace(/^assets[\\/]/, '').replace(/\\/g, '/');
-                 const fullUrl = '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/' + cleanPath.split('/').map(encodeURIComponent).join('/');
+                 // url_path is like "assets/Modern_Office_Revamped/.../foo.png"
+                 const fullUrl = def.url_path.replace(/\\/g, '/');
                  if(!this.textures.exists(`single_${pl.id}`)) {
                      this.load.image(`single_${pl.id}`, fullUrl);
                  }
@@ -169,6 +193,14 @@ class OfficeScene extends Phaser.Scene {
   }
 
   create() {
+    // Remove loading screen UI
+    if (this._loadingUI) {
+      this._loadingUI.forEach(obj => obj.destroy());
+      this._loadingUI = null;
+    }
+    // Also remove the DOLONIA title text objects created in preload
+    this.children.list.filter(c => c.type === 'Text' && (c.text === 'DOLONIA' || c.text === 'AI Office Simulator')).forEach(t => t.destroy());
+
     // If anything failed to load, show it on-screen immediately.
     if (Array.isArray(this._loadErrors) && this._loadErrors.length > 0) {
       const msg = this._loadErrors
@@ -1163,8 +1195,7 @@ class OfficeScene extends Phaser.Scene {
            } else {
              // Fallback: try dynamic load via url_path if available
              if (def.url_path) {
-               const cleanPath = def.url_path.replace(/^assets[\\/]/, '').replace(/\\/g, '/');
-               const fullUrl = '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/' + cleanPath.split('/').map(encodeURIComponent).join('/');
+               const fullUrl = def.url_path.replace(/\\/g, '/');
                requiresDynamicLoad.add({ id: pl.id, url: fullUrl });
              }
            }

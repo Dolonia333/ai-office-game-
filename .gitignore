@@ -7,3 +7,15 @@ _singles_catalog.png
 _sheet_preview_*.png
 _current_sprites.png
 tiles-catalog.json
+
+# Credentials & config
+.env
+.env.*
+openclaw.json
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
