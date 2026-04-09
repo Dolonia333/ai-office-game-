@@ -1,30 +1,19 @@
 ---
-name: Feature request
-about: Suggest a new idea or improvement
-title: '[FEATURE] '
-labels: enhancement
+name: Feature Request
+about: Suggest a new feature or improvement
+title: ''
+labels: feature
 assignees: ''
 ---
 
-## Is your feature request related to a problem?
-A clear description of the problem. E.g. "I find it frustrating when..."
+## What problem does this solve?
+<!-- Describe the problem or gap this feature addresses -->
 
-## Describe the solution you'd like
-A clear and concise description of what you want to happen.
-
-## Which area does this affect?
-- [ ] NPC behaviour / AI brains
-- [ ] Player controls / chat system
-- [ ] Office layout / furniture
-- [ ] Security monitor
-- [ ] Meeting system
-- [ ] OpenClaw integration
-- [ ] New AI provider support
-- [ ] Performance
-- [ ] Other
+## Proposed solution
+<!-- How would you implement it? Which files would change? -->
 
 ## Alternatives considered
-Any alternative approaches or features you've considered.
+<!-- Any other approaches you thought about -->
 
 ## Additional context
-Add any mockups, links, or references that support the request.
+<!-- Mockups, references, or examples from other projects -->

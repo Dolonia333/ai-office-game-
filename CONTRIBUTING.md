@@ -1,81 +1,97 @@
-# Contributing to AI Office Game
+# Contributing to Dolonia (AI Office Game)
 
-Thanks for your interest in contributing! Here's how to get involved.
+Thanks for your interest in contributing! This guide will help you get set up and understand how we work.
 
 ## Getting Started
 
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally:
+```bash
+git clone https://github.com/Dolonia333/ai-office-game-.git
+cd ai-office-game-
+npm install
+npm start
+```
+
+The game runs at `http://localhost:8080`. No API keys needed — it falls back to demo mode automatically.
+
+## Project Structure
+
+```
+pixel-office-game/
+├── server.js              # HTTP + WebSocket server
+├── office-scene.js        # Main Phaser 3 game scene (client)
+├── index.html             # Entry point
+├── src/
+│   ├── npc-brains.js      # Multi-provider AI for NPC responses
+│   ├── cofounder-agent.js  # Autonomous CTO agent loop
+│   ├── agent-office-manager.js  # NPC coordination + meetings
+│   ├── agent-actions.js    # NPC action queue (walk, sit, speak, etc.)
+│   ├── pathfinding.js      # A* grid pathfinding
+│   └── player-chat.js      # CEO-to-NPC chat UI (client)
+├── npcs/                   # 16 NPC personality files (SOUL.md + MEMORY.md)
+├── assets/                 # Sprites, tilesets, character sheets
+└── security-monitor-server.js  # HTTP threat detection
+```
+
+## Branch Naming
+
+Use these prefixes so it's clear what a branch does:
+
+| Prefix | Use for | Example |
+|--------|---------|---------|
+| `fix/` | Bug fixes | `fix/chair-depth-restore` |
+| `feat/` | New features | `feat/audio-system` |
+| `perf/` | Performance work | `perf/y-sort-dirty-flag` |
+| `docs/` | Documentation | `docs/setup-guide` |
+| `test/` | Adding tests | `test/pathfinding-unit` |
+| `infra/` | Deployment/tooling | `infra/dockerfile` |
+
+## Workflow
+
+1. **Pick an issue** — Check [open issues](https://github.com/Dolonia333/ai-office-game-/issues) for something to work on. Issues labeled `good first issue` are great starting points.
+
+2. **Create a branch** from `main`:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/ai-office-game-.git
-   cd ai-office-game-
-   npm install
-   node server.js
+   git checkout main
+   git pull origin main
+   git checkout -b fix/your-description
    ```
-3. Open `http://localhost:8080` to verify the game runs before making changes.
 
-## Ways to Contribute
+3. **Make your changes** — Keep commits focused. One logical change per commit.
 
-### Reporting Bugs
-Use the [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.md) on GitHub Issues. Include your OS, Node version, browser, and any terminal/console output.
+4. **Test locally** — Run the server, open the game, verify your change works. Check the browser console for errors.
 
-### Suggesting Features
-Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md). The more detail the better.
+5. **Open a PR** — Reference the issue number in your PR description (e.g., "Fixes #5"). Describe what you changed and why.
 
-### Editing NPC Personalities
-Each NPC's personality lives in a plain markdown file — no coding required:
+## Commit Messages
+
+Write commit messages that explain **why**, not just what:
 
 ```
-npcs/abby/SOUL.md      ← Edit to change Abby's personality
-npcs/abby/MEMORY.md    ← NPC's persistent memory (auto-written at runtime)
+# Good
+Fix NPC depth restore after sitting — origDepth was saved after modification
+
+# Bad  
+Update agent-actions.js
 ```
-
-Change the soul file, restart `node server.js`, and the NPC is different. No code changes needed.
-
-### Code Contributions
-
-**Before starting large work**, open an issue first so we can discuss the approach.
-
-Preferred areas:
-- New AI provider integrations (add to `src/npc-brains.js`)
-- NPC behaviour improvements (`src/npc-agent-controller.js`)
-- Pathfinding / movement fixes (`src/pathfinding.js`)
-- Office layout / furniture additions (`data/furniture_catalog_openplan.json`)
-- Security monitor enhancements (`security-monitor-server.js`)
-
-## Development Workflow
-
-1. Create a branch: `git checkout -b my-feature`
-2. Make your changes
-3. Test in **demo mode** (no API keys) — `node server.js` — game must work fully
-4. Test with a live provider if your change touches AI code
-5. Commit with a clear message: `git commit -m "feat: add Gemini provider for Pier"`
-6. Push and open a Pull Request against `main`
-
-## Commit Style
-
-Use conventional commit prefixes where possible:
-
-| Prefix | Use for |
-|--------|---------|
-| `feat:` | New feature |
-| `fix:` | Bug fix |
-| `npc:` | Soul file / NPC personality change |
-| `docs:` | Documentation only |
-| `refactor:` | Code cleanup, no behaviour change |
-| `chore:` | Tooling, dependencies |
 
 ## Code Style
 
-- Plain JavaScript (ES6+), no transpiler required
-- Keep server-side code in `server.js` / `src/`
-- Keep client-side Phaser code in `office-scene.js` / `src/`
-- NPC identity stays in `npcs/*/SOUL.md` — avoid hardcoding personalities in JS
+- No framework or bundler — vanilla JS, Phaser 3 on the client, Node.js on the server
+- Use `const`/`let`, never `var`
+- Prefix private methods/properties with `_`
+- Server-side files use `require()` (CommonJS)
+- Client-side files are loaded via `<script>` tags
 
-## Asset Licensing
+## AI Provider Setup (Optional)
 
-The LimeZu Modern Office art assets have their own license — do **not** add new art without confirming compatibility with [LimeZu's terms](https://limezu.itch.io/).
+The game works without any API keys (demo mode). To enable real AI responses:
+
+- **Claude**: Set `ANTHROPIC_API_KEY` env var
+- **Gemini**: Set `GEMINI_API_KEY` env var  
+- **Grok**: Set `XAI_API_KEY` env var
+- **Kimi**: Set `KIMI_API_KEY` env var
+- **LM Studio**: Run locally on default port
 
 ## Questions?
 
-Open a GitHub Issue or start a Discussion. We're happy to help.
+Open an issue or check the existing ones for context on ongoing work.
