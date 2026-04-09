@@ -16,8 +16,8 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => {
   console.error('[Server] Unhandled rejection (kept alive):', err?.message || err);
 });
-// Serve from the parent directory so ../pixel game stuff/ paths resolve correctly
-const ROOT = path.resolve(__dirname, '..');
+// Serve from the project directory — all assets are now in assets/
+const ROOT = __dirname;
 
 const MIME = {
   '.html': 'text/html',
@@ -111,7 +111,11 @@ const server = http.createServer((req, res) => {
 
   // Default to the game's index.html
   if (urlPath === '/' || urlPath === '/pixel-office-game/' || urlPath === '/pixel-office-game') {
-    urlPath = '/pixel-office-game/index.html';
+    urlPath = '/index.html';
+  }
+  // Strip /pixel-office-game/ prefix since ROOT is now the project directory
+  if (urlPath.startsWith('/pixel-office-game/')) {
+    urlPath = urlPath.replace('/pixel-office-game', '');
   }
   const filePath = path.join(ROOT, urlPath);
 
@@ -151,10 +155,10 @@ securityWss.on('connection', (ws) => {
   securityMonitor.addClient(ws);
   ws.on('close', () => {
     console.log('[SecurityMonitor] WS client disconnected');
-    securityMonitor.removeClient(ws);
+    securityMonitor.clients?.delete(ws);
   });
   ws.on('error', () => {
-    securityMonitor.removeClient(ws);
+    securityMonitor.clients?.delete(ws);
   });
 });
 

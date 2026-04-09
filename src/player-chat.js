@@ -598,8 +598,8 @@ class PlayerChat {
     const recent = this._chatLog.slice(-20);
     log.innerHTML = recent.map(m => {
       const senderClass = m.from === 'You' ? 'you' : m.from === 'System' ? 'system' : 'npc';
-      const escaped = m.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<div class="msg"><span class="sender ${senderClass}">${m.from}:</span><span class="text">${escaped}</span></div>`;
+      const esc = (s) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `<div class="msg"><span class="sender ${senderClass}">${esc(m.from)}:</span><span class="text">${esc(m.text)}</span></div>`;
     }).join('');
 
     // Scroll to bottom

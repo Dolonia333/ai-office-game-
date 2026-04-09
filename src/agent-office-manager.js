@@ -638,11 +638,13 @@ class AgentOfficeManager {
         }
 
         // Route each attendee: leaders sit, others stand
+        const meetingNpcKeys = [npcKey];
         attendees.forEach((name, i) => {
           const aKey = Object.entries(this.NPC_NAMES).find(
             ([k, v]) => v.toLowerCase() === name.toLowerCase()
           )?.[0];
           if (aKey) {
+            meetingNpcKeys.push(aKey);
             const isLeader = CHAIR_RANKS.has(name.toLowerCase());
             setTimeout(() => {
               if (isLeader) {
@@ -653,6 +655,19 @@ class AgentOfficeManager {
             }, (i + 1) * 1500);
           }
         });
+
+        // Auto-end meeting after 30 seconds — everyone stands and returns to desks
+        if (this._meetingTimeout) clearTimeout(this._meetingTimeout);
+        this._meetingTimeout = setTimeout(() => {
+          meetingNpcKeys.forEach(key => {
+            this.actions.leaveMeeting(key);
+            const agent = this.agents.get(key);
+            if (agent?.assignedDesk) {
+              setTimeout(() => this.actions.useComputer(key, agent.assignedDesk), 1500);
+            }
+          });
+          this._meetingTimeout = null;
+        }, 30000);
         break;
       }
     }
