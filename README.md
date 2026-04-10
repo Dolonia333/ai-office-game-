@@ -16,6 +16,7 @@ Built with **Phaser 3** using the [LimeZu Modern Office](https://limezu.itch.io/
 - **A* pathfinding** — NPCs navigate around furniture using grid-based pathfinding with stuck detection
 - **Security monitor** — live threat detection dashboard (file access, network scans, injection attempts)
 - **Meeting system** — call meetings, NPCs walk to conference room, sit in chairs, discuss, return to work
+- **Procedural room generator** — algorithmically builds rooms from the furniture catalog with 6 archetypes (workspace, conference, breakroom, manager office, reception, storage)
 - **OpenClaw integration** — connect to the OpenClaw gateway for full AI agent workflows
 
 ## Quick Start
@@ -175,6 +176,7 @@ Browser (Phaser 3)                    Server (Node.js :8080)              Extern
 | `src/pathfinding.js` | A* pathfinding for NPC movement |
 | `src/robber-controller.js` | Optional robber NPC visualization |
 | `src/RoomAssembly.js` | Phaser integration for room layouts — catalog lookup, texture cropping, Y-sort |
+| `src/RoomGenerator.js` | Procedural room generator — 6 archetypes, collision grid, decor pass |
 | `src/RoomBuilder.js` | Low-level sprite rendering with modular group validation |
 | `data/sheet_registry.json` | Canonical map of sheet IDs → file paths + grid sizes |
 | `data/master_furniture_catalog.json` | Auto-generated merge of all furniture_catalog_*.json files |
@@ -324,6 +326,72 @@ The player character uses `Dolo.png` — a 768x64 sprite sheet generated with [C
 - **Walk animation:** All 6 frames per direction at 10fps
 
 All 16 NPCs use individual XP-style character sheets at 32x48 per frame (4x4 grid: 4 directions, 4 frames each).
+
+## Procedural Room Generator
+
+The `RoomGenerator` (`src/RoomGenerator.js`) algorithmically builds room layouts from the furniture catalog. Instead of hand-authoring every room template in JSON, you can generate them on the fly.
+
+### Room Archetypes
+
+| Archetype | What It Builds |
+|-----------|----------------|
+| `workspace` | Rows of desks with chairs, desk setups (monitors), partitions between rows |
+| `conference` | Centered conference table with chairs around all sides |
+| `breakroom` | Sofas, vending machines, small tables, casual seating |
+| `manager_office` | Single desk, bookshelf, guest chairs, whiteboard |
+| `reception` | Reception desk, waiting row seats, plants |
+| `storage` | Bookshelves, filing cabinets, minimal decor |
+
+### How It Works
+
+1. **Catalog Intelligence** — groups all 48 catalog sprites by type (surface, seat, furniture, decor, partition) and builds convenience pools (desks, chairs, plants, etc.)
+2. **OccupancyGrid** — 32px-cell collision grid prevents overlapping furniture. Every placed item marks its footprint.
+3. **Archetype Layout** — each purpose runs a layout function that places primary furniture, then secondary items
+4. **Decor Pass** — adds plants in corners, wall art along the top edge, and trash cans
+5. **Partition Pass** — workspaces with 4+ desks get dividers between desk rows
+6. **Auto-sizing** — room dimensions are calculated from purpose + occupant count if not specified
+
+### Usage
+
+**Via URL parameters** (easiest):
+```
+http://localhost:8080?mode=assembly&generate=workspace&occupants=6
+http://localhost:8080?mode=assembly&generate=conference&occupants=8
+http://localhost:8080?mode=assembly&generate=breakroom
+http://localhost:8080?mode=assembly&generate=manager_office&rw=400&rh=350
+```
+
+**Via browser console:**
+```javascript
+// Generate a template
+const tpl = scene.roomGenerator.generate({ purpose: 'workspace', occupants: 4 });
+console.log(tpl.items); // [{id, x, y, instanceId, ...}, ...]
+
+// Generate and render immediately
+const name = scene.roomGenerator.generateAndRegister(scene.roomAssembly, {
+  purpose: 'conference',
+  occupants: 8,
+  width: 512,
+  height: 384
+});
+scene.roomAssembly.renderRoom(name, 100, 100);
+```
+
+**Programmatically:**
+```javascript
+import { RoomGenerator } from './src/RoomGenerator.js';
+
+const gen = new RoomGenerator(catalogData);
+const template = gen.generate({
+  purpose: 'workspace',
+  occupants: 6,
+  width: 576,   // optional — auto-sized if omitted
+  height: 512
+});
+// template.items is compatible with RoomAssembly.renderRoom()
+```
+
+Generated templates use the exact same format as hand-authored templates in `data/room-templates.json`, so they work with `RoomAssembly` without any changes.
 
 ## Office Furniture System
 

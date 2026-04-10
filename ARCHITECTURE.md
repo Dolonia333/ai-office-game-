@@ -284,7 +284,8 @@ pixel-office-game/
 │   ├── robber-controller.js     # Robber NPC visualization
 │   ├── RoomAssembly.js          # Room layout system
 │   ├── RoomBuilder.js           # Sprite rendering
-│   └── city/                    # Procedural office generator (ESM)
+│   ├── RoomGenerator.js         # Procedural room generator (6 archetypes, collision grid)
+│   └── city/                    # City-level office generator (ESM)
 │
 ├── data/
 │   ├── furniture_catalog_openplan.json
