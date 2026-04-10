@@ -405,9 +405,11 @@ class OfficeScene extends Phaser.Scene {
     // --- Room Assembly system mode: render perfect rooms without broken sprites ---
     if (modeParam === 'assembly') {
       Promise.all([
-        import('./src/RoomAssembly.js')
-      ]).then(([module]) => {
-        const RoomAssembly = module.RoomAssembly || module.default;
+        import('./src/RoomAssembly.js'),
+        import('./src/RoomGenerator.js')
+      ]).then(([assemblyModule, generatorModule]) => {
+        const RoomAssembly = assemblyModule.RoomAssembly || assemblyModule.default;
+        const RoomGenerator = generatorModule.RoomGenerator || generatorModule.default;
         
         // Initialize assembly system
         const assembly = new RoomAssembly(this);
@@ -423,8 +425,27 @@ class OfficeScene extends Phaser.Scene {
         // List available templates
         assembly.listTemplates();
         
+        // Procedural room generation: ?generate=workspace&occupants=6
+        const generateParam = new URLSearchParams(window.location.search).get('generate');
+        const generator = new RoomGenerator(catalogData);
+        this.roomGenerator = generator; // expose for console debugging
+
         // Render a test room - default to the rebuilt reference layout
-        const templateName = new URLSearchParams(window.location.search).get('template') || 'reference_office_main';
+        let templateName = new URLSearchParams(window.location.search).get('template') || 'reference_office_main';
+
+        if (generateParam) {
+          const occupants = parseInt(new URLSearchParams(window.location.search).get('occupants') || '4', 10);
+          const genWidth = parseInt(new URLSearchParams(window.location.search).get('rw') || '0', 10) || undefined;
+          const genHeight = parseInt(new URLSearchParams(window.location.search).get('rh') || '0', 10) || undefined;
+          templateName = generator.generateAndRegister(assembly, {
+            purpose: generateParam,
+            occupants,
+            width: genWidth,
+            height: genHeight
+          });
+          console.log(`🏗️ Generated template: ${templateName}`);
+        }
+
         const isReferenceTemplate = templateName === 'reference_office_main';
         // Anchor compact reference composition near the middle so camera can frame it tightly.
         // Reference template uses catalog-placement coords directly (origin at 0,0).
