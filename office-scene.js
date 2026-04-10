@@ -537,6 +537,8 @@ class OfficeScene extends Phaser.Scene {
         this.playerState = 'walk';
         this.playerLocked = false;
         this.facing = 'down';
+        // Dirty flag — set true whenever any character moves, cleared after Y-sort runs
+        this._depthDirty = true;
 
         this.npcs = [];
         const npcKeys = ['xp_abby', 'xp_alex', 'xp_bob', 'xp_dan'];
@@ -1790,45 +1792,52 @@ class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // Automated Z-sorting (Y-sorting): sort ALL sprites by bottom_y and assign depth.
-    // This is the “brain”: if character.bottom_y < desk.bottom_y they draw behind; if > they draw in front.
-    // Characters get a small Y bias (+1) so they render IN FRONT of furniture at the same Y level
-    // (e.g., standing behind a chair — the character should be visible over the chair back).
-    const isCharacter = (s) => s === this.player || (Array.isArray(this.npcs) && this.npcs.includes(s));
-    // Track which NPCs are sitting (managed by AgentActions._sittingNpcs)
-    const sittingNpcSet = this._agentActions?._sittingNpcs || new Map();
-    const isSittingNpc = (s) => {
-      if (!isCharacter(s) || s === this.player) return false;
-      const key = s.texture?.key;
-      return key && sittingNpcSet.has(key);
-    };
-    const sortY = (s) => {
-      const baseY = s.y + (s.displayHeight * (1 - s.originY));
-      return isCharacter(s) ? baseY + 1 : baseY;
-    };
-    const sortable = [];
-    if (this.player) sortable.push(this.player);
-    if (Array.isArray(this.npcs)) sortable.push(...this.npcs);
-    if (Array.isArray(this.furnitureDecorSprites)) sortable.push(...this.furnitureDecorSprites.map((e) => e.sprite).filter(Boolean));
-    sortable.sort((a, b) => sortY(a) - sortY(b));
-    sortable.forEach((s, i) => {
-      // Don't override depth for sitting NPCs — their depth is locked by _applySitDepth
-      if (isSittingNpc(s)) return;
-      s.setDepth(10 + i);
-    });
-    // For sitting NPCs: lock depth relative to their chair
-    sittingNpcSet.forEach((sitData, npcKey) => {
-      const npc = this.npcs?.find(n => n.texture?.key === npcKey);
-      if (!npc || !sitData.chairSprite) return;
-      const chairDepth = sitData.chairSprite.depth;
-      if (sitData.chairInfo?.backFacing) {
-        // Back-facing: chair ON TOP of NPC
-        npc.setDepth(chairDepth - 0.5);
-      } else {
-        // Front-facing: NPC ON TOP of chair
-        npc.setDepth(chairDepth + 0.5);
+    // Automated Z-sorting (Y-sorting): only runs when _depthDirty is true.
+    // Mark dirty whenever the player or any NPC is moving (non-zero velocity).
+    if (!this._depthDirty) {
+      const pv = this.player?.body?.velocity;
+      if (pv && (Math.abs(pv.x) > 1 || Math.abs(pv.y) > 1)) {
+        this._depthDirty = true;
+      } else if (Array.isArray(this.npcs)) {
+        for (const npc of this.npcs) {
+          const v = npc.body?.velocity;
+          if (v && (Math.abs(v.x) > 1 || Math.abs(v.y) > 1)) { this._depthDirty = true; break; }
+        }
       }
-    });
+    }
+    if (this._depthDirty) {
+      this._depthDirty = false;
+      const isCharacter = (s) => s === this.player || (Array.isArray(this.npcs) && this.npcs.includes(s));
+      const sittingNpcSet = this._agentActions?._sittingNpcs || new Map();
+      const isSittingNpc = (s) => {
+        if (!isCharacter(s) || s === this.player) return false;
+        const key = s.texture?.key;
+        return key && sittingNpcSet.has(key);
+      };
+      const sortY = (s) => {
+        const baseY = s.y + (s.displayHeight * (1 - s.originY));
+        return isCharacter(s) ? baseY + 1 : baseY;
+      };
+      const sortable = [];
+      if (this.player) sortable.push(this.player);
+      if (Array.isArray(this.npcs)) sortable.push(...this.npcs);
+      if (Array.isArray(this.furnitureDecorSprites)) sortable.push(...this.furnitureDecorSprites.map((e) => e.sprite).filter(Boolean));
+      sortable.sort((a, b) => sortY(a) - sortY(b));
+      sortable.forEach((s, i) => {
+        if (isSittingNpc(s)) return;
+        s.setDepth(10 + i);
+      });
+      sittingNpcSet.forEach((sitData, npcKey) => {
+        const npc = this.npcs?.find(n => n.texture?.key === npcKey);
+        if (!npc || !sitData.chairSprite) return;
+        const chairDepth = sitData.chairSprite.depth;
+        if (sitData.chairInfo?.backFacing) {
+          npc.setDepth(chairDepth - 0.5);
+        } else {
+          npc.setDepth(chairDepth + 0.5);
+        }
+      });
+    }
 
     // Interaction: press E/Space near object in front of player.
     const interactPressed = (this.interactKeys?.E?.isDown || this.interactKeys?.SPACE?.isDown);
@@ -2225,11 +2234,12 @@ class OfficeScene extends Phaser.Scene {
           else npc.anims.play(npc._animKey('walk_right'), true);
         } else {
           // idle frames: up=12 down=0 left=4 right=8
-          if (ai.facing === 'up') npc.setFrame(12);
-          else if (ai.facing === 'down') npc.setFrame(0);
-          else if (ai.facing === 'left') npc.setFrame(4);
-          else npc.setFrame(8);
-          npc.anims.stop();
+          // Skip redundant setFrame() calls — only update when facing changes
+          const idleFrame = ai.facing === 'up' ? 12 : ai.facing === 'down' ? 0 : ai.facing === 'left' ? 4 : 8;
+          if (npc.frame?.name !== idleFrame) {
+            npc.setFrame(idleFrame);
+            npc.anims.stop();
+          }
         }
       });
     }
