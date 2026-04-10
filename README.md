@@ -174,8 +174,10 @@ Browser (Phaser 3)                    Server (Node.js :8080)              Extern
 | `src/demo-scene.js` | Investor demo cutscene (20-second scripted sequence) |
 | `src/pathfinding.js` | A* pathfinding for NPC movement |
 | `src/robber-controller.js` | Optional robber NPC visualization |
-| `src/RoomAssembly.js` | Phaser integration for room layouts (validation, Z-sorting) |
+| `src/RoomAssembly.js` | Phaser integration for room layouts — catalog lookup, texture cropping, Y-sort |
 | `src/RoomBuilder.js` | Low-level sprite rendering with modular group validation |
+| `data/sheet_registry.json` | Canonical map of sheet IDs → file paths + grid sizes |
+| `data/master_furniture_catalog.json` | Auto-generated merge of all furniture_catalog_*.json files |
 | `index.html` | Entry point — loads Phaser 3.80 + all game scripts |
 
 ### Data Files
@@ -345,15 +347,29 @@ Uses the [LimeZu Modern Office Revamped](https://limezu.itch.io/) asset pack. Al
 
 ## Development Tools
 
+All tools are browser-based — open them at `http://localhost:8080/<tool>.html` while the server is running. See [TOOLS_GUIDE.md](TOOLS_GUIDE.md) for step-by-step instructions on every tool.
+
 | Tool | Purpose |
 |------|---------|
-| `asset-browser.html` | Browse and search all sprites in the asset catalog |
-| `catalog-explorer.html` | Explore furniture catalog with visual previews |
-| `singles-viewer.html` | View individual sprite files with metadata |
-| `sprite-cutter.html` | Cut sprites from tilesheets |
-| `sprite-labeler.html` | Label and categorize sprites |
-| `tile-labeler.html` | Label tile types |
-| `verify-sprites.html` | Verify sprite rendering |
+| `sprite-cutter.html` | **Main pipeline tool** — load a sheet PNG, draw a snap-to-32px selection, name it, save to list, export catalog JSON |
+| `catalog-explorer.html` | Browse all catalog files, schemas, pipeline diagram, and auto-detected issues |
+| `asset-browser.html` | Thumbnail grid of every LimeZu asset pack — find sprites visually |
+| `tile-labeler.html` | Label individual floor/wall tiles in MV A2/A4/BCDE tilesets |
+| `sprite-labeler.html` | Review and fix object ID assignments on character/NPC sprites |
+| `singles-viewer.html` | Browse pre-sliced single-sprite PNGs (IDs 1–339) by ID or filename |
+| `verify-sprites.html` | Render every catalog entry live — confirms crops and coordinates |
+
+### Sprite → Catalog Pipeline
+
+```
+Find sprite (Asset Browser)
+  → Cut it (Sprite Cutter: load PNG, drag selection, name, save)
+  → Export JSON (Sprite Cutter: Export All JSON → sprite_cuts.json)
+  → Paste into data/furniture_catalog_openplan.json
+  → Verify (verify-sprites.html)
+  → Rebuild master: python scripts/build_master_catalog.py
+  → Place in game via room-templates.json
+```
 
 ## Troubleshooting
 
@@ -403,11 +419,14 @@ node server.js
 
 | Document | Contents |
 |----------|----------|
+| [TOOLS_GUIDE.md](TOOLS_GUIDE.md) | **All browser tools** — step-by-step usage for Sprite Cutter, Catalog Explorer, Asset Browser, and every other dev tool |
+| [ENGINE_AND_SPRITES.md](ENGINE_AND_SPRITES.md) | **How it all works** — Phaser scene lifecycle, sprite sheet formats, catalog schema, how a JSON entry becomes a game sprite |
 | [SYSTEM_SUMMARY.md](SYSTEM_SUMMARY.md) | Room Assembly system — sprite inventory, validation, templates |
 | [ROOM_ASSEMBLY_GUIDE.md](ROOM_ASSEMBLY_GUIDE.md) | Implementation guide for room layouts |
 | [ASSEMBLY.md](ASSEMBLY.md) | Sprite assembly blueprint (16px grid rules, pivot points) |
 | [HOW_OBJECTS_ARE_BUILT.md](HOW_OBJECTS_ARE_BUILT.md) | Tile/sprite structure by engine (MV, VX Ace, XP) |
 | [CATALOG_OVERVIEW.md](CATALOG_OVERVIEW.md) | Asset pack contents (LimeZu Modern Office) |
+| [CATALOG_CONVENTIONS.md](CATALOG_CONVENTIONS.md) | Catalog field reference — type vocabulary, anchors, interact_distance |
 
 ## License
 
