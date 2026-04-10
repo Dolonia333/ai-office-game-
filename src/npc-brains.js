@@ -81,7 +81,8 @@ class NpcBrainManager {
     if (!this.providers.demo) {
       this.providers.demo = { type: 'demo', baseUrl: null, apiKey: null, model: null };
     }
-    this._demoMode = Object.keys(this.providers).length <= 2; // only demo + maybe lmstudio
+    const remoteCount = Object.keys(this.providers).filter(k => k !== 'demo' && k !== 'lmstudio').length;
+    this._demoMode = remoteCount === 0; // demo mode only when zero remote providers configured
     if (this._demoMode) {
       console.log('[NpcBrains] Demo mode active — NPCs use smart scripted responses (no API keys required)');
     }
@@ -161,7 +162,20 @@ class NpcBrainManager {
       const folder = this._nameToFolder[npcName] || npcName.toLowerCase();
       const memPath = path.join(__dirname, '..', 'npcs', folder, 'MEMORY.md');
       const timestamp = new Date().toISOString().slice(0, 16);
-      fs.appendFileSync(memPath, `\n- [${timestamp}] ${entry}`);
+      const newLine = `\n- [${timestamp}] ${entry}`;
+
+      // Cap memory file at 200 lines to prevent unbounded growth
+      let existing = '';
+      try { existing = fs.readFileSync(memPath, 'utf-8'); } catch (_) {}
+      const lines = existing.split('\n').filter(l => l.trim());
+      if (lines.length >= 200) {
+        // Trim oldest 50 entries, keeping the most recent 150
+        const trimmed = lines.slice(lines.length - 150);
+        fs.writeFileSync(memPath, trimmed.join('\n') + newLine);
+      } else {
+        fs.appendFileSync(memPath, newLine);
+      }
+
       brain.longTermMemory = fs.readFileSync(memPath, 'utf-8');
     } catch (err) {
       console.warn(`[NpcBrains] Failed to save memory for ${npcName}:`, err.message);
@@ -615,6 +629,8 @@ ${roleActions}
       const reason = delegateMatch[2].trim();
       if (this._hierarchy[delegateTo]) {
         delegation = { delegateTo, reason, originalMessage: message };
+      } else {
+        console.warn(`[NpcBrains] ${npcName} tried to delegate to unknown target: "${delegateTo}" — ignoring`);
       }
       responseText = responseText.replace(/\s*\[DELEGATE:[^\]]+\]/, '').trim();
     }

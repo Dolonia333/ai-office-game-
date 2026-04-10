@@ -338,6 +338,7 @@ class NpcPathFollower {
     this._lastPos = { x: npc.x, y: npc.y };
     this._stuckTimer = 0;
     this._stuckThreshold = 1500; // ms before considered stuck
+    this._stuckCount = 0;        // consecutive stuck checks
     this._rerouting = false;
     this._rerouteCount = 0;      // how many times we've rerouted for this destination
     this._maxReroutes = 3;       // give up after this many reroutes
