@@ -19,6 +19,8 @@ class NpcBrainManager {
     this._lastDecisions = {};  // npcName -> last decision object
     this._taskProgress = {};   // npcName -> { task, phase, startedAt }
     this._pendingCascades = []; // queued cascade decisions to send downstream
+    this._requestQueue = [];    // sequential queue for LM Studio requests
+    this._processingRequest = false; // whether a request is in-flight
 
     this._loadProviders();
     this._initBrains();
@@ -602,50 +604,67 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
    * Call LM Studio local API (HTTP, OpenAI-compatible)
    */
   _callLocal(config, systemPrompt, messages, opts = {}) {
+    // Queue requests so only one hits LM Studio at a time — GPU can only run one inference
+    return new Promise((resolve, reject) => {
+      this._requestQueue.push({ config, systemPrompt, messages, opts, resolve, reject });
+      this._processQueue();
+    });
+  }
+
+  _processQueue() {
+    if (this._processingRequest || this._requestQueue.length === 0) return;
+    this._processingRequest = true;
+
+    const { config, systemPrompt, messages, opts, resolve, reject } = this._requestQueue.shift();
     const maxTokens = opts.maxTokens || 150;
     const sliceLen = opts.sliceLen || 150;
-    return new Promise((resolve, reject) => {
-      const oaiMessages = [
-        { role: 'system', content: systemPrompt },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-      ];
-      if (messages.length === 0) {
-        oaiMessages.push({ role: 'user', content: 'Introduce yourself briefly.' });
-      }
 
-      const body = JSON.stringify({
-        model: config.model,
-        max_tokens: maxTokens,
-        temperature: 0.8,
-        messages: oaiMessages,
-      });
+    const oaiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map(m => ({ role: m.role, content: m.content })),
+    ];
+    if (messages.length === 0) {
+      oaiMessages.push({ role: 'user', content: 'Introduce yourself briefly.' });
+    }
 
-      const url = new URL('/v1/chat/completions', config.baseUrl);
-      const req = http.request({
-        hostname: url.hostname,
-        port: url.port || 1234,
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-        },
-      }, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try {
-            const p = JSON.parse(data);
-            if (p.error) return reject(new Error(p.error.message || JSON.stringify(p.error)));
-            resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, sliceLen));
-          } catch (e) { reject(e); }
-        });
-      });
-      req.on('error', reject);
-      req.setTimeout(30000, () => req.destroy(new Error('LM Studio timeout')));
-      req.write(body);
-      req.end();
+    const body = JSON.stringify({
+      model: config.model,
+      max_tokens: maxTokens,
+      temperature: 0.8,
+      messages: oaiMessages,
     });
+
+    const done = () => {
+      this._processingRequest = false;
+      this._processQueue();
+    };
+
+    const url = new URL('/v1/chat/completions', config.baseUrl);
+    const req = http.request({
+      hostname: url.hostname,
+      port: url.port || 1234,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const p = JSON.parse(data);
+          if (p.error) { done(); return reject(new Error(p.error.message || JSON.stringify(p.error))); }
+          done();
+          resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, sliceLen));
+        } catch (e) { done(); reject(e); }
+      });
+    });
+    req.on('error', (err) => { done(); reject(err); });
+    req.setTimeout(60000, () => { req.destroy(new Error('LM Studio timeout')); done(); });
+    req.write(body);
+    req.end();
   }
 
   // Org chart hierarchy — who reports to who and what they do

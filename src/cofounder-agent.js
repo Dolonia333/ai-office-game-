@@ -372,6 +372,23 @@ YOUR JOB — create a LIVING office:
    * Call LM Studio local API (OpenAI-compatible)
    */
   _callLmStudio(userMessage) {
+    // Route through NpcBrainManager's queue so all LM Studio requests are sequential
+    if (this.npcBrains) {
+      const config = {
+        baseUrl: this.baseUrl,
+        model: this.model,
+        type: 'lmstudio',
+      };
+      return this.npcBrains._callLocal(config, this._getSystemPrompt(), this.conversationHistory, {
+        maxTokens: 1024,
+        sliceLen: 4000,
+      }).then(text => {
+        console.log('[CofounderAgent] LM Studio responded:', text.slice(0, 80));
+        return text;
+      });
+    }
+
+    // Fallback if npcBrains not attached yet
     return new Promise((resolve, reject) => {
       const oaiMessages = [
         { role: 'system', content: this._getSystemPrompt() },
@@ -403,27 +420,17 @@ YOUR JOB — create a LIVING office:
           try {
             const parsed = JSON.parse(data);
             if (parsed.error) {
-              console.error('[CofounderAgent] LM Studio error:', JSON.stringify(parsed.error));
               reject(new Error(parsed.error.message || 'LM Studio error'));
               return;
             }
             const text = parsed.choices?.[0]?.message?.content || '';
-            console.log('[CofounderAgent] LM Studio responded:', text.slice(0, 80));
             resolve(text);
-          } catch (err) {
-            console.error('[CofounderAgent] Raw response:', data.slice(0, 200));
-            reject(err);
-          }
+          } catch (err) { reject(err); }
         });
       });
 
-      req.on('error', (err) => {
-        // LM Studio not running — fall back to demo mode
-        reject(new Error(`LM Studio unreachable: ${err.message}`));
-      });
-      req.setTimeout(30000, () => {
-        req.destroy(new Error('LM Studio timeout (30s)'));
-      });
+      req.on('error', (err) => reject(new Error(`LM Studio unreachable: ${err.message}`)));
+      req.setTimeout(60000, () => req.destroy(new Error('LM Studio timeout (60s)')));
       req.write(body);
       req.end();
     });
