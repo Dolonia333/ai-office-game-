@@ -186,6 +186,35 @@ agentWss.on('connection', (ws) => {
             npcBrains.saveMemory(msg.npcName, `${msg.fromName} said: "${msg.text}" — I replied: "${response}"`);
           })
           .catch(err => console.warn('[NpcBrains] Response error:', err.message));
+      } else if (msg.type === 'npc_think') {
+        // NPC is asking "what should I do next?"
+        npcBrains.think(msg.npcName, msg.context || {})
+          .then(decision => {
+            // Send the main decision
+            const reply = JSON.stringify({
+              type: 'npc_decision',
+              npcName: msg.npcName,
+              decision,
+            });
+            if (ws.readyState === 1) ws.send(reply);
+
+            // Send cascade decisions (leader decisions rippling down to reports)
+            const cascades = decision._cascades || [];
+            delete decision._cascades; // Clean up before sending
+            cascades.forEach((cascade, idx) => {
+              // Stagger cascades so they don't all fire at once
+              setTimeout(() => {
+                const cascadeReply = JSON.stringify({
+                  type: 'npc_cascade',
+                  npcName: cascade.npcName,
+                  fromName: cascade.fromName,
+                  message: cascade.message,
+                });
+                if (ws.readyState === 1) ws.send(cascadeReply);
+              }, (idx + 1) * 3000);
+            });
+          })
+          .catch(err => console.warn('[NpcBrains] Think error:', err.message));
       } else if (msg.type === 'player_chat') {
         // CEO (player) is talking directly to an NPC
         const npcName = msg.npcName;

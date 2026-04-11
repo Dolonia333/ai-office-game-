@@ -1,18 +1,17 @@
 /**
  * Cofounder Agent (Server-side)
- * The CTO AI brain powered by Claude API.
+ * The CTO AI brain powered by LM Studio (local OpenAI-compatible API).
  * Runs on the server (loaded by server.js), sends commands to the game via WebSocket.
  */
 
-const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
 class CofounderAgent {
   constructor() {
-    this.apiKey = null;
-    this.model = 'claude-3-haiku-20240307'; // Fast and available on user's key
-    this.baseUrl = 'https://api.anthropic.com';
+    this.model = process.env.LM_STUDIO_MODEL || 'qwen2.5-14b-instruct-1m';
+    this.baseUrl = process.env.LM_STUDIO_URL || 'http://localhost:1234';
     this.wsClients = new Set();
 
     // Office state (updated by game client)
@@ -25,7 +24,7 @@ class CofounderAgent {
 
     // Conversation history for context
     this.conversationHistory = [];
-    this.maxHistoryLength = 20;
+    this.maxHistoryLength = 30;
 
     // Think interval
     this._thinkInterval = null;
@@ -35,28 +34,7 @@ class CofounderAgent {
     // CEO message queue
     this._ceoMessages = [];
 
-    this._loadApiKey();
-  }
-
-  /**
-   * Load the Anthropic API key from OpenClaw config
-   */
-  _loadApiKey() {
-    try {
-      const configPath = path.join(
-        process.env.USERPROFILE || process.env.HOME || '',
-        '.openclaw', 'openclaw.json'
-      );
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      this.apiKey = config?.models?.providers?.anthropic?.apiKey;
-      if (this.apiKey) {
-        console.log('[CofounderAgent] API key loaded from OpenClaw config');
-      } else {
-        console.warn('[CofounderAgent] No Anthropic API key found in OpenClaw config');
-      }
-    } catch (err) {
-      console.warn('[CofounderAgent] Failed to load API key:', err.message);
-    }
+    console.log(`[CofounderAgent] Using LM Studio at ${this.baseUrl} with model ${this.model}`);
   }
 
   /**
@@ -174,7 +152,7 @@ NPC CONVERSATIONS & MEMORY:
 - NPCs should have opinions, preferences, and working styles that persist. They're not just executing tasks — they have personality and autonomy.
 
 YOUR JOB — create a LIVING office:
-1. JSON array ONLY. No other text. Keep speech under 40 chars.
+1. JSON array ONLY. No other text. Keep speech under 120 chars.
 2. CONVERSATIONS: Have NPCs talk TO each other using speakTo. One asks, another responds. Make it feel real — "Hey Alex, how's the API?" / "Almost done, testing now."
 3. WORK CYCLES: NPCs should sit at desks (useComputer), work for a while, then stand up (standUp) to talk to someone, get coffee (goToBreakroom), or check the bookshelf.
 4. ABBY IS THE CTO: She should walk to people, check on progress, delegate, praise good work, and occasionally report to the CEO. She manages the team actively. She calls team meetings and 1-on-1s in the conference room.
@@ -192,13 +170,7 @@ YOUR JOB — create a LIVING office:
    * Start the autonomous thinking loop
    */
   start() {
-    if (!this.apiKey) {
-      console.warn('[CofounderAgent] No API key — starting demo think loop');
-      this._startDemoLoop();
-      return;
-    }
-
-    console.log('[CofounderAgent] Starting autonomous thinking loop');
+    console.log('[CofounderAgent] Starting autonomous thinking loop (LM Studio)');
     this._usingDemoLoop = false;
 
     // Think every 15-30 seconds
@@ -307,10 +279,9 @@ YOUR JOB — create a LIVING office:
   }
 
   /**
-   * Main thinking function - calls Claude API and dispatches commands
+   * Main thinking function - calls LM Studio and dispatches commands
    */
   async _think() {
-    if (!this.apiKey) return;
 
     this._thinkCount++;
 
@@ -371,7 +342,7 @@ YOUR JOB — create a LIVING office:
     }
 
     try {
-      const response = await this._callClaude(userMessage);
+      const response = await this._callLmStudio(userMessage);
       if (response) {
         this._consecutiveErrors = 0;
         this.conversationHistory.push({ role: 'assistant', content: response });
@@ -380,6 +351,14 @@ YOUR JOB — create a LIVING office:
     } catch (err) {
       this._consecutiveErrors++;
       console.warn('[CofounderAgent] Think error:', err.message, err.stack ? err.stack.split('\n')[1] : '');
+      // Broadcast error so the game can show Abby going to breakroom
+      this._broadcast({
+        type: 'agent_error',
+        agentId: 'Abby',
+        message: err.message || 'API error',
+        consecutiveErrors: this._consecutiveErrors,
+      });
+
       if (this._consecutiveErrors >= 2 && !this._usingDemoLoop) {
         console.warn('[CofounderAgent] API failing — switching to demo think loop');
         this._usingDemoLoop = true;
@@ -390,45 +369,46 @@ YOUR JOB — create a LIVING office:
   }
 
   /**
-   * Call the Claude API
+   * Call LM Studio local API (OpenAI-compatible)
    */
-  _callClaude(userMessage) {
+  _callLmStudio(userMessage) {
     return new Promise((resolve, reject) => {
+      const oaiMessages = [
+        { role: 'system', content: this._getSystemPrompt() },
+        ...this.conversationHistory,
+      ];
+
       const body = JSON.stringify({
         model: this.model,
         max_tokens: 1024,
-        system: this._getSystemPrompt(),
-        messages: this.conversationHistory,
+        temperature: 0.7,
+        messages: oaiMessages,
       });
 
-      const url = new URL('/v1/messages', this.baseUrl);
+      const url = new URL('/v1/chat/completions', this.baseUrl);
 
-      const options = {
+      const req = http.request({
         hostname: url.hostname,
-        port: 443,
+        port: url.port || 1234,
         path: url.pathname,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-          'x-api-key': this.apiKey,
           'Content-Length': Buffer.byteLength(body),
         },
-      };
-
-      const req = https.request(options, (res) => {
+      }, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
             const parsed = JSON.parse(data);
             if (parsed.error) {
-              console.error('[CofounderAgent] API error response:', JSON.stringify(parsed.error));
-              reject(new Error(parsed.error.message || 'API error'));
+              console.error('[CofounderAgent] LM Studio error:', JSON.stringify(parsed.error));
+              reject(new Error(parsed.error.message || 'LM Studio error'));
               return;
             }
-            const text = parsed.content?.[0]?.text || '';
-            console.log('[CofounderAgent] Claude responded:', text.slice(0, 80));
+            const text = parsed.choices?.[0]?.message?.content || '';
+            console.log('[CofounderAgent] LM Studio responded:', text.slice(0, 80));
             resolve(text);
           } catch (err) {
             console.error('[CofounderAgent] Raw response:', data.slice(0, 200));
@@ -437,9 +417,12 @@ YOUR JOB — create a LIVING office:
         });
       });
 
-      req.on('error', reject);
-      req.setTimeout(15000, () => {
-        req.destroy(new Error('Request timeout'));
+      req.on('error', (err) => {
+        // LM Studio not running — fall back to demo mode
+        reject(new Error(`LM Studio unreachable: ${err.message}`));
+      });
+      req.setTimeout(30000, () => {
+        req.destroy(new Error('LM Studio timeout (30s)'));
       });
       req.write(body);
       req.end();
@@ -489,7 +472,7 @@ YOUR JOB — create a LIVING office:
   }
 
   /**
-   * Parse Claude's response and dispatch commands to game clients
+   * Parse LM Studio's response and dispatch commands to game clients
    */
   _parseAndDispatch(response) {
     try {
@@ -569,9 +552,7 @@ YOUR JOB — create a LIVING office:
       case 'ceo_speak':
         this._ceoMessages.push(msg.text);
         // Trigger immediate think when CEO speaks
-        if (this.apiKey) {
-          this._think().catch(err => console.warn('[CofounderAgent] CEO response error:', err.message));
-        }
+        this._think().catch(err => console.warn('[CofounderAgent] CEO response error:', err.message));
         break;
       case 'task_complete':
         console.log(`[CofounderAgent] Task ${msg.taskId} completed by ${msg.agentId}`);

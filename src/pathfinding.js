@@ -424,7 +424,7 @@ class NpcPathFollower {
           return null;
         }
 
-        // Stuck for 3 checks (1.5s) — try rerouting
+        // Stuck for 3 checks (1.5s) — nudge randomly then reroute
         if (this._stuckCount >= 3) {
           this._stuckCount = 0;
           this._rerouteCount++;
@@ -436,6 +436,12 @@ class NpcPathFollower {
             this._totalStuckTime = 0;
             return null;
           }
+
+          // Apply a small random nudge to break free before rerouting
+          const nudgeAmt = 8 + Math.random() * 8;
+          const nudgeAngle = Math.random() * Math.PI * 2;
+          this.npc.x += Math.cos(nudgeAngle) * nudgeAmt;
+          this.npc.y += Math.sin(nudgeAngle) * nudgeAmt;
 
           const finalTarget = this.waypoints[this.waypoints.length - 1];
 

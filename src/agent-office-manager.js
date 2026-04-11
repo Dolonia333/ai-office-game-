@@ -169,10 +169,15 @@ class AgentOfficeManager {
       if (agent.role === 'cofounder') {
         // CTO gets a manager office desk, fallback to open office
         deskPool = managerDesks.length > 0 ? managerDesks : openDesks;
-      } else if (agent.role === 'desk_worker' || agent.role === 'stock_trader' || agent.role === 'researcher') {
+      } else if (
+        (agent.roleDef && agent.roleDef.idleArea === 'desk') ||
+        agent.role === 'researcher' || agent.role === 'stock_trader'
+      ) {
+        // All desk-based roles (idleArea=desk): desk_worker, qa_engineer,
+        // devops, designer, data_engineer — plus researcher & stock_trader
         deskPool = openDesks;
       } else {
-        return; // receptionist, etc. don't need desks
+        return; // receptionist, security, project_mgr, etc. don't need desks
       }
 
       // Find first unassigned desk
@@ -188,201 +193,374 @@ class AgentOfficeManager {
   }
 
   /**
-   * Start initial agent behaviors
+   * Start initial agent behaviors — role-based startup + autonomous AI thinking
    */
   _startInitialBehaviors() {
-    // Skip initial behaviors if demo mode is active
     if (this._demoMode) return;
+
+    // Role-based startup behaviors (existing — NPCs settle into the office)
     this.agents.forEach((agent, npcKey) => {
       switch (agent.role) {
         case 'cofounder':
-          // CTO goes to her desk first, then checks on the team
           if (agent.assignedDesk) {
             this.actions.useComputer(npcKey, agent.assignedDesk);
             agent.status = 'working';
-            // After settling in, greet the team
             this.scene.time.delayedCall(5000, () => {
               this.actions.speak(npcKey, 'Good morning team!');
             });
-            // Then go talk to developers
-            this.scene.time.delayedCall(12000, () => {
-              this._cofounderCheckIn(npcKey);
-            });
-          } else {
-            this._cofounderPatrol(npcKey);
           }
           break;
         case 'desk_worker':
         case 'stock_trader':
-          // Desk workers go to their assigned desk
-          if (agent.assignedDesk) {
-            this.actions.useComputer(npcKey, agent.assignedDesk);
-            agent.status = 'working';
-            this.scene.time.delayedCall(3000, () => {
-              this.actions.speak(npcKey, 'Starting work...');
-            });
-          }
-          break;
         case 'researcher':
-          // Researcher goes to assigned desk if they have one, otherwise bookshelf
+        case 'qa_engineer':
+        case 'devops':
+        case 'designer':
+        case 'data_engineer':
           if (agent.assignedDesk) {
             this.actions.useComputer(npcKey, agent.assignedDesk);
             agent.status = 'working';
-            this.scene.time.delayedCall(2000, () => {
-              this.actions.speak(npcKey, 'Reviewing data...');
-            });
-          } else {
-            this.actions.checkBookshelf(npcKey);
-            agent.status = 'researching';
-            this.scene.time.delayedCall(2000, () => {
-              this.actions.speak(npcKey, 'Reviewing research...');
-            });
           }
           break;
         case 'receptionist':
-          // Receptionist goes to front area
           this.actions.walkTo(npcKey, 580, 610);
           agent.status = 'stationed';
-          this.scene.time.delayedCall(2000, () => {
-            this.actions.speak(npcKey, 'Ready at reception.');
-          });
           break;
         case 'it_support':
-          // IT support roams
-          this._itPatrol(npcKey);
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
           break;
       }
     });
-  }
 
-  /**
-   * Cofounder patrol behavior (walks around checking on agents)
-   */
-  _cofounderPatrol(npcKey) {
-    if (this._demoMode) return;
-    const agent = this.agents.get(npcKey);
-    if (!agent) return;
-
-    const checkpoints = [
-      { x: 200, y: 200, msg: 'Checking dev team...' },
-      { x: 500, y: 200, msg: 'Reviewing code progress...' },
-      { x: 700, y: 300, msg: 'Looking at research...' },
-      { x: 400, y: 400, msg: 'Office looking good.' },
-      { x: 200, y: 550, msg: 'Break room check.' },
-    ];
-
-    let idx = 0;
-    const patrol = () => {
-      if (agent.status === 'task_override') return; // server took over
-
-      const cp = checkpoints[idx % checkpoints.length];
-      idx++;
-
-      this.actions.walkTo(npcKey, cp.x, cp.y).then(() => {
-        this.actions.speak(npcKey, cp.msg);
-        // Wait 8-15 seconds before next checkpoint
-        const delay = 8000 + Math.random() * 7000;
-        this.scene.time.delayedCall(delay, patrol);
+    // After everyone settles in, start AI think loops (staggered so LM Studio isn't overwhelmed)
+    let delay = 15000;
+    this.agents.forEach((agent, npcKey) => {
+      this.scene.time.delayedCall(delay, () => {
+        this._npcThinkLoop(npcKey);
       });
-    };
-
-    // Start after initial delay
-    this.scene.time.delayedCall(4000, patrol);
+      delay += 4000; // space NPCs 4 seconds apart
+    });
   }
 
   /**
-   * Cofounder check-in: stand up, walk to devs, talk, they respond, then return to desk
+   * Autonomous NPC think loop — each NPC periodically asks LM Studio what to do next.
+   * Replaces all hardcoded patrol/checkin/wander behaviors.
    */
-  _cofounderCheckIn(npcKey) {
-    if (this._demoMode) return;
+  _npcThinkLoop(npcKey) {
     const agent = this.agents.get(npcKey);
     if (!agent) return;
-    if (agent.status === 'task_override') return;
+    if (agent.status === 'task_override') {
+      // Server command took over — check again later
+      this.scene.time.delayedCall(15000, () => this._npcThinkLoop(npcKey));
+      return;
+    }
 
-    // Find developer NPCs to talk to
-    const devKeys = [];
+    // Build office context for the NPC
+    const nearbyNpcs = [];
     this.agents.forEach((a, k) => {
-      if (k !== npcKey && (a.role === 'desk_worker' || a.role === 'researcher')) {
-        devKeys.push(k);
+      if (k !== npcKey) {
+        nearbyNpcs.push(`${a.name} (${a.role}) — ${a.status || 'idle'}`);
       }
     });
 
-    if (devKeys.length === 0) return;
+    const context = {
+      description: `Office time: ${new Date().toLocaleTimeString()}. Your status: ${agent.status || 'idle'}. ` +
+        `Nearby coworkers: ${nearbyNpcs.join(', ')}.`,
+    };
 
-    // Pick a random dev to check on
-    const targetKey = devKeys[Math.floor(Math.random() * devKeys.length)];
-    const targetAgent = this.agents.get(targetKey);
-    const targetName = targetAgent?.name || targetKey;
-
-    // Stand up from desk and walk to them
-    this.actions.standUp(npcKey);
-
-    const checkInMessages = [
-      `Hey ${targetName}, how's it going?`,
-      `${targetName}, any blockers?`,
-      `Status update, ${targetName}?`,
-      `${targetName}, need anything?`,
-    ];
-    const responseMessages = [
-      'All good, making progress!',
-      'Working on it, almost done.',
-      'No blockers, thanks!',
-      'Could use a code review later.',
-      'Just fixing a bug, give me a sec.',
-    ];
-
-    const msg = checkInMessages[Math.floor(Math.random() * checkInMessages.length)];
-
-    this.actions.speakTo(npcKey, targetKey, msg).then(() => {
-      // Dev responds after a short delay
-      this.scene.time.delayedCall(2000, () => {
-        const response = responseMessages[Math.floor(Math.random() * responseMessages.length)];
-        this.actions.speak(targetKey, response);
-
-        // Abby goes back to her desk after chatting
-        this.scene.time.delayedCall(3000, () => {
-          if (agent.assignedDesk) {
-            this.actions.useComputer(npcKey, agent.assignedDesk);
-          }
-          // Schedule next check-in
-          const nextDelay = 20000 + Math.random() * 20000;
-          this.scene.time.delayedCall(nextDelay, () => {
-            this._cofounderCheckIn(npcKey);
-          });
-        });
-      });
+    // Ask server for NPC's decision
+    this._send({
+      type: 'npc_think',
+      npcName: agent.name,
+      context,
     });
+
+    // The response comes back as 'npc_decision' in _handleServerMessage
+    // Schedule next think cycle (25-45 seconds)
+    const nextDelay = 25000 + Math.random() * 20000;
+    this.scene.time.delayedCall(nextDelay, () => this._npcThinkLoop(npcKey));
   }
 
   /**
-   * IT support patrol behavior
+   * Execute an NPC's autonomous decision from LM Studio
    */
-  _itPatrol(npcKey) {
+  _executeNpcDecision(npcName, decision) {
+    // Find the NPC key from name
+    const npcKey = Object.entries(this.NPC_NAMES).find(
+      ([k, v]) => v.toLowerCase() === npcName?.toLowerCase()
+    )?.[0];
+    if (!npcKey) return;
+
     const agent = this.agents.get(npcKey);
-    if (!agent) return;
+    if (!agent || agent.status === 'task_override') return;
 
-    const locations = [
-      { x: 200, y: 180, msg: 'Checking workstations...' },
-      { x: 600, y: 180, msg: 'Network looks stable.' },
-      { x: 400, y: 350, msg: 'Running diagnostics...' },
-      { x: 900, y: 200, msg: 'Server room OK.' },
-    ];
+    const thought = decision.thought || '';
+    const action = decision.action || 'work';
+    const target = decision.target || null;
+    const location = decision.location || null;
+    const message = decision.message || '';
 
-    let idx = 0;
-    const patrol = () => {
-      if (agent.status === 'task_override') return;
+    console.log(`[NPC Think] ${npcName}: "${thought}" → ${action}${target ? ` → ${target}` : ''}${location ? ` @ ${location}` : ''}`);
 
-      const loc = locations[idx % locations.length];
-      idx++;
+    // Show thought bubble briefly
+    if (thought) {
+      this.actions.think(npcKey, thought);
+    }
 
-      this.actions.walkTo(npcKey, loc.x, loc.y).then(() => {
-        this.actions.speak(npcKey, loc.msg);
-        const delay = 10000 + Math.random() * 10000;
-        this.scene.time.delayedCall(delay, patrol);
-      });
+    // Helper: find target NPC key
+    const findTargetKey = (name) => name ? Object.entries(this.NPC_NAMES).find(
+      ([k, v]) => v.toLowerCase() === name.toLowerCase()
+    )?.[0] : null;
+
+    // Helper: move to a location
+    const goToLocation = (key, loc) => {
+      if (loc === 'breakroom') this.actions.goToBreakroom(key);
+      else if (loc === 'conference') this.actions.goToRoom(key, 'conference');
+      else if (loc === 'storage') this.actions.goToRoom(key, 'storage');
+      else if (loc === 'desk' && this.agents.get(key)?.assignedDesk) {
+        this.actions.useComputer(key, this.agents.get(key).assignedDesk);
+      }
     };
 
-    this.scene.time.delayedCall(5000, patrol);
+    switch (action) {
+      case 'talk': {
+        const targetKey = findTargetKey(target);
+        if (targetKey && message) {
+          this.actions.standUp(npcKey);
+          this.actions.speakTo(npcKey, targetKey, message);
+          // Send to server for real AI response from target NPC
+          this.scene.time.delayedCall(2000, () => {
+            this._send({
+              type: 'npc_conversation',
+              npcName: target,
+              fromName: npcName,
+              text: message,
+            });
+          });
+        } else if (message) {
+          this.actions.speak(npcKey, message);
+        }
+        break;
+      }
+
+      case 'collaborate': {
+        // Two NPCs go to a location together and have a conversation
+        const targetKey = findTargetKey(target);
+        if (targetKey && message) {
+          this.actions.standUp(npcKey);
+          this.actions.standUp(targetKey);
+          agent.status = 'collaborating';
+
+          const targetAgent = this.agents.get(targetKey);
+          if (targetAgent) targetAgent.status = 'collaborating';
+
+          // Both walk to the location
+          if (location && location !== 'desk') {
+            goToLocation(npcKey, location);
+            this.scene.time.delayedCall(1000, () => goToLocation(targetKey, location));
+          }
+
+          // Initiator speaks first
+          this.scene.time.delayedCall(3000, () => {
+            this.actions.speakTo(npcKey, targetKey, message);
+            // Target responds via AI
+            this.scene.time.delayedCall(2000, () => {
+              this._send({
+                type: 'npc_conversation',
+                npcName: target,
+                fromName: npcName,
+                text: message,
+              });
+            });
+          });
+
+          // Both return to desks after collaboration
+          this.scene.time.delayedCall(20000, () => {
+            if (agent.assignedDesk) {
+              this.actions.useComputer(npcKey, agent.assignedDesk);
+              agent.status = 'working';
+            }
+            if (targetAgent?.assignedDesk) {
+              this.actions.useComputer(targetKey, targetAgent.assignedDesk);
+              targetAgent.status = 'working';
+            }
+          });
+        }
+        break;
+      }
+
+      case 'work':
+        if (agent.assignedDesk) {
+          this.actions.useComputer(npcKey, agent.assignedDesk);
+          agent.status = 'working';
+          if (message) {
+            this.scene.time.delayedCall(1500, () => {
+              this.actions.speak(npcKey, message);
+            });
+          }
+        }
+        break;
+
+      case 'break': {
+        this.actions.standUp(npcKey);
+        agent.status = 'break';
+
+        // If targeting someone, invite them along
+        const breakTargetKey = findTargetKey(target);
+        if (breakTargetKey) {
+          this.actions.standUp(breakTargetKey);
+          const breakTargetAgent = this.agents.get(breakTargetKey);
+          if (breakTargetAgent) breakTargetAgent.status = 'break';
+          this.actions.goToBreakroom(breakTargetKey);
+        }
+
+        this.actions.goToBreakroom(npcKey);
+
+        if (message) {
+          this.scene.time.delayedCall(3000, () => {
+            if (breakTargetKey) {
+              this.actions.speakTo(npcKey, breakTargetKey, message);
+              // Get AI response from break partner
+              this.scene.time.delayedCall(2000, () => {
+                this._send({
+                  type: 'npc_conversation',
+                  npcName: target,
+                  fromName: npcName,
+                  text: message,
+                });
+              });
+            } else {
+              this.actions.speak(npcKey, message);
+            }
+          });
+        }
+
+        // Return to desk after break
+        this.scene.time.delayedCall(18000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+          if (breakTargetKey) {
+            const bta = this.agents.get(breakTargetKey);
+            if (bta?.assignedDesk) {
+              this.actions.useComputer(breakTargetKey, bta.assignedDesk);
+              bta.status = 'working';
+            }
+          }
+        });
+        break;
+      }
+
+      case 'check':
+        this.actions.standUp(npcKey);
+        agent.status = 'checking';
+        if (location) {
+          goToLocation(npcKey, location);
+        } else if (message?.toLowerCase().includes('server')) {
+          this.actions.goToRoom(npcKey, 'storage');
+        } else if (message?.toLowerCase().includes('research')) {
+          this.actions.checkBookshelf(npcKey);
+        } else {
+          this.actions.goToRoom(npcKey, 'open_office');
+        }
+        if (message) {
+          this.scene.time.delayedCall(2000, () => {
+            this.actions.speak(npcKey, message);
+          });
+        }
+        // Return to desk after
+        this.scene.time.delayedCall(12000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+        break;
+
+      case 'report': {
+        // Task completion — visual "clock out" to manager
+        const reportTargetKey = findTargetKey(target);
+        this.actions.standUp(npcKey);
+        agent.status = 'reporting';
+        this.actions.emote(npcKey, '!');
+
+        if (reportTargetKey) {
+          // Walk toward manager, then speak
+          this.scene.time.delayedCall(1500, () => {
+            this.actions.speakTo(npcKey, reportTargetKey, message || 'Task complete.');
+            // Request AI response from the manager
+            this.scene.time.delayedCall(2000, () => {
+              this._send({
+                type: 'npc_conversation',
+                npcName: target,
+                fromName: npcName,
+                text: message || 'Task complete.',
+              });
+            });
+          });
+        } else if (message) {
+          this.scene.time.delayedCall(1500, () => {
+            this.actions.speak(npcKey, message);
+          });
+        }
+
+        // Return to desk after reporting
+        this.scene.time.delayedCall(15000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+        break;
+      }
+
+      case 'error': {
+        // API error — NPC goes to breakroom to "reset"
+        this.actions.emote(npcKey, '!');
+        agent.status = 'error';
+
+        this.scene.time.delayedCall(1000, () => {
+          this.actions.standUp(npcKey);
+        });
+
+        this.scene.time.delayedCall(2000, () => {
+          this.actions.goToBreakroom(npcKey);
+        });
+
+        // Show truncated error message as speech once in breakroom
+        this.scene.time.delayedCall(5000, () => {
+          const errorText = (message || 'Error').slice(0, 80) + ' — taking a break';
+          this.actions.speak(npcKey, errorText);
+        });
+
+        // After 20 seconds, walk back to desk and resume
+        this.scene.time.delayedCall(20000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          } else {
+            agent.status = 'idle';
+          }
+        });
+        break;
+      }
+
+      case 'meeting':
+        if (message) {
+          this.actions.speak(npcKey, message);
+        }
+        break;
+
+      default:
+        if (agent.assignedDesk) {
+          this.actions.useComputer(npcKey, agent.assignedDesk);
+          agent.status = 'working';
+        }
+    }
   }
 
   // ---- WebSocket Connection ----
@@ -490,6 +668,35 @@ class AgentOfficeManager {
         }
         break;
       }
+      case 'npc_decision': {
+        // NPC's autonomous decision from LM Studio think loop
+        this._executeNpcDecision(msg.npcName, msg.decision || {});
+        break;
+      }
+      case 'npc_cascade': {
+        // A leader's decision cascading down to a report
+        const cascadeTargetKey = Object.entries(this.NPC_NAMES).find(
+          ([k, v]) => v.toLowerCase() === msg.npcName?.toLowerCase()
+        )?.[0];
+        const cascadeFromKey = Object.entries(this.NPC_NAMES).find(
+          ([k, v]) => v.toLowerCase() === msg.fromName?.toLowerCase()
+        )?.[0];
+        if (cascadeTargetKey && cascadeFromKey && msg.message) {
+          // The leader speaks to the report
+          this.actions.speakTo(cascadeFromKey, cascadeTargetKey, msg.message);
+          console.log('[Cascade] ' + msg.fromName + ' -> ' + msg.npcName + ': "' + msg.message + '"');
+          // Trigger the report's AI to respond to the directive
+          this.scene.time.delayedCall(2500, () => {
+            this._send({
+              type: 'npc_conversation',
+              npcName: msg.npcName,
+              fromName: msg.fromName,
+              text: msg.message,
+            });
+          });
+        }
+        break;
+      }
       case 'player_chat_response': {
         // NPC responding to the CEO (player) — route to PlayerChat UI
         const respondingKey = Object.entries(this.NPC_NAMES).find(
@@ -511,6 +718,37 @@ class AgentOfficeManager {
         }
 
         console.log(`[AgentManager] ${msg.npcName} responds to CEO: "${msg.text}"${msg.delegation ? ` [delegating to ${msg.delegation.delegateTo}]` : ''}${msg.actions?.length ? ` [${msg.actions.length} actions]` : ''}`);
+        break;
+      }
+      case 'agent_error': {
+        // CofounderAgent hit an error — show the NPC going to breakroom
+        const errorAgentKey = Object.entries(this.NPC_NAMES).find(
+          ([k, v]) => v.toLowerCase() === msg.agentId?.toLowerCase()
+        )?.[0];
+        if (errorAgentKey) {
+          const errorAgent = this.agents.get(errorAgentKey);
+          if (errorAgent && errorAgent.status !== 'error') {
+            errorAgent.status = 'error';
+            this.actions.emote(errorAgentKey, '!');
+            this.scene.time.delayedCall(1000, () => {
+              this.actions.standUp(errorAgentKey);
+            });
+            this.scene.time.delayedCall(2000, () => {
+              this.actions.goToBreakroom(errorAgentKey);
+            });
+            this.scene.time.delayedCall(5000, () => {
+              const errText = (msg.message || 'API error').slice(0, 60) + ' — resetting';
+              this.actions.speak(errorAgentKey, errText);
+            });
+            // Return to desk after 20 seconds
+            this.scene.time.delayedCall(20000, () => {
+              if (errorAgent.assignedDesk) {
+                this.actions.useComputer(errorAgentKey, errorAgent.assignedDesk);
+              }
+              errorAgent.status = 'idle';
+            });
+          }
+        }
         break;
       }
       default:
@@ -539,6 +777,16 @@ class AgentOfficeManager {
     if (!npcKey) {
       console.warn(`[AgentManager] Unknown agent: ${agentId}`);
       return;
+    }
+
+    // Mark NPC as under CofounderAgent control — prevents think loop conflicts
+    const agent = this.agents.get(npcKey);
+    if (agent && action !== 'speak' && action !== 'think' && action !== 'emote') {
+      agent.status = 'task_override';
+      // Release after 15 seconds so think loop can resume
+      this.scene.time.delayedCall(15000, () => {
+        if (agent.status === 'task_override') agent.status = 'idle';
+      });
     }
 
     switch (action) {

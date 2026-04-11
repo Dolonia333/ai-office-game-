@@ -163,20 +163,27 @@ class AgentActions {
           this._standUpNpc(npcKey);
         }
 
+        // Add slight random offset so multiple NPCs don't stack on the exact same pixel
+        const ox = x + (Math.random() - 0.5) * 12;
+        const oy = y + (Math.random() - 0.5) * 12;
+
         npc.ai.mode = 'agent_task';
-        npc.ai.taskTarget = { x, y };
+        npc.ai.taskTarget = { x: ox, y: oy };
         npc.ai.taskState = 'walking';
 
         const checkInterval = this.scene.time.addEvent({
           delay: 100,
           loop: true,
           callback: () => {
-            const dist = Math.hypot(x - npc.x, y - npc.y);
+            const dist = Math.hypot(ox - npc.x, oy - npc.y);
             if (dist <= 10 || npc.ai.taskState === 'working') {
               checkInterval.remove();
               npc.body.setVelocity(0, 0);
-              npc.ai.taskState = 'arrived';
-              resolve();
+              // Brief idle pause on arrival — looks like settling into position
+              this.scene.time.delayedCall(200, () => {
+                npc.ai.taskState = 'arrived';
+                resolve();
+              });
             }
           }
         });
@@ -481,9 +488,9 @@ class AgentActions {
         const target = this._getNpc(targetNpcKey);
         if (!npc || !target) { resolve(); return; }
 
-        // Walk near the target NPC
-        const tx = target.x + (npc.x > target.x ? 24 : -24);
-        const ty = target.y;
+        // Walk near the target NPC — add slight Y offset so they don't stack
+        const tx = target.x + (npc.x > target.x ? 26 : -26);
+        const ty = target.y + Phaser.Math.Between(-6, 6);
 
         npc.ai.mode = 'agent_task';
         npc.ai.taskTarget = { x: tx, y: ty };
@@ -497,18 +504,31 @@ class AgentActions {
             if (dist <= 20) {
               checkInterval.remove();
               npc.body.setVelocity(0, 0);
-              // Face the target
+
+              // Face speaker toward the target
               npc.ai.facing = target.x > npc.x ? 'right' : 'left';
               npc.anims.stop();
               if (npc.ai.facing === 'left') npc.setFrame(4);
               else npc.setFrame(8);
 
-              // Show speech bubble
-              this._showSpeechBubble(npc, npcKey, text, 'speech');
+              // Face the target NPC back toward the speaker
+              if (target.ai) {
+                target.ai.facing = npc.x > target.x ? 'right' : 'left';
+                target.body.setVelocity(0, 0);
+                target.anims.stop();
+                if (target.ai.facing === 'left') target.setFrame(4);
+                else target.setFrame(8);
+              }
 
-              // After a beat, target reacts
-              this.scene.time.delayedCall(1500, () => {
-                resolve();
+              // Small idle pause before speaking — looks like settling in
+              this.scene.time.delayedCall(350, () => {
+                // Show speech bubble after the pause
+                this._showSpeechBubble(npc, npcKey, text, 'speech');
+
+                // After a beat, resolve
+                this.scene.time.delayedCall(1500, () => {
+                  resolve();
+                });
               });
             }
           }

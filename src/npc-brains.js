@@ -15,6 +15,10 @@ class NpcBrainManager {
     this.providers = {};   // provider configs loaded from openclaw.json
     this.brains = {};      // npcName -> NpcBrain instance
     this.memories = {};    // npcName -> conversation history array
+    this._thinkCycles = {};    // npcName -> consecutive work cycles count
+    this._lastDecisions = {};  // npcName -> last decision object
+    this._taskProgress = {};   // npcName -> { task, phase, startedAt }
+    this._pendingCascades = []; // queued cascade decisions to send downstream
 
     this._loadProviders();
     this._initBrains();
@@ -67,7 +71,7 @@ class NpcBrainManager {
       this.providers.lmstudio = {
         baseUrl: 'http://localhost:1234',
         apiKey: 'lm-studio',
-        model: 'dolphin3.0-llama3.1-8b',
+        model: process.env.LM_STUDIO_MODEL || 'qwen2.5-14b-instruct-1m',
         type: 'lmstudio',
       };
 
@@ -123,10 +127,10 @@ class NpcBrainManager {
       // Parse provider and role from SOUL.md sections
       const providerMatch = soul.match(/## Provider\n(\w+)/);
       const roleMatch = soul.match(/## Role\n(.+)/);
-      const provider = providerMatch?.[1] || 'claude';
+      const provider = providerMatch?.[1] || 'lmstudio';
       const role = roleMatch?.[1]?.trim() || 'Employee';
 
-      const providerConfig = this.providers[provider] || this.providers.claude || this.providers.demo;
+      const providerConfig = this.providers[provider] || this.providers.lmstudio || this.providers.demo;
 
       this.brains[name] = {
         provider,
@@ -134,12 +138,11 @@ class NpcBrainManager {
         personality: soul,  // Full SOUL.md content IS the personality
         longTermMemory,
         providerConfig,
-        fallbackConfig: this.providers.claude,
+        fallbackConfig: null, // No paid API fallback — go straight to canned responses
       };
       this.memories[name] = [];
 
-      const fallback = provider !== 'claude' && !this.providers[provider] ? ' (fallback: claude)' : '';
-      console.log(`[NpcBrains] ${name} (${role}) -> ${provider}${fallback} [SOUL.md loaded]`);
+      console.log(`[NpcBrains] ${name} (${role}) -> ${provider} [SOUL.md loaded]`);
     }
   }
 
@@ -214,15 +217,15 @@ ${coworkerContext}
 
 You are in a pixel art office game. You're having a conversation at work.
 Your role: ${brain.role}. You know your coworkers, remember past conversations, and understand how you can help each other get things done.
-Keep responses SHORT (under 40 characters). Be natural, like a real coworker. Reference past conversations when relevant.
+Keep responses conversational (under 120 characters). Be natural, like a real coworker. Reference past conversations when relevant.
 ${context.description || ''}
 
 Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
     // Add to memory (sanitize to prevent JSON encoding issues)
     this.memories[npcName].push({ from: fromName, text: this._sanitize(message) });
-    if (this.memories[npcName].length > 20) {
-      this.memories[npcName] = this.memories[npcName].slice(-20);
+    if (this.memories[npcName].length > 50) {
+      this.memories[npcName] = this.memories[npcName].slice(-50);
     }
 
     // Build conversation from memory
@@ -263,30 +266,219 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
   }
 
   /**
+   * Autonomous NPC thinking — decides what to do next based on role, memory, and office state.
+   * Returns a JSON action the NPC wants to take, plus _cascades for leaders.
+   */
+  async think(npcName, officeContext = {}) {
+    const brain = this.brains[npcName];
+    if (!brain) return { action: 'idle' };
+
+    const rawMemory = brain.longTermMemory || '';
+    const recentMemory = rawMemory.length > 100
+      ? this._sanitize(rawMemory.slice(-1200))
+      : '';
+
+    const coworkerContext = this._getCoworkerContext(npcName, '');
+    const hierarchyRules = this._getHierarchyRules(npcName);
+    const teamContext = this._getTeamContext(npcName);
+    const h = this._hierarchy[npcName];
+
+    const recentConversations = (this.memories[npcName] || []).slice(-10)
+      .map(m => m.from + ': "' + m.text + '"')
+      .join('\n');
+
+    // Track think cycles for fatigue/variety hints
+    const cycles = this._thinkCycles[npcName] || 0;
+    const lastDecision = this._lastDecisions[npcName] || null;
+    const taskProg = this._taskProgress[npcName] || null;
+
+    // Build continuity context
+    var continuitySection = '';
+    if (lastDecision) {
+      continuitySection += 'Your LAST decision was: action="' + (lastDecision.action || '?') + '"';
+      if (lastDecision.target) continuitySection += ', talking to ' + lastDecision.target;
+      if (lastDecision.thought) continuitySection += '. You were thinking: "' + lastDecision.thought + '"';
+      continuitySection += '\n';
+    }
+    if (taskProg) {
+      continuitySection += 'Current task: "' + taskProg.task + '" (phase: ' + taskProg.phase + ', started ' + taskProg.startedAt + ').\n';
+    }
+
+    // Emotional state / fatigue hints
+    var fatigueHint = '';
+    if (cycles >= 4) {
+      fatigueHint = 'You have been working for ' + cycles + ' consecutive cycles without a break. Consider taking a break, chatting with someone, or switching tasks.';
+    } else if (cycles >= 2) {
+      fatigueHint = 'You have been focused for a while (' + cycles + ' cycles). Maybe check in with a teammate or stretch your legs.';
+    }
+
+    // Action weighting hint to prevent all NPCs just "working"
+    var actionWeightHint = '';
+    if (h && h.manages.length > 0) {
+      actionWeightHint = 'As a manager, spend ~40% TALKING (check-ins, delegating, updates), ~20% COLLABORATING, ~20% WORKING, ~10% MEETINGS, ~10% BREAKS. Do NOT just sit at your desk every cycle.';
+    } else if (h && h.reportsTo !== 'CEO') {
+      actionWeightHint = 'Balance your time: ~40% WORKING, ~25% TALKING (updates, asking for help), ~15% COLLABORATING, ~10% BREAKS, ~10% CHECK/MEETING.';
+    }
+
+    var managesStr = (h && h.manages.length > 0) ? h.manages.join(', ') : 'nobody';
+    var reportsToStr = h ? h.reportsTo : 'your boss';
+
+    const systemPrompt = brain.personality + '\n\n' +
+      '## Hierarchy Rules\n' + hierarchyRules + '\n\n' +
+      '## Your Teams\n' + (teamContext || 'No team assignments.') + '\n\n' +
+      '## Your Coworkers\n' + coworkerContext + '\n\n' +
+      '## Your Memories\n' + (recentMemory || 'No memories yet.') + '\n\n' +
+      '## Recent Conversations\n' + (recentConversations || 'None yet today.') + '\n\n' +
+      '## Task Continuity\n' + (continuitySection || 'No previous decision this session.') + '\n\n' +
+      '## Current Office State\n' + (officeContext.description || 'Normal workday. Everyone is at their desks.') + '\n\n' +
+      (fatigueHint ? '## Energy Level\n' + fatigueHint + '\n\n' : '') +
+      'You are ' + npcName + ', ' + brain.role + ', in a pixel art office. Think about what to do RIGHT NOW.\n\n' +
+      'HIERARCHY ENFORCEMENT:\n' +
+      '- ONLY give tasks/orders to people you manage: ' + managesStr + '\n' +
+      '- NEVER give orders to ' + reportsToStr + ' or anyone above you\n' +
+      '- When you finish a task, REPORT to ' + reportsToStr + '\n' +
+      '- If someone above you asks you to do something, you do it\n\n' +
+      'THINK ABOUT:\n' +
+      '- Your role and expertise: what are YOU uniquely good at?\n' +
+      '- Past conversations: did someone ask you for something? Did you promise to follow up?\n' +
+      '- Who can help YOU: if stuck, who has the expertise you need?\n' +
+      '- Who needs YOUR help: is anyone working on something you know about?\n' +
+      '- Task progress: are you STARTING something new, CONTINUING something, or FINISHING and reporting?\n' +
+      '- Collaboration: could you solve this faster by working WITH someone?\n\n' +
+      (actionWeightHint ? 'ACTION BALANCE:\n' + actionWeightHint + '\n\n' : '') +
+      'BEHAVIOR GUIDE:\n' +
+      '- Ask coworkers for help with things outside your expertise\n' +
+      '- Offer help when you remember someone struggling with something you are good at\n' +
+      '- Walk to the breakroom with someone for a casual chat about ideas\n' +
+      '- Go to the conference room to whiteboard a problem together\n' +
+      '- Reference SPECIFIC past conversations and follow up on them\n' +
+      '- Build on previous decisions: do not repeat the same task endlessly\n' +
+      '- When you FINISH a task, talk to your manager (' + reportsToStr + ') to report it\n' +
+      '- Have opinions and preferences: disagree sometimes, suggest alternatives\n\n' +
+      'Respond with EXACTLY ONE JSON object (no other text):\n' +
+      '{\n' +
+      '  "thought": "what you are thinking and WHY (1-2 sentences)",\n' +
+      '  "action": "one of: work, talk, collaborate, break, check, meeting, report",\n' +
+      '  "target": "NPC name if talking/collaborating/reporting, or null",\n' +
+      '  "location": "desk, breakroom, conference, storage, or null (stay put)",\n' +
+      '  "message": "what you would say: be specific, reference past work, ask real questions",\n' +
+      '  "taskPhase": "one of: starting, continuing, finished, none",\n' +
+      '  "save": "concise note: WHO you talked to, WHAT was discussed, WHAT was decided, WHAT is next"\n' +
+      '}\n\n' +
+      'Examples:\n' +
+      '{"thought": "Josh mentioned a CSS bug yesterday. I should follow up since it blocks the launch.", "action": "talk", "target": "Josh", "location": null, "message": "Hey Josh, did you fix that CSS layout issue? I need it before we ship the dashboard.", "taskPhase": "continuing", "save": "Followed up with Josh on CSS bug. Blocks dashboard launch. Waiting for his update."}\n' +
+      '{"thought": "I finished the API refactor. I need to report to Abby before moving on.", "action": "report", "target": "Abby", "location": null, "message": "Abby, the API refactor is done. All endpoints updated and tests pass. Ready for Jenny to review.", "taskPhase": "finished", "save": "FINISHED API refactor. Reported to Abby. Next: wait for Jenny code review."}\n' +
+      '{"thought": "Been coding for a while. Edward and I should brainstorm over coffee.", "action": "break", "target": "Edward", "location": "breakroom", "message": "Edward, want to grab coffee? I want to bounce some API ideas off you.", "taskPhase": "none", "save": "Coffee break with Edward. Discussed API redesign. He suggested GraphQL."}\n' +
+      '{"thought": "Molly found a bug in my code. Starting a fix before sprint review.", "action": "work", "target": null, "location": "desk", "message": "Fixing the validation bug Molly reported", "taskPhase": "starting", "save": "STARTED fixing validation bug from Molly QA report. Bug in form input sanitization."}';
+
+    try {
+      const response = await this._callProvider(brain.providerConfig, systemPrompt, [
+        { role: 'user', content: 'What do you want to do right now? Respond with JSON only.' }
+      ]);
+
+      // Parse the JSON response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const decision = JSON.parse(jsonMatch[0]);
+
+        // Track think cycles (reset on non-work action)
+        if (decision.action === 'work') {
+          this._thinkCycles[npcName] = (this._thinkCycles[npcName] || 0) + 1;
+        } else {
+          this._thinkCycles[npcName] = 0;
+        }
+
+        // Save last decision for continuity
+        this._lastDecisions[npcName] = {
+          action: decision.action,
+          target: decision.target,
+          thought: decision.thought,
+          timestamp: new Date().toISOString().slice(0, 16),
+        };
+
+        // Track task progress phases
+        if (decision.taskPhase === 'starting' && decision.message) {
+          this._taskProgress[npcName] = {
+            task: decision.message.slice(0, 80),
+            phase: 'in-progress',
+            startedAt: new Date().toLocaleTimeString(),
+          };
+        } else if (decision.taskPhase === 'finished') {
+          var finishedTask = this._taskProgress[npcName];
+          this._taskProgress[npcName] = null;
+          // Auto-report to manager when finishing a task
+          if (finishedTask && !decision.target && h) {
+            decision.target = h.reportsTo !== 'CEO' ? h.reportsTo : null;
+            if (decision.action !== 'report') decision.action = 'report';
+          }
+        } else if (decision.taskPhase === 'continuing' && this._taskProgress[npcName]) {
+          this._taskProgress[npcName].phase = 'continuing';
+        }
+
+        // Enhanced memory saving: include WHO, WHAT, DECIDED, NEXT
+        if (decision.save) {
+          var enrichedSave = decision.save;
+          if (decision.taskPhase && decision.taskPhase !== 'none') {
+            enrichedSave = '[' + decision.taskPhase.toUpperCase() + '] ' + enrichedSave;
+          }
+          if (decision.target && h) {
+            var targetH = this._hierarchy[decision.target];
+            if (targetH) {
+              var rel = (h.manages.indexOf(decision.target) !== -1) ? 'report' :
+                        (h.reportsTo === decision.target) ? 'manager' : 'peer';
+              enrichedSave += ' (spoke to ' + decision.target + ', my ' + rel + ')';
+            }
+          }
+          this.saveMemory(npcName, enrichedSave);
+        }
+
+        // Cascade decisions from leaders to their reports
+        decision._cascades = [];
+        if (h && h.manages.length > 0 && (decision.action === 'talk' || decision.action === 'collaborate' || decision.action === 'meeting' || decision.action === 'report')) {
+          decision._cascades = this._cascadeDecision(npcName, decision);
+        }
+
+        // If action is "report", ensure it has a target (the manager)
+        if (decision.action === 'report' && !decision.target && h) {
+          decision.target = h.reportsTo !== 'CEO' ? h.reportsTo : null;
+        }
+
+        return decision;
+      }
+      return { action: 'work', thought: 'Focusing on my tasks', message: 'Working...', target: null };
+    } catch (err) {
+      console.warn('[NpcBrains] ' + npcName + ' think error: ' + err.message);
+      return { action: 'error', thought: 'Something went wrong', message: err.message || 'API error — taking a break', target: null };
+    }
+  }
+
+  /**
    * Call an AI provider API
    */
-  _callProvider(config, systemPrompt, messages) {
+  _callProvider(config, systemPrompt, messages, opts = {}) {
     if (!config || config.type === 'demo') {
       // Demo mode — return null so fallback logic kicks in
       return Promise.reject(new Error('Demo mode — no API configured'));
     }
     if (config.type === 'anthropic') {
-      return this._callAnthropic(config, systemPrompt, messages);
+      return this._callAnthropic(config, systemPrompt, messages, opts);
     } else if (config.type === 'google') {
-      return this._callGoogle(config, systemPrompt, messages);
+      return this._callGoogle(config, systemPrompt, messages, opts);
     } else if (config.type === 'openai') {
-      return this._callOpenAI(config, systemPrompt, messages);
+      return this._callOpenAI(config, systemPrompt, messages, opts);
     } else if (config.type === 'lmstudio') {
-      return this._callLocal(config, systemPrompt, messages);
+      return this._callLocal(config, systemPrompt, messages, opts);
     }
     return Promise.reject(new Error('Unknown provider type'));
   }
 
-  _callAnthropic(config, systemPrompt, messages) {
+  _callAnthropic(config, systemPrompt, messages, opts = {}) {
+    const maxTokens = opts.maxTokens || 100;
+    const sliceLen = opts.sliceLen || 150;
     return new Promise((resolve, reject) => {
       const body = JSON.stringify({
         model: config.model,
-        max_tokens: 100,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: messages.length > 0 ? messages : [{ role: 'user', content: 'Introduce yourself briefly.' }],
       });
@@ -307,7 +499,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
           try {
             const p = JSON.parse(data);
             if (p.error) return reject(new Error(p.error.message));
-            resolve((p.content?.[0]?.text || '').trim().slice(0, 60));
+            resolve((p.content?.[0]?.text || '').trim().slice(0, sliceLen));
           } catch (e) { reject(e); }
         });
       });
@@ -318,7 +510,9 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     });
   }
 
-  _callGoogle(config, systemPrompt, messages) {
+  _callGoogle(config, systemPrompt, messages, opts = {}) {
+    const maxTokens = opts.maxTokens || 60;
+    const sliceLen = opts.sliceLen || 150;
     return new Promise((resolve, reject) => {
       const contents = messages.map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -331,7 +525,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       const body = JSON.stringify({
         contents,
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: { maxOutputTokens: 60 },
+        generationConfig: { maxOutputTokens: maxTokens },
       });
 
       const url = new URL(
@@ -349,7 +543,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
             const p = JSON.parse(data);
             if (p.error) return reject(new Error(p.error.message));
             const text = p.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            resolve(text.trim().slice(0, 60));
+            resolve(text.trim().slice(0, sliceLen));
           } catch (e) { reject(e); }
         });
       });
@@ -360,7 +554,9 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     });
   }
 
-  _callOpenAI(config, systemPrompt, messages) {
+  _callOpenAI(config, systemPrompt, messages, opts = {}) {
+    const maxTokens = opts.maxTokens || 150;
+    const sliceLen = opts.sliceLen || 150;
     return new Promise((resolve, reject) => {
       const oaiMessages = [
         { role: 'system', content: systemPrompt },
@@ -372,7 +568,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
       const body = JSON.stringify({
         model: config.model,
-        max_tokens: 60,
+        max_tokens: maxTokens,
         messages: oaiMessages,
       });
 
@@ -391,7 +587,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
           try {
             const p = JSON.parse(data);
             if (p.error) return reject(new Error(p.error.message || JSON.stringify(p.error)));
-            resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, 60));
+            resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, sliceLen));
           } catch (e) { reject(e); }
         });
       });
@@ -405,7 +601,9 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
   /**
    * Call LM Studio local API (HTTP, OpenAI-compatible)
    */
-  _callLocal(config, systemPrompt, messages) {
+  _callLocal(config, systemPrompt, messages, opts = {}) {
+    const maxTokens = opts.maxTokens || 150;
+    const sliceLen = opts.sliceLen || 150;
     return new Promise((resolve, reject) => {
       const oaiMessages = [
         { role: 'system', content: systemPrompt },
@@ -417,7 +615,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
       const body = JSON.stringify({
         model: config.model,
-        max_tokens: 60,
+        max_tokens: maxTokens,
         temperature: 0.8,
         messages: oaiMessages,
       });
@@ -439,12 +637,12 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
           try {
             const p = JSON.parse(data);
             if (p.error) return reject(new Error(p.error.message || JSON.stringify(p.error)));
-            resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, 60));
+            resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, sliceLen));
           } catch (e) { reject(e); }
         });
       });
       req.on('error', reject);
-      req.setTimeout(15000, () => req.destroy(new Error('LM Studio timeout')));
+      req.setTimeout(30000, () => req.destroy(new Error('LM Studio timeout')));
       req.write(body);
       req.end();
     });
@@ -469,6 +667,118 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     'Lucy':    { reportsTo: 'Abby', manages: [], title: 'Receptionist — schedules, coordination' },
     'Bouncer': { reportsTo: 'Dan', manages: [], title: 'Security Guard — office security' },
   };
+
+  _teams = {
+    'Engineering': { members: ['Alex', 'Josh', 'Edward', 'Roki', 'Jenny'], domain: 'building features, fixing bugs, code review', lead: 'Alex' },
+    'DevOps & Infra': { members: ['Oscar', 'Dan'], domain: 'deployments, CI/CD, servers, networking', lead: 'Oscar' },
+    'Product & Design': { members: ['Sarah', 'Rob', 'Molly'], domain: 'product requirements, UI/UX design, QA testing', lead: 'Sarah' },
+    'Data & Research': { members: ['Pier', 'Bob'], domain: 'data pipelines, analytics, R&D', lead: 'Pier' },
+    'Operations': { members: ['Lucy', 'Bouncer', 'Dan'], domain: 'scheduling, office coordination, security', lead: 'Lucy' },
+    'Leadership': { members: ['Abby', 'Marcus', 'Sarah', 'Alex'], domain: 'strategy, planning, sprint coordination', lead: 'Abby' },
+  };
+
+  _getTeamsForNpc(npcName) {
+    const result = [];
+    for (const [teamName, team] of Object.entries(this._teams)) {
+      if (team.members.includes(npcName)) {
+        result.push({ name: teamName, ...team });
+      }
+    }
+    return result;
+  }
+
+  _getHierarchyRules(npcName) {
+    const h = this._hierarchy[npcName];
+    if (!h) return '';
+    const lines = [];
+    if (h.reportsTo === 'CEO') {
+      lines.push('You report DIRECTLY to the CEO. No one in the office outranks you except the CEO.');
+    } else {
+      lines.push('You report to ' + h.reportsTo + '. You do NOT give orders to ' + h.reportsTo + ' or anyone above them.');
+    }
+    if (h.manages.length > 0) {
+      lines.push('You manage: ' + h.manages.join(', ') + '. You can assign them tasks, ask for updates, and review their work.');
+    } else {
+      lines.push('You do not manage anyone. You receive tasks from ' + h.reportsTo + ' and collaborate with peers.');
+    }
+    const superiors = [];
+    let current = h.reportsTo;
+    while (current && current !== 'CEO' && this._hierarchy[current]) {
+      superiors.push(current);
+      current = this._hierarchy[current].reportsTo;
+    }
+    if (superiors.length > 0) {
+      lines.push('Chain above you: ' + superiors.join(' -> ') + ' -> CEO. Never give orders to these people.');
+    }
+    return lines.join('\n');
+  }
+
+  _getTeamContext(npcName) {
+    const teams = this._getTeamsForNpc(npcName);
+    if (teams.length === 0) return '';
+    return teams.map(function(t) {
+      return 'Team "' + t.name + '": [' + t.members.join(', ') + '] - you collaborate on ' + t.domain + '. Lead: ' + t.lead + '.';
+    }).join('\n');
+  }
+
+  /**
+   * Cascade a decision from a leader down the hierarchy.
+   * Returns an array of { npcName, fromName, message } for conversations to trigger.
+   */
+  _cascadeDecision(fromNpc, decision) {
+    const h = this._hierarchy[fromNpc];
+    if (!h || h.manages.length === 0) return [];
+    const cascades = [];
+    const decisionText = decision.message || decision.thought || '';
+    if (!decisionText || decisionText.length < 5) return [];
+    var action = decision.action || '';
+    if (action === 'work' || action === 'break' || action === 'check') return [];
+
+    var relevantReports = h.manages.filter(function(name) {
+      if (decision.target && name === decision.target) return false;
+      if (decisionText.toLowerCase().indexOf(name.toLowerCase()) !== -1) return true;
+      return false;
+    });
+    // Broaden: check domain keywords if no name matches
+    if (relevantReports.length === 0) {
+      relevantReports = h.manages.filter(function(name) {
+        if (decision.target && name === decision.target) return false;
+        var rTeams = this._getTeamsForNpc(name);
+        for (var i = 0; i < rTeams.length; i++) {
+          var keywords = rTeams[i].domain.toLowerCase().split(/[,\s]+/);
+          for (var j = 0; j < keywords.length; j++) {
+            if (keywords[j].length > 3 && decisionText.toLowerCase().indexOf(keywords[j]) !== -1) return true;
+          }
+        }
+        return false;
+      }.bind(this));
+    }
+    var targets = relevantReports.length > 0 ? relevantReports.slice(0, 3) : h.manages.slice(0, 2);
+    for (var i = 0; i < targets.length; i++) {
+      var reportName = targets[i];
+      cascades.push({
+        npcName: reportName,
+        fromName: fromNpc,
+        message: fromNpc + ' says: ' + decisionText.slice(0, 120),
+      });
+      this.saveMemory(reportName, fromNpc + ' directed: "' + decisionText.slice(0, 100) + '"');
+      // Second-level cascade
+      var reportH = this._hierarchy[reportName];
+      if (reportH && reportH.manages.length > 0) {
+        for (var j = 0; j < Math.min(reportH.manages.length, 2); j++) {
+          var subReport = reportH.manages[j];
+          cascades.push({
+            npcName: subReport,
+            fromName: reportName,
+            message: reportName + ' relayed from ' + fromNpc + ': ' + decisionText.slice(0, 100),
+          });
+          this.saveMemory(subReport, reportName + ' relayed from ' + fromNpc + ': "' + decisionText.slice(0, 80) + '"');
+        }
+      }
+    }
+    this.saveMemory(fromNpc, 'Cascaded decision to ' + targets.join(', ') + ': "' + decisionText.slice(0, 80) + '"');
+    return cascades;
+  }
 
   /**
    * Build coworker context for an NPC — who they work with and recent interactions
@@ -531,7 +841,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     const h = this._hierarchy[npcName];
     const rawMemory = brain.longTermMemory || '';
     const memorySection = rawMemory.length > 50
-      ? `\n\n## Your Memories\n${this._sanitize(rawMemory.slice(-800))}`
+      ? `\n\n## Your Memories (what you remember from past days)\n${this._sanitize(rawMemory.slice(-1200))}`
       : '';
 
     const coworkerContext = this._getCoworkerContext(npcName, 'CEO');
@@ -539,15 +849,61 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     // Build role-specific action list
     const roleActions = this._getRoleActions(npcName, h);
 
-    const systemPrompt = `${brain.personality}${memorySection}
+    // Build chain-of-command context
+    let chainOfCommand = '';
+    if (h?.reportsTo === 'CEO') {
+      chainOfCommand = 'You report DIRECTLY to the CEO. You are a senior leader.';
+    } else {
+      const chain = [];
+      let current = npcName;
+      while (current && current !== 'CEO') {
+        const ch = this._hierarchy[current];
+        if (ch?.reportsTo) {
+          chain.push(ch.reportsTo);
+          current = ch.reportsTo;
+        } else break;
+      }
+      chainOfCommand = `Your chain of command: You -> ${chain.join(' -> ')} -> CEO.`;
+    }
+
+    // Build current task context from recent memories and decisions
+    const recentMem = this.memories[npcName] || [];
+    const recentWork = recentMem.slice(-8).map(m => `${m.from}: "${m.text}"`).join('\n');
+    const currentTaskSection = recentWork
+      ? `\n## Recent Conversations (your short-term memory)\n${recentWork}`
+      : '\n## Recent Conversations\nNo conversations yet today.';
+
+    // Build team status for managers
+    let teamStatus = '';
+    if (h?.manages?.length > 0) {
+      const statuses = h.manages.map(memberName => {
+        const memberMem = this.memories[memberName] || [];
+        const lastActivity = memberMem.slice(-2).map(m => m.text).join('; ');
+        return `- ${memberName} (${this._hierarchy[memberName]?.title || 'employee'}): ${lastActivity || 'at their desk'}`;
+      });
+      teamStatus = `\n## Your Team's Current Status\n${statuses.join('\n')}`;
+    }
+
+    // Find CEO-specific past conversations in long-term memory
+    const ceoMemories = rawMemory.split('\n')
+      .filter(l => l.includes('CEO'))
+      .slice(-5)
+      .join('\n');
+    const ceoHistorySection = ceoMemories
+      ? `\n## Past CEO Conversations (what the CEO has told you before)\n${this._sanitize(ceoMemories)}`
+      : '';
+
+    const systemPrompt = `${brain.personality}${memorySection}${ceoHistorySection}
+${currentTaskSection}
+${teamStatus}
 
 ## Your Coworkers
 ${coworkerContext}
 
-## Your Role & What You Can Do
+## Your Role & Position
 You are ${npcName}, ${h?.title || brain.role}. The CEO (your ultimate boss) is talking to you directly.
-${h?.reportsTo === 'CEO' ? 'You report directly to the CEO.' : `You report to ${h?.reportsTo}.`}
-${h?.manages?.length > 0 ? `You manage: ${h.manages.join(', ')}.` : ''}
+${chainOfCommand}
+${h?.manages?.length > 0 ? `You manage: ${h.manages.join(', ')}.` : 'You are an individual contributor (no direct reports).'}
 
 ### Actions you can take (append tags at the END of your response):
 ${roleActions}
@@ -565,17 +921,27 @@ ${roleActions}
 - Delegate to the right person: [DELEGATE:PersonName:reason]
   Example: "I'll get Alex on that. [DELEGATE:Alex:frontend bug needs senior dev]"
 
+## How to Respond to the CEO
+1. Show your thinking briefly — what's your take on their request? (1 short sentence)
+2. Give your actual response — be specific, reference what you're working on or what you know.
+3. If the CEO gives an ORDER:
+   - Acknowledge it clearly
+   - Explain briefly HOW you'll do it
+   - If you manage people, say WHO you'll assign it to and why they're the right person
+   - Always include [ACTION:...] or [DELEGATE:...] tags
+4. If just chatting/answering a question, no tags needed.
+5. You can chain multiple actions: "On it! [ACTION:speakTo:Josh:CEO wants the homepage fixed] [DELEGATE:Josh:frontend task]"
+
 ## Rules
-- When the CEO asks you to DO something, always include an [ACTION:...] or [DELEGATE:...] tag.
-- When just chatting/answering a question, no tag needed.
-- You can chain multiple actions: "On it! [ACTION:speakTo:Josh:CEO wants the homepage fixed] [DELEGATE:Josh:frontend task]"
-- Keep your spoken text under 60 characters. Be natural and professional.
+- Keep your spoken text under 200 characters. The CEO deserves detailed, thoughtful responses.
+- Be natural, professional, and show you understand the company hierarchy.
+- Reference your current work, past conversations, and team status when relevant.
 - Respond in character as ${npcName}. Dialogue text first, then tags at the end.`;
 
     // Add to memory
     this.memories[npcName].push({ from: 'CEO', text: this._sanitize(message) });
-    if (this.memories[npcName].length > 20) {
-      this.memories[npcName] = this.memories[npcName].slice(-20);
+    if (this.memories[npcName].length > 50) {
+      this.memories[npcName] = this.memories[npcName].slice(-50);
     }
 
     const messages = this.memories[npcName].map(m => ({
@@ -583,9 +949,12 @@ ${roleActions}
       content: m.from === npcName ? m.text : `${m.from} says: "${m.text}"`,
     }));
 
+    // Use higher token limits for CEO conversations — they deserve detailed responses
+    const playerOpts = { maxTokens: 300, sliceLen: 500 };
+
     let responseText;
     try {
-      responseText = await this._callProvider(brain.providerConfig, systemPrompt, messages);
+      responseText = await this._callProvider(brain.providerConfig, systemPrompt, messages, playerOpts);
     } catch (err) {
       const now = Date.now();
       const lastErr = this._lastErrorLog?.[npcName] || 0;
@@ -597,7 +966,7 @@ ${roleActions}
       // Try fallback provider
       if (brain.fallbackConfig && brain.fallbackConfig !== brain.providerConfig) {
         try {
-          responseText = await this._callProvider(brain.fallbackConfig, systemPrompt, messages);
+          responseText = await this._callProvider(brain.fallbackConfig, systemPrompt, messages, playerOpts);
         } catch (e2) {
           responseText = null;
         }
