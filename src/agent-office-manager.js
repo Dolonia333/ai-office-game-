@@ -185,6 +185,11 @@ class AgentOfficeManager {
         agent.assignedDesk = deskId;
         assignedDeskIds.add(deskId);
         this.deskAssignments.set(deskId, npcKey);
+        // Store desk position for fallback use in office-scene.js
+        const deskObj = this.actions._getFurniture(deskId);
+        if (deskObj?.sprite) {
+          agent._assignedDeskPos = { x: deskObj.sprite.x, y: deskObj.sprite.y };
+        }
         console.log(`[AgentManager] Assigned ${agent.name} to desk ${deskId} (has chair nearby)`);
       }
     });
@@ -471,9 +476,9 @@ class AgentOfficeManager {
           this.actions.useComputer(npcKey, agent.assignedDesk);
           agent.status = 'working';
         } else {
-          // No desk — walk to a random work area so they don't freeze
-          const wx = 300 + Math.random() * 500;
-          const wy = 300 + Math.random() * 200;
+          // No desk — go to breakroom rather than random center clustering
+          const wx = 80 + Math.random() * 150;
+          const wy = 520 + Math.random() * 80;
           this.actions.walkTo(npcKey, wx, wy);
           agent.status = 'working';
         }
@@ -518,17 +523,21 @@ class AgentOfficeManager {
           });
         }
 
-        // Return to desk after break
-        this.scene.time.delayedCall(18000, () => {
+        // Return to desk after break (~30s)
+        this.scene.time.delayedCall(30000, () => {
           if (agent.assignedDesk) {
             this.actions.useComputer(npcKey, agent.assignedDesk);
             agent.status = 'working';
+          } else {
+            agent.status = 'idle';
           }
           if (breakTargetKey) {
             const bta = this.agents.get(breakTargetKey);
             if (bta?.assignedDesk) {
               this.actions.useComputer(breakTargetKey, bta.assignedDesk);
               bta.status = 'working';
+            } else if (bta) {
+              bta.status = 'idle';
             }
           }
         });
@@ -631,9 +640,22 @@ class AgentOfficeManager {
 
       case 'meeting':
         agent.status = 'meeting';
+        this.actions.standUp(npcKey);
         if (message) {
           this.actions.speak(npcKey, message);
         }
+        // Actually walk to the conference room and join meeting
+        this.actions.joinMeeting(npcKey);
+        // Return to desk after meeting (~25s)
+        this.scene.time.delayedCall(25000, () => {
+          agent.status = 'working';
+          agent._taskLabel = null;
+          this.actions.standUp(npcKey);
+          const deskId = this._deskAssignments?.get(npcKey);
+          if (deskId) {
+            this.actions.useComputer(npcKey, deskId);
+          }
+        });
         break;
 
       default:

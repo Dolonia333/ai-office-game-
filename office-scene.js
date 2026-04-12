@@ -2131,7 +2131,8 @@ class OfficeScene extends Phaser.Scene {
             // Don't continue to movement logic — skip to animation section
           } else {
           // AI agent task: walk to assigned position and stay
-          const t = ai.taskTarget || { x: 400, y: 300 };
+          // Fallback to NPC's assigned desk or spawn position, not a hardcoded center
+          const t = ai.taskTarget || ai._assignedDeskPos || ai._spawnPos || { x: npc.x, y: npc.y };
           const dist = Math.hypot(t.x - npc.x, t.y - npc.y);
 
           if (dist > 10) {
@@ -2148,9 +2149,16 @@ class OfficeScene extends Phaser.Scene {
               } else {
                 // Path follower returned null — arrived or gave up
                 npc.body.setVelocity(0, 0);
-                // Clear last target so pathfinding retries on next frame
+                const distToTarget = ai.taskTarget ? Phaser.Math.Distance.Between(npc.x, npc.y, ai.taskTarget.x, ai.taskTarget.y) : 0;
                 ai._lastTarget = null;
-                if (ai.taskState === 'walking') ai.taskState = 'working';
+                if (distToTarget > 60) {
+                  // Gave up — too far from target, go back to idle instead of faking work
+                  ai.mode = 'wander';
+                  ai.taskState = null;
+                  ai.taskTarget = null;
+                } else if (ai.taskState === 'walking') {
+                  ai.taskState = 'working';
+                }
               }
             } else {
               npc.body.setVelocity(((t.x - npc.x) / dist) * wanderSpeed, ((t.y - npc.y) / dist) * wanderSpeed);

@@ -1,54 +1,110 @@
-# Changelog
+# CHANGELOG
 
-All notable changes to this project are documented here.
+## [Unreleased] — Autonomous NPC AI System (Phase 1-6)
 
-## [Unreleased]
+### Why This Was Built
+Denizen visualizes AI agent workflows in real-time. The NPCs represent AI agents running business tasks. For this to be a meaningful observability tool, the agents need to actually think, decide, collaborate, and learn autonomously — not just follow scripts. This set of changes replaces the scripted NPC behavior with a fully autonomous AI system powered by local LM Studio inference.
 
-### Fixed
-- **#2** NPC `MEMORY.md` files now capped at 200 lines — prevents unbounded disk growth and oversized AI prompts (`src/npc-brains.js`)
-- **#3** NPC stand-up Y offset now uses chair facing direction (`backFacing ? -16 : +16`) instead of always `+16` — fixes clipping into back-facing chairs (`src/agent-actions.js`)
-- **#4** `_stuckCount` initialized to `0` in `NpcPathFollower` constructor — removes reliance on runtime `|| 0` patch (`src/pathfinding.js`)
-- **#4** `_standingMeetingNpcs` initialized in `AgentActions` constructor — eliminates lazy-init guard (`src/agent-actions.js`)
-- **#5** `DELEGATE` response parser now logs a warning when an unknown NPC target is encountered, instead of silently discarding it (`src/npc-brains.js`)
-- **#11** Demo mode threshold now excludes LM Studio from the remote provider count — demo mode activates correctly when only local providers are configured (`src/npc-brains.js`)
+### What Was Done
 
-### Added
-- `LICENSE` — official MIT license file (GitHub now detects it automatically)
-- `CONTRIBUTING.md` — fork, run, edit NPC souls, commit style, asset license rules
-- `.github/ISSUE_TEMPLATE/bug_report.md` — structured bug report form
-- `.github/ISSUE_TEMPLATE/feature_request.md` — structured feature request form
-- `.github/PULL_REQUEST_TEMPLATE.md` — PR checklist including demo mode and console checks
-- `SECURITY.md` — vulnerability disclosure policy
+#### Phase 1: Request Queue & Token Fix
+**Problem:** 16 NPCs all calling LM Studio simultaneously overwhelmed the single GPU (4070 Ti Super). Every request timed out. Additionally, the `think()` function used `maxTokens: 150` but expected JSON responses of 250-400 characters, causing truncation → JSON parse failure → fallback to `{ action: 'work' }` every time.
 
-### Fixed (documentation)
-- README troubleshooting section referenced wrong directory name (`pixel-office-game` → `ai-office-game-`)
+**Fix:**
+- Added sequential request queue (`_requestQueue[]` + `_processQueue()`) in `npc-brains.js` — one inference at a time, 60s timeout
+- CofounderAgent routes through the same queue
+- Increased `think()` to `maxTokens: 400, sliceLen: 600, temperature: 0.95`
+- Increased `getResponse()` to `maxTokens: 200, sliceLen: 300`
 
-## [0.3.0] — 2026-03-22
+#### Phase 2: Contextual Think Prompts
+**Problem:** NPCs always chose "work" because the prompt was static and boring. The AI had no context about what was happening around it.
 
-### Added
-- Zero-config demo mode — game works without any API keys
-- Player chat system — press Enter to talk to NPCs, they walk over and respond
-- Smart NPC fallbacks — context-aware scripted responses infer meaning from player messages
-- A* pathfinding with stuck detection and automatic rerouting
-- Security monitor server — real-time threat detection (file access, network scans, shell exec, API abuse)
-- 16 NPC soul files (`npcs/*/SOUL.md`) — personality-driven system prompts
-- NPC persistent memory (`npcs/*/MEMORY.md`) — conversations saved across sessions
-- Meeting system — CTO can call meetings, NPCs walk to conference room, sit and discuss
+**Fix:**
+- Rotate user prompts based on NPC state (work cycles, last decision, nearby NPCs, memory snippets)
+- JSON schema moved from system prompt to user message (last thing model sees = better compliance)
+- Trimmed system prompt to reduce input token count
+- Added state-based nudges: "You've been working for 3 cycles, maybe take a break"
 
-## [0.2.0] — 2026-03-15
+#### Phase 3: Memory-Aware Conversations
+**Problem:** NPCs had generic conversations with no reference to shared history.
 
-### Added
-- Soul file architecture (OpenClaw pattern) — NPC identity from plain markdown files
-- 16-NPC hierarchy — org chart with reporting structure and role-specific actions
-- Multi-provider NPC brains — Claude, Grok, Gemini, Kimi, LM Studio per NPC
-- Cofounder agent (CTO brain) — autonomous thinking loop every 15–30s
+**Fix:**
+- `getResponse()` now extracts memories relevant to the specific conversation partner
+- Added `taskContext` including both NPCs' current work
+- `saveMemory()` extracts `[TOPIC:tag]` entries for future retrieval
 
-## [0.1.0] — 2026-03-19 (Initial commit)
+#### Phase 4: Visual Status Indicators
+**Problem:** No way to see at a glance what each agent is doing (defeats the purpose of an observability tool).
 
-### Added
-- Pixel art office scene built with Phaser 3 and LimeZu Modern Office asset pack
-- Basic NPC sprites and player character (`Dolo.png`)
-- Furniture catalog system (`data/furniture_catalog_openplan.json`)
-- Room assembly system (`src/RoomAssembly.js`, `src/RoomBuilder.js`)
-- Node.js HTTP/WebSocket server (`server.js`)
-- Development tools: asset browser, sprite cutter, tile labeler
+**Fix:**
+- Colored dots above each NPC: green=working, blue=talking, yellow=break, purple=meeting, red=error, gray=idle
+- Task labels showing current work description (truncated to 25 chars)
+- Updated every 500ms via `_updateStatusIndicators()`
+
+#### Phase 5: Skill Extraction & Tracking
+**Problem:** NPCs learn things in conversations but don't remember or build expertise.
+
+**Fix:**
+- `saveMemory()` detects learning keywords and appends `[SKILL:name:+1]` to MEMORY.md
+- Added `_getSkillContext(npcName)` to parse and include skills in think prompts
+- NPCs reference their skills when making decisions
+
+#### Phase 6: State-Reactive CTO
+**Problem:** The CTO (Abby) used 20+ hardcoded scripted scenarios that rotated randomly — felt robotic and ignored actual office state.
+
+**Fix:**
+- Replaced scripted prompts with `_buildStateReactivePrompt()` that observes real office state
+- Counts idle/working/talking agents, spots opportunities
+- Time-of-day awareness (morning standup, lunch breaks, afternoon reviews)
+- References recent history to avoid repetition
+
+### Bug Fixes
+
+#### NPC Clustering at (400, 300)
+**Problem:** NPCs cluster in a random spot in the middle of the office instead of using proper rooms.
+
+**Root Causes:**
+1. `office-scene.js` has `const t = ai.taskTarget || { x: 400, y: 300 }` — every NPC without a target converges here
+2. The `'meeting'` action case only set status but never moved NPCs to the conference room
+3. When pathfinding gives up, NPCs pretend to "work" wherever they stopped
+4. Deskless NPCs sent to random center coordinates (300-800, 300-500)
+
+**Fix:**
+- Fallback coordinate now uses NPC's assigned desk position instead of hardcoded center
+- `'meeting'` case now calls `joinMeeting()` and walks NPCs to conference room
+- Pathfinding failure detection: if NPC is >60px from target, go to idle/wander instead of faking work
+- Deskless NPCs sent to breakroom instead of random center
+
+#### 6 NPCs Without Desks
+**Problem:** Dan, Lucy, Bouncer, Marcus, Sarah, and Roki had no desk assignments because `_assignDesks()` filtered by role.
+
+**Fix:** Removed role filter — all 16 NPCs get desk assignments.
+
+#### Abby (CTO) Getting Stuck
+**Problem:** Pathfinding to private office desk at (1188, 124) required crossing entire cluttered office. Physics collisions trapped her mid-walk.
+
+**Fix:** Added `teleportToDesk()` — CTO teleports directly to private office on startup.
+
+#### Token Truncation → Always "Work"
+**Problem:** 90% of NPC decisions were "work" because JSON responses were truncated at 150 chars, causing parse failure and fallback.
+
+**Fix:** Increased maxTokens to 400, sliceLen to 600.
+
+### Architecture Decisions
+
+- **Single GPU queue:** One inference at a time is the only viable approach for a 4070 Ti Super running Qwen2.5-14B. Parallel requests cause OOM or 60s+ timeouts.
+- **Temperature 0.95:** Higher temperature produces varied decisions (break, talk, collaborate) instead of always choosing the "safe" work action.
+- **Think interval 45-75s:** Balances responsiveness with queue sustainability for 16 NPCs.
+- **Teleport for CTO:** Pathfinding across complex layouts is unreliable for the longest paths. Teleport is pragmatic.
+- **Status dots as core feature:** Denizen IS observability. Visual indicators of agent state are the product, not decoration.
+
+### Files Changed
+| File | What Changed |
+|------|-------------|
+| `src/npc-brains.js` | Request queue, token limits, contextual prompts, skill extraction, memory-aware responses |
+| `src/cofounder-agent.js` | State-reactive prompt, shared queue routing, error threshold |
+| `src/agent-office-manager.js` | Status indicators, desk assignment for all, meeting/break movement, task labels |
+| `src/agent-actions.js` | `teleportToDesk()`, collision body shrink during walks |
+| `src/pathfinding.js` | Increased reroute limit (5) and stuck threshold (8s) |
+| `office-scene.js` | Fallback position fix, pathfinding failure detection, _lastTarget reset |
+| `npcs/*/MEMORY.md` | Accumulated NPC memories with topic tags and skill entries |
