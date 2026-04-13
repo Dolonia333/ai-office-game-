@@ -21,22 +21,12 @@ class PlayerChat {
     this._maxLog = 50;
     this._waitingForResponse = false;
 
-    // All NPC names for name detection in messages
-    this._npcNames = [
-      'Abby', 'Alex', 'Bob', 'Dan', 'Jenny', 'Lucy', 'Bouncer',
-      'Marcus', 'Sarah', 'Edward', 'Josh', 'Molly', 'Oscar',
-      'Pier', 'Rob', 'Roki'
-    ];
-
-    // NPC name → npcKey mapping
-    this._nameToKey = {
-      'abby': 'xp_abby', 'alex': 'xp_alex', 'bob': 'xp_bob',
-      'dan': 'xp_dan', 'jenny': 'xp_jenny', 'lucy': 'xp_lucy',
-      'bouncer': 'xp_bouncer', 'marcus': 'xp_conference_man',
-      'sarah': 'xp_conference_woman', 'edward': 'xp_edward',
-      'josh': 'xp_josh', 'molly': 'xp_molly', 'oscar': 'xp_oscar',
-      'pier': 'xp_pier', 'rob': 'xp_rob', 'roki': 'xp_roki',
-    };
+    const roster = globalThis.DenizenNpcRoster;
+    if (!roster) {
+      console.error('[PlayerChat] DenizenNpcRoster missing — load src/npc-roster.js before player-chat.js');
+    }
+    this._npcNames = roster ? [...roster.displayNames] : [];
+    this._nameToKey = roster ? { ...roster.nameToKey } : {};
 
     this._buildUI();
   }
@@ -331,13 +321,17 @@ class PlayerChat {
       this._responseTimeout = null;
     }
 
+    const safeText = typeof text === 'string' && text.length > 0
+      ? text
+      : '(No reply right now.)';
+
     // Add to chat log
-    this._addToLog(npcName, text);
+    this._addToLog(npcName, safeText);
 
     // Show speech bubble on the NPC
     const npcKey = this._nameToKey[npcName?.toLowerCase()] || this._lastTargetKey;
     if (npcKey && this.manager?.actions) {
-      this.manager.actions.speak(npcKey, text);
+      this.manager.actions.speak(npcKey, safeText);
     }
 
     // Handle delegation — NPC escalates to their superior
@@ -370,6 +364,10 @@ class PlayerChat {
                     y: Math.round(this.scene.player?.y || 0),
                   },
                 });
+              } else {
+                this._addToLog('System', 'Not connected to server — delegation stopped. Run `node server.js` and refresh.');
+                if (npcKey) this._resumeNpc(npcKey);
+                if (superiorKey) this._resumeNpc(superiorKey);
               }
             });
           });

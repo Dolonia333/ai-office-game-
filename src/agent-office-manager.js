@@ -48,25 +48,11 @@ class AgentOfficeManager {
       intern: { label: 'Intern', color: '#84cc16', idleArea: 'roaming' },
     };
 
-    // NPC key to display name mapping
-    this.NPC_NAMES = {
-      xp_abby: 'Abby',
-      xp_alex: 'Alex',
-      xp_bob: 'Bob',
-      xp_dan: 'Dan',
-      xp_jenny: 'Jenny',
-      xp_lucy: 'Lucy',
-      xp_bouncer: 'Bouncer',
-      xp_conference_man: 'Marcus',
-      xp_conference_woman: 'Sarah',
-      xp_edward: 'Edward',
-      xp_josh: 'Josh',
-      xp_molly: 'Molly',
-      xp_oscar: 'Oscar',
-      xp_pier: 'Pier',
-      xp_rob: 'Rob',
-      xp_roki: 'Roki',
-    };
+    const roster = globalThis.DenizenNpcRoster;
+    if (!roster) {
+      console.error('[AgentManager] DenizenNpcRoster missing — load src/npc-roster.js before agent-office-manager.js');
+    }
+    this.NPC_NAMES = roster ? { ...roster.keyToDisplay } : {};
   }
 
   /**
