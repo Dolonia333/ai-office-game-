@@ -57,9 +57,23 @@ const npcBrains = new NpcBrainManager();
 const cofounderAgent = new CofounderAgent();
 cofounderAgent.npcBrains = npcBrains; // Give the director access to individual NPC brains
 
+function safeDecodePath(url) {
+  try {
+    return decodeURIComponent(url.split('?')[0]);
+  } catch (err) {
+    return null;
+  }
+}
+
 const server = http.createServer((req, res) => {
-  let urlPath = decodeURIComponent(req.url.split('?')[0]);
+  let urlPath = safeDecodePath(req.url);
   const fullUrl = req.url;
+
+  if (!urlPath) {
+    res.writeHead(400);
+    res.end('Bad request');
+    return;
+  }
 
   // --- Security: check every request for suspicious patterns ---
   securityMonitor.checkHttpRequest(req);
@@ -117,10 +131,11 @@ const server = http.createServer((req, res) => {
   if (urlPath.startsWith('/pixel-office-game/')) {
     urlPath = urlPath.replace('/pixel-office-game', '');
   }
-  const filePath = path.join(ROOT, urlPath);
+  const filePath = path.resolve(ROOT, `.${urlPath}`);
+  const relativePath = path.relative(ROOT, filePath);
 
   // Prevent directory traversal above ROOT
-  if (!filePath.startsWith(ROOT)) {
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
     res.writeHead(403);
     res.end('Forbidden');
     // This itself is a threat!
@@ -174,6 +189,26 @@ agentWss.on('connection', (ws) => {
       if (msg.type === 'npc_conversation') {
         if (!msg.npcName || !npcBrains.brains[msg.npcName]) {
           console.warn('[AgentWS] npc_conversation: unknown or missing npcName');
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'npc_response',
+              npcName: typeof msg.npcName === 'string' && msg.npcName ? msg.npcName : 'Unknown',
+              fromName: typeof msg.fromName === 'string' ? msg.fromName : '',
+              text: '(No reply right now.)',
+            }));
+          }
+          return;
+        }
+        if (typeof msg.text !== 'string' || !msg.text.trim()) {
+          console.warn('[AgentWS] npc_conversation: invalid text payload');
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'npc_response',
+              npcName: msg.npcName,
+              fromName: msg.fromName,
+              text: '(No reply right now.)',
+            }));
+          }
           return;
         }
         // Route to individual NPC brain for a personalized response
@@ -190,7 +225,7 @@ agentWss.on('connection', (ws) => {
             npcBrains.saveMemory(msg.npcName, `${msg.fromName} said: "${msg.text}" — I replied: "${response}"`);
           })
           .catch(err => {
-            console.warn('[NpcBrains] Response error:', err.message);
+            console.warn('[NpcBrains] Response error:', String(err?.message ?? err));
             if (ws.readyState === 1) {
               ws.send(JSON.stringify({
                 type: 'npc_response',
@@ -205,6 +240,28 @@ agentWss.on('connection', (ws) => {
         const npcName = msg.npcName;
         if (!npcName || !npcBrains.brains[npcName]) {
           console.warn('[AgentWS] player_chat: unknown or missing npcName');
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'player_chat_response',
+              npcName: typeof msg.npcName === 'string' && msg.npcName ? msg.npcName : 'Unknown',
+              text: 'That person isn\'t in the office right now.',
+              delegation: null,
+              actions: [],
+            }));
+          }
+          return;
+        }
+        if (typeof msg.text !== 'string' || !msg.text.trim()) {
+          console.warn('[AgentWS] player_chat: invalid text payload');
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'player_chat_response',
+              npcName: npcName,
+              text: 'I did not catch that. Try again?',
+              delegation: null,
+              actions: [],
+            }));
+          }
           return;
         }
         console.log(`[PlayerChat] CEO → ${npcName}: "${msg.text}"`);
@@ -222,7 +279,7 @@ agentWss.on('connection', (ws) => {
             npcBrains.saveMemory(npcName, `CEO said: "${msg.text}" — I replied: "${result.text}"${result.delegation ? ` [delegated to ${result.delegation.delegateTo}]` : ''}`);
           })
           .catch(err => {
-            console.warn('[PlayerChat] Response error:', err.message);
+            console.warn('[PlayerChat] Response error:', String(err?.message ?? err));
             const fallback = JSON.stringify({
               type: 'player_chat_response',
               npcName: npcName,

@@ -122,26 +122,11 @@ class OfficeScene extends Phaser.Scene {
       { frameWidth: 16, frameHeight: 32 }
     );
 
-    // All distinct XP characters available in the pack (32x48 per frame, 4x4 grid)
-    // Reduced NPC list to keep total preload under 32 files (prevent loader stall)
-    const xpNames = [
-      'Abby',
-      'Alex',
-      'Bob',
-      'Dan',
-      'Jenny',
-      'Lucy',
-      'Bouncer',
-      'Conference_man',
-      'Conference_woman',
-      'Edward',
-      'Josh',
-      'Molly',
-      'Oscar',
-      'Pier',
-      'Rob',
-      'Roki'
-    ];
+    const roster = globalThis.DenizenNpcRoster;
+    if (!roster) {
+      console.error('[OfficeScene] DenizenNpcRoster missing — load src/npc-roster.js before office-scene.js');
+    }
+    const xpNames = roster ? roster.assetNames : [];
 
     xpNames.forEach((name) => {
       this.load.spritesheet(

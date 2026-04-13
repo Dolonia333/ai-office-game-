@@ -93,6 +93,13 @@ describe('_parseDelegateTag', () => {
     assert.equal(p.fullMatch, '[DELEGATE:Alex:see doc: section 2]');
   });
 
+  it('allows colons in reason (Molly / QA)', () => {
+    const t = mgr._parseDelegateTag('OK [DELEGATE:Molly:ask QA: use case A]');
+    assert.ok(t);
+    assert.equal(t.delegateTo, 'Molly');
+    assert.equal(t.reason, 'ask QA: use case A');
+  });
+
   it('allows empty reason', () => {
     const p = mgr._parseDelegateTag('[DELEGATE:Molly:]');
     assert.equal(p.delegateTo, 'Molly');
