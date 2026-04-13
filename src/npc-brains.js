@@ -120,9 +120,9 @@ class NpcBrainManager {
       try { soul = fs.readFileSync(soulPath, 'utf-8'); } catch (_) {}
       try { longTermMemory = fs.readFileSync(memoryPath, 'utf-8'); } catch (_) {}
 
-      // Parse provider and role from SOUL.md sections
-      const providerMatch = soul.match(/## Provider\n(\w+)/);
-      const roleMatch = soul.match(/## Role\n(.+)/);
+      // Parse provider and role from SOUL.md sections (CRLF-safe for Windows checkouts)
+      const providerMatch = soul.match(/## Provider\r?\n(\w+)/);
+      const roleMatch = soul.match(/## Role\r?\n(.+)/);
       const provider = providerMatch?.[1] || 'claude';
       const role = roleMatch?.[1]?.trim() || 'Employee';
 
@@ -158,8 +158,12 @@ class NpcBrainManager {
   saveMemory(npcName, entry) {
     const brain = this.brains[npcName];
     if (!brain) return;
+    const folder = this._nameToFolder[npcName];
+    if (!folder) {
+      console.warn(`[NpcBrains] saveMemory: no folder mapping for "${npcName}"`);
+      return;
+    }
     try {
-      const folder = this._nameToFolder[npcName] || npcName.toLowerCase();
       const memPath = path.join(__dirname, '..', 'npcs', folder, 'MEMORY.md');
       const timestamp = new Date().toISOString().slice(0, 16);
       const newLine = `\n- [${timestamp}] ${entry}`;
@@ -517,6 +521,22 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
   }
 
   /**
+   * Parse [DELEGATE:Name:reason] — reason may contain colons; only the first ':' splits name from reason.
+   * @returns {{ delegateTo: string, reason: string, fullMatch: string } | null}
+   */
+  _parseDelegateTag(text) {
+    const m = text.match(/\[DELEGATE:([^\]]+)\]/);
+    if (!m) return null;
+    const inner = m[1].trim();
+    const colon = inner.indexOf(':');
+    if (colon === -1) return null;
+    const delegateTo = inner.slice(0, colon).trim();
+    const reason = inner.slice(colon + 1).trim();
+    if (!delegateTo) return null;
+    return { delegateTo, reason, fullMatch: m[0] };
+  }
+
+  /**
    * Generate a response for the CEO (player) talking to an NPC.
    * Includes delegation logic — NPC decides if they should handle it
    * or escalate to their superior.
@@ -608,6 +628,10 @@ ${roleActions}
       }
     }
 
+    if (typeof responseText !== 'string') {
+      responseText = this._smartFallback(npcName, message, h);
+    }
+
     // Parse action tags [ACTION:...]
     let actions = [];
     const actionRegex = /\[ACTION:([^\]]+)\]/g;
@@ -621,24 +645,24 @@ ${roleActions}
     // Remove action tags from displayed text
     responseText = responseText.replace(/\s*\[ACTION:[^\]]+\]/g, '').trim();
 
-    // Parse delegation tag [DELEGATE:...]
+    // Parse delegation tag [DELEGATE:Name:reason] (reason may include ':')
     let delegation = null;
-    const delegateMatch = responseText.match(/\[DELEGATE:([^:]+):([^\]]+)\]/);
-    if (delegateMatch) {
-      const delegateTo = delegateMatch[1].trim();
-      const reason = delegateMatch[2].trim();
+    const parsedDelegate = this._parseDelegateTag(responseText);
+    if (parsedDelegate) {
+      const { delegateTo, reason, fullMatch } = parsedDelegate;
       if (this._hierarchy[delegateTo]) {
         delegation = { delegateTo, reason, originalMessage: message };
       } else {
         console.warn(`[NpcBrains] ${npcName} tried to delegate to unknown target: "${delegateTo}" — ignoring`);
       }
-      responseText = responseText.replace(/\s*\[DELEGATE:[^\]]+\]/, '').trim();
+      responseText = responseText.replace(fullMatch, '').replace(/\s+$/, '').trim();
     }
 
     // If the AI responded but didn't include any actions or delegation,
     // and the player's message looks like a task request, inject smart fallback actions
     if (actions.length === 0 && !delegation) {
-      const isTaskRequest = /fix|build|code|go|check|test|deploy|research|call|meet|talk|tell|ask|schedule|design|review|run|look|find|make|create|set up|update|push|ship/i.test(message);
+      // Use \\b on short tokens that are substrings of common chat ("going", etc.)
+      const isTaskRequest = /fix|build|code|\bgo\b|check|test|deploy|research|call|meet|talk|tell|ask|schedule|design|review|run|look|find|make|create|set up|update|push|ship/i.test(message);
       if (isTaskRequest) {
         const fallbackText = this._smartFallback(npcName, message, h);
         // Extract actions from the fallback text
@@ -648,10 +672,9 @@ ${roleActions}
           const parts = fbMatch[1].split(':');
           actions.push({ action: parts[0].trim(), params: parts.slice(1).map(p => p.trim()) });
         }
-        // Extract delegation from fallback
-        const fbDelegateMatch = fallbackText.match(/\[DELEGATE:([^:]+):([^\]]+)\]/);
-        if (fbDelegateMatch && this._hierarchy[fbDelegateMatch[1].trim()]) {
-          delegation = { delegateTo: fbDelegateMatch[1].trim(), reason: fbDelegateMatch[2].trim(), originalMessage: message };
+        const fbDel = this._parseDelegateTag(fallbackText);
+        if (fbDel && this._hierarchy[fbDel.delegateTo]) {
+          delegation = { delegateTo: fbDel.delegateTo, reason: fbDel.reason, originalMessage: message };
         }
         console.log(`[NpcBrains] Smart fallback for ${npcName}: ${actions.length} actions, delegation=${delegation?.delegateTo || 'none'}`);
       }

@@ -172,6 +172,10 @@ agentWss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'npc_conversation') {
+        if (!msg.npcName || !npcBrains.brains[msg.npcName]) {
+          console.warn('[AgentWS] npc_conversation: unknown or missing npcName');
+          return;
+        }
         // Route to individual NPC brain for a personalized response
         npcBrains.getResponse(msg.npcName, msg.fromName, msg.text, msg.context || {})
           .then(response => {
@@ -185,10 +189,24 @@ agentWss.on('connection', (ws) => {
             // Save significant conversations to MEMORY.md
             npcBrains.saveMemory(msg.npcName, `${msg.fromName} said: "${msg.text}" — I replied: "${response}"`);
           })
-          .catch(err => console.warn('[NpcBrains] Response error:', err.message));
+          .catch(err => {
+            console.warn('[NpcBrains] Response error:', err.message);
+            if (ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                type: 'npc_response',
+                npcName: msg.npcName,
+                fromName: msg.fromName,
+                text: '(No reply right now.)',
+              }));
+            }
+          });
       } else if (msg.type === 'player_chat') {
         // CEO (player) is talking directly to an NPC
         const npcName = msg.npcName;
+        if (!npcName || !npcBrains.brains[npcName]) {
+          console.warn('[AgentWS] player_chat: unknown or missing npcName');
+          return;
+        }
         console.log(`[PlayerChat] CEO → ${npcName}: "${msg.text}"`);
         npcBrains.getPlayerResponse(npcName, msg.text)
           .then(result => {
@@ -210,6 +228,7 @@ agentWss.on('connection', (ws) => {
               npcName: npcName,
               text: 'Got it, I\'ll look into that.',
               delegation: null,
+              actions: [],
             });
             if (ws.readyState === 1) ws.send(fallback);
           });

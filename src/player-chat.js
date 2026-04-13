@@ -275,20 +275,25 @@ class PlayerChat {
     }
 
     // Send to server for NPC brain processing
-    if (this.manager?.ws?.readyState === WebSocket.OPEN) {
-      this.manager._send({
-        type: 'player_chat',
-        npcName: targetName,
-        npcKey: targetKey,
-        text: trimmed,
-        playerPos: {
-          x: Math.round(this.scene.player?.x || 0),
-          y: Math.round(this.scene.player?.y || 0),
-        },
-      });
+    if (this.manager?.ws?.readyState !== WebSocket.OPEN) {
+      this._waitingForResponse = false;
+      this._addToLog('System', 'Not connected to server. Run `node server.js` and refresh the page.');
+      this._resumeNpc(targetKey);
+      return;
     }
 
-    // Timeout after 15s
+    this.manager._send({
+      type: 'player_chat',
+      npcName: targetName,
+      npcKey: targetKey,
+      text: trimmed,
+      playerPos: {
+        x: Math.round(this.scene.player?.x || 0),
+        y: Math.round(this.scene.player?.y || 0),
+      },
+    });
+
+    // Timeout after 15s (only when we actually sent a request)
     this._responseTimeout = setTimeout(() => {
       if (this._waitingForResponse) {
         this._waitingForResponse = false;
@@ -369,8 +374,9 @@ class PlayerChat {
             });
           });
         });
+        return; // scheduled chain moves NPCs; do not run generic resume here
       }
-      return; // delegation handles its own resume flow
+      this._addToLog('System', `Delegation skipped — unknown coworker "${superiorName}".`);
     }
 
     // Resume NPC after speech bubble — but only if no actions are pending

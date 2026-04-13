@@ -579,21 +579,28 @@ class AgentOfficeManager {
         this.actions.setIdle(npcKey);
         break;
       case 'speakTo': {
-        // Stagger speech so bubbles don't overlap
+        // Stagger speech so bubbles don't overlap; decrement when speakTo finishes
+        // (do not reset the counter on a fixed 1s timer — that overlapped pending staggered calls)
         this._speechQueue = this._speechQueue || 0;
         const staggerDelay = this._speechQueue * 3500; // 3.5s between speeches
         this._speechQueue++;
-        // Reset queue after batch completes
-        clearTimeout(this._speechQueueReset);
-        this._speechQueueReset = setTimeout(() => { this._speechQueue = 0; }, 1000);
 
         const targetName = params.target || params.targetAgent;
         const targetKey = Object.entries(this.NPC_NAMES).find(
           ([k, v]) => v.toLowerCase() === targetName?.toLowerCase()
         )?.[0] || `xp_${targetName?.toLowerCase()}`;
 
+        const releaseSpeechSlot = () => {
+          this._speechQueue = Math.max(0, (this._speechQueue || 0) - 1);
+        };
+
         this.scene.time.delayedCall(staggerDelay, () => {
-          this.actions.speakTo(npcKey, targetKey, params.text);
+          const speakPromise = this.actions.speakTo(npcKey, targetKey, params.text);
+          if (speakPromise && typeof speakPromise.then === 'function') {
+            speakPromise.then(releaseSpeechSlot).catch(releaseSpeechSlot);
+          } else {
+            releaseSpeechSlot();
+          }
 
           // Request a response from the target NPC's brain
           const speakerName = this.NPC_NAMES[npcKey] || agentId;
