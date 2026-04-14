@@ -82,6 +82,37 @@ describe('_cannedResponse', () => {
 });
 
 // ---------------------------------------------------------------------------
+// _parseDelegateTag
+// ---------------------------------------------------------------------------
+
+describe('_parseDelegateTag', () => {
+  it('splits name and reason on first colon only', () => {
+    const p = mgr._parseDelegateTag('OK [DELEGATE:Alex:see doc: section 2]');
+    assert.equal(p.delegateTo, 'Alex');
+    assert.equal(p.reason, 'see doc: section 2');
+    assert.equal(p.fullMatch, '[DELEGATE:Alex:see doc: section 2]');
+  });
+
+  it('allows colons in reason (Molly / QA)', () => {
+    const t = mgr._parseDelegateTag('OK [DELEGATE:Molly:ask QA: use case A]');
+    assert.ok(t);
+    assert.equal(t.delegateTo, 'Molly');
+    assert.equal(t.reason, 'ask QA: use case A');
+  });
+
+  it('allows empty reason', () => {
+    const p = mgr._parseDelegateTag('[DELEGATE:Molly:]');
+    assert.equal(p.delegateTo, 'Molly');
+    assert.equal(p.reason, '');
+  });
+
+  it('returns null when malformed', () => {
+    assert.equal(mgr._parseDelegateTag('[DELEGATE:Molly]'), null);
+    assert.equal(mgr._parseDelegateTag('no tag'), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // _smartFallback — action tag generation
 // ---------------------------------------------------------------------------
 

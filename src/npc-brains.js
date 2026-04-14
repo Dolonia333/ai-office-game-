@@ -9,6 +9,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const npcRoster = require('./npc-roster');
 
 class NpcBrainManager {
   constructor() {
@@ -97,27 +98,8 @@ class NpcBrainManager {
   _initBrains() {
     // Load NPC identities from soul files (OpenClaw pattern)
     const npcsDir = path.join(__dirname, '..', 'npcs');
-    // folder name -> display name mapping (for sprite names that differ from character names)
-    const npcEntries = [
-      { folder: 'abby', display: 'Abby' },
-      { folder: 'alex', display: 'Alex' },
-      { folder: 'bob', display: 'Bob' },
-      { folder: 'jenny', display: 'Jenny' },
-      { folder: 'dan', display: 'Dan' },
-      { folder: 'lucy', display: 'Lucy' },
-      { folder: 'bouncer', display: 'Bouncer' },
-      { folder: 'conference_man', display: 'Marcus' },
-      { folder: 'conference_woman', display: 'Sarah' },
-      { folder: 'edward', display: 'Edward' },
-      { folder: 'josh', display: 'Josh' },
-      { folder: 'molly', display: 'Molly' },
-      { folder: 'oscar', display: 'Oscar' },
-      { folder: 'pier', display: 'Pier' },
-      { folder: 'rob', display: 'Rob' },
-      { folder: 'roki', display: 'Roki' },
-    ];
 
-    for (const { folder, display } of npcEntries) {
+    for (const { folder, display } of npcRoster.entries) {
       const name = display;
       const soulPath = path.join(npcsDir, folder, 'SOUL.md');
       const memoryPath = path.join(npcsDir, folder, 'MEMORY.md');
@@ -126,9 +108,9 @@ class NpcBrainManager {
       try { soul = fs.readFileSync(soulPath, 'utf-8'); } catch (_) {}
       try { longTermMemory = fs.readFileSync(memoryPath, 'utf-8'); } catch (_) {}
 
-      // Parse provider and role from SOUL.md sections
-      const providerMatch = soul.match(/## Provider\n(\w+)/);
-      const roleMatch = soul.match(/## Role\n(.+)/);
+      // Parse provider and role from SOUL.md sections (CRLF-safe for Windows checkouts)
+      const providerMatch = soul.match(/## Provider\r?\n(\w+)/);
+      const roleMatch = soul.match(/## Role\r?\n(.+)/);
       const provider = providerMatch?.[1] || 'lmstudio';
       const role = roleMatch?.[1]?.trim() || 'Employee';
 
@@ -163,8 +145,12 @@ class NpcBrainManager {
   saveMemory(npcName, entry) {
     const brain = this.brains[npcName];
     if (!brain) return;
+    const folder = this._nameToFolder[npcName];
+    if (!folder) {
+      console.warn(`[NpcBrains] saveMemory: no folder mapping for "${npcName}"`);
+      return;
+    }
     try {
-      const folder = this._nameToFolder[npcName] || npcName.toLowerCase();
       const memPath = path.join(__dirname, '..', 'npcs', folder, 'MEMORY.md');
       const timestamp = new Date().toISOString().slice(0, 16);
       const newLine = `\n- [${timestamp}] ${entry}`;
@@ -201,7 +187,7 @@ class NpcBrainManager {
 
       brain.longTermMemory = fs.readFileSync(memPath, 'utf-8');
     } catch (err) {
-      console.warn(`[NpcBrains] Failed to save memory for ${npcName}:`, err.message);
+      console.warn(`[NpcBrains] Failed to save memory for ${npcName}:`, String(err?.message ?? err));
     }
   }
 
@@ -233,12 +219,14 @@ class NpcBrainManager {
    */
   // Strip characters that break JSON surrogate pair encoding (emojis, etc.)
   _sanitize(str) {
-    return str.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, '');
+    return String(str ?? '').replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, '');
   }
 
   async getResponse(npcName, fromName, message, context = {}) {
     const brain = this.brains[npcName];
     if (!brain) return `(${npcName} nods)`;
+
+    const safeMessage = typeof message === 'string' ? message : String(message ?? '');
 
     const rawMemory = brain.longTermMemory || '';
     // Extract memories specifically about the person we're talking to
@@ -272,7 +260,7 @@ ${context.description || ''}${taskContext}
 Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
     // Add to memory (sanitize to prevent JSON encoding issues)
-    this.memories[npcName].push({ from: fromName, text: this._sanitize(message) });
+    this.memories[npcName].push({ from: fromName, text: this._sanitize(safeMessage) });
     if (this.memories[npcName].length > 50) {
       this.memories[npcName] = this.memories[npcName].slice(-50);
     }
@@ -285,15 +273,20 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
     try {
       const response = await this._callProvider(brain.providerConfig, systemPrompt, messages, { maxTokens: 200, sliceLen: 300 });
-      // Store response in memory
-      this.memories[npcName].push({ from: npcName, text: response });
-      return response;
+      let out = response;
+      if (typeof out !== 'string') {
+        out = this._cannedResponse(npcName, fromName, safeMessage);
+      }
+      out = this._sanitize(out);
+      this.memories[npcName].push({ from: npcName, text: out });
+      return out;
     } catch (err) {
       // Throttle error logging — only log once per NPC per 60 seconds
       const now = Date.now();
       const lastErr = this._lastErrorLog?.[npcName] || 0;
       if (now - lastErr > 60000) {
-        console.warn(`[NpcBrains] ${npcName}'s provider failed: ${err.message.slice(0, 80)}`);
+        const brief = String(err?.message ?? err).slice(0, 80);
+        console.warn(`[NpcBrains] ${npcName}'s provider failed: ${brief}`);
         if (!this._lastErrorLog) this._lastErrorLog = {};
         this._lastErrorLog[npcName] = now;
       }
@@ -301,14 +294,19 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       if (brain.fallbackConfig && brain.fallbackConfig !== brain.providerConfig) {
         try {
           const response = await this._callProvider(brain.fallbackConfig, systemPrompt, messages, { maxTokens: 200, sliceLen: 300 });
-          this.memories[npcName].push({ from: npcName, text: response });
-          return response;
+          let out = response;
+          if (typeof out !== 'string') {
+            out = this._cannedResponse(npcName, fromName, safeMessage);
+          }
+          out = this._sanitize(out);
+          this.memories[npcName].push({ from: npcName, text: out });
+          return out;
         } catch (e2) {
-          console.warn(`[NpcBrains] ${npcName} fallback also failed: ${e2.message}`);
+          console.warn(`[NpcBrains] ${npcName} fallback also failed: ${String(e2?.message ?? e2)}`);
         }
       }
       // Last resort: context-aware canned response
-      const response = this._cannedResponse(npcName, fromName, message);
+      const response = this._sanitize(this._cannedResponse(npcName, fromName, safeMessage));
       this.memories[npcName].push({ from: npcName, text: response });
       return response;
     }
@@ -898,6 +896,22 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
   }
 
   /**
+   * Parse [DELEGATE:Name:reason] — reason may contain colons; only the first ':' splits name from reason.
+   * @returns {{ delegateTo: string, reason: string, fullMatch: string } | null}
+   */
+  _parseDelegateTag(text) {
+    const m = text.match(/\[DELEGATE:([^\]]+)\]/);
+    if (!m) return null;
+    const inner = m[1].trim();
+    const colon = inner.indexOf(':');
+    if (colon === -1) return null;
+    const delegateTo = inner.slice(0, colon).trim();
+    const reason = inner.slice(colon + 1).trim();
+    if (!delegateTo) return null;
+    return { delegateTo, reason, fullMatch: m[0] };
+  }
+
+  /**
    * Generate a response for the CEO (player) talking to an NPC.
    * Includes delegation logic — NPC decides if they should handle it
    * or escalate to their superior.
@@ -907,8 +921,9 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
    */
   async getPlayerResponse(npcName, message) {
     const brain = this.brains[npcName];
-    if (!brain) return { text: `(${npcName} nods)`, delegation: null };
+    if (!brain) return { text: `(${npcName} nods)`, delegation: null, actions: [] };
 
+    const safeMessage = typeof message === 'string' ? message : String(message ?? '');
     const h = this._hierarchy[npcName];
     const rawMemory = brain.longTermMemory || '';
     const memorySection = rawMemory.length > 50
@@ -1010,7 +1025,7 @@ ${roleActions}
 - Respond in character as ${npcName}. Dialogue text first, then tags at the end.`;
 
     // Add to memory
-    this.memories[npcName].push({ from: 'CEO', text: this._sanitize(message) });
+    this.memories[npcName].push({ from: 'CEO', text: this._sanitize(safeMessage) });
     if (this.memories[npcName].length > 50) {
       this.memories[npcName] = this.memories[npcName].slice(-50);
     }
@@ -1030,7 +1045,8 @@ ${roleActions}
       const now = Date.now();
       const lastErr = this._lastErrorLog?.[npcName] || 0;
       if (now - lastErr > 60000) {
-        console.warn(`[NpcBrains] ${npcName} player-chat provider failed: ${err.message.slice(0, 80)}`);
+        const brief = String(err?.message ?? err).slice(0, 80);
+        console.warn(`[NpcBrains] ${npcName} player-chat provider failed: ${brief}`);
         if (!this._lastErrorLog) this._lastErrorLog = {};
         this._lastErrorLog[npcName] = now;
       }
@@ -1044,8 +1060,12 @@ ${roleActions}
       }
       // If all providers failed, use smart fallback that infers actions from the message
       if (!responseText) {
-        responseText = this._smartFallback(npcName, message, h);
+        responseText = this._smartFallback(npcName, safeMessage, h);
       }
+    }
+
+    if (typeof responseText !== 'string') {
+      responseText = this._smartFallback(npcName, safeMessage, h);
     }
 
     // Parse action tags [ACTION:...]
@@ -1061,26 +1081,26 @@ ${roleActions}
     // Remove action tags from displayed text
     responseText = responseText.replace(/\s*\[ACTION:[^\]]+\]/g, '').trim();
 
-    // Parse delegation tag [DELEGATE:...]
+    // Parse delegation tag [DELEGATE:Name:reason] (reason may include ':')
     let delegation = null;
-    const delegateMatch = responseText.match(/\[DELEGATE:([^:]+):([^\]]+)\]/);
-    if (delegateMatch) {
-      const delegateTo = delegateMatch[1].trim();
-      const reason = delegateMatch[2].trim();
+    const parsedDelegate = this._parseDelegateTag(responseText);
+    if (parsedDelegate) {
+      const { delegateTo, reason, fullMatch } = parsedDelegate;
       if (this._hierarchy[delegateTo]) {
-        delegation = { delegateTo, reason, originalMessage: message };
+        delegation = { delegateTo, reason, originalMessage: safeMessage };
       } else {
         console.warn(`[NpcBrains] ${npcName} tried to delegate to unknown target: "${delegateTo}" — ignoring`);
       }
-      responseText = responseText.replace(/\s*\[DELEGATE:[^\]]+\]/, '').trim();
+      responseText = responseText.replace(fullMatch, '').replace(/\s+$/, '').trim();
     }
 
     // If the AI responded but didn't include any actions or delegation,
     // and the player's message looks like a task request, inject smart fallback actions
     if (actions.length === 0 && !delegation) {
-      const isTaskRequest = /fix|build|code|go|check|test|deploy|research|call|meet|talk|tell|ask|schedule|design|review|run|look|find|make|create|set up|update|push|ship/i.test(message);
+      // Use \b on short tokens that are substrings of common chat ("going", etc.)
+      const isTaskRequest = /fix|build|code|\bgo\b|check|test|deploy|research|call|meet|talk|tell|ask|schedule|design|review|run|look|find|make|create|set up|update|push|ship/i.test(safeMessage);
       if (isTaskRequest) {
-        const fallbackText = this._smartFallback(npcName, message, h);
+        const fallbackText = this._smartFallback(npcName, safeMessage, h);
         // Extract actions from the fallback text
         const fbActionRegex = /\[ACTION:([^\]]+)\]/g;
         let fbMatch;
@@ -1088,10 +1108,9 @@ ${roleActions}
           const parts = fbMatch[1].split(':');
           actions.push({ action: parts[0].trim(), params: parts.slice(1).map(p => p.trim()) });
         }
-        // Extract delegation from fallback
-        const fbDelegateMatch = fallbackText.match(/\[DELEGATE:([^:]+):([^\]]+)\]/);
-        if (fbDelegateMatch && this._hierarchy[fbDelegateMatch[1].trim()]) {
-          delegation = { delegateTo: fbDelegateMatch[1].trim(), reason: fbDelegateMatch[2].trim(), originalMessage: message };
+        const fbDel = this._parseDelegateTag(fallbackText);
+        if (fbDel && this._hierarchy[fbDel.delegateTo]) {
+          delegation = { delegateTo: fbDel.delegateTo, reason: fbDel.reason, originalMessage: safeMessage };
         }
         console.log(`[NpcBrains] Smart fallback for ${npcName}: ${actions.length} actions, delegation=${delegation?.delegateTo || 'none'}`);
       }
@@ -1103,9 +1122,6 @@ ${roleActions}
     return { text: responseText, delegation, actions };
   }
 
-  /**
-   * Get role-specific actions an NPC knows they can perform
-   */
   /**
    * Generate a context-aware canned response for NPC-to-NPC conversation.
    * Used when no AI provider is available (demo mode or all providers down).

@@ -52,25 +52,12 @@ class AgentOfficeManager {
     this._statusDots = new Map(); // npcKey -> Phaser.GameObjects.Arc
     this._taskLabels = new Map(); // npcKey -> Phaser.GameObjects.Text
 
-    // NPC key to display name mapping
-    this.NPC_NAMES = {
-      xp_abby: 'Abby',
-      xp_alex: 'Alex',
-      xp_bob: 'Bob',
-      xp_dan: 'Dan',
-      xp_jenny: 'Jenny',
-      xp_lucy: 'Lucy',
-      xp_bouncer: 'Bouncer',
-      xp_conference_man: 'Marcus',
-      xp_conference_woman: 'Sarah',
-      xp_edward: 'Edward',
-      xp_josh: 'Josh',
-      xp_molly: 'Molly',
-      xp_oscar: 'Oscar',
-      xp_pier: 'Pier',
-      xp_rob: 'Rob',
-      xp_roki: 'Roki',
-    };
+    // NPC key to display name mapping (from shared roster)
+    const roster = globalThis.DenizenNpcRoster;
+    if (!roster) {
+      console.error('[AgentManager] DenizenNpcRoster missing — load src/npc-roster.js before agent-office-manager.js');
+    }
+    this.NPC_NAMES = roster ? { ...roster.keyToDisplay } : {};
   }
 
   /**
@@ -930,21 +917,28 @@ class AgentOfficeManager {
         this.actions.setIdle(npcKey);
         break;
       case 'speakTo': {
-        // Stagger speech so bubbles don't overlap
+        // Stagger speech so bubbles don't overlap; decrement when speakTo finishes
+        // (do not reset the counter on a fixed 1s timer — that overlapped pending staggered calls)
         this._speechQueue = this._speechQueue || 0;
         const staggerDelay = this._speechQueue * 3500; // 3.5s between speeches
         this._speechQueue++;
-        // Reset queue after batch completes
-        clearTimeout(this._speechQueueReset);
-        this._speechQueueReset = setTimeout(() => { this._speechQueue = 0; }, 1000);
 
         const targetName = params.target || params.targetAgent;
         const targetKey = Object.entries(this.NPC_NAMES).find(
           ([k, v]) => v.toLowerCase() === targetName?.toLowerCase()
         )?.[0] || `xp_${targetName?.toLowerCase()}`;
 
+        const releaseSpeechSlot = () => {
+          this._speechQueue = Math.max(0, (this._speechQueue || 0) - 1);
+        };
+
         this.scene.time.delayedCall(staggerDelay, () => {
-          this.actions.speakTo(npcKey, targetKey, params.text);
+          const speakPromise = this.actions.speakTo(npcKey, targetKey, params.text);
+          if (speakPromise && typeof speakPromise.then === 'function') {
+            speakPromise.then(releaseSpeechSlot).catch(releaseSpeechSlot);
+          } else {
+            releaseSpeechSlot();
+          }
 
           // Request a response from the target NPC's brain
           const speakerName = this.NPC_NAMES[npcKey] || agentId;
