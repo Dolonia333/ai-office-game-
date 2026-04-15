@@ -770,7 +770,7 @@ class AgentOfficeManager {
           responderKey &&
           originalSpeakerKey &&
           msg.text &&
-          !/\(No reply right now\.\)/i.test(msg.text) &&
+          !msg.text.toLowerCase().includes('no reply') &&
           currentTurn < MAX_CHAT_TURNS;
 
         if (canReplyBack) {
@@ -787,6 +787,8 @@ class AgentOfficeManager {
                 text: msg.text,
                 turn: currentTurn + 1,
               });
+            }).catch(() => {
+              // NPC destroyed or scene torn down — conversation dies silently, no retry.
             });
           });
         }
