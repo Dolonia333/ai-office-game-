@@ -187,8 +187,24 @@ agentWss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'npc_conversation') {
-        if (!msg.npcName || !npcBrains.brains[msg.npcName]) {
-          console.warn('[AgentWS] npc_conversation: unknown or missing npcName');
+        // Resolve the NPC name case-insensitively — cofounder dispatch and
+        // LM Studio replies sometimes return lowercased or title-cased names.
+        let resolvedName = null;
+        if (typeof msg.npcName === 'string' && msg.npcName) {
+          if (npcBrains.brains[msg.npcName]) {
+            resolvedName = msg.npcName;
+          } else {
+            const lower = msg.npcName.toLowerCase();
+            resolvedName = Object.keys(npcBrains.brains).find(n => n.toLowerCase() === lower) || null;
+          }
+        }
+        if (!resolvedName) {
+          // Throttle warning — cofounder dispatch floods this otherwise.
+          const now = Date.now();
+          if (!global._lastUnknownNpcWarn || now - global._lastUnknownNpcWarn > 30000) {
+            console.warn(`[AgentWS] npc_conversation: unknown npcName "${msg.npcName}" (further warnings throttled 30s)`);
+            global._lastUnknownNpcWarn = now;
+          }
           if (ws.readyState === 1) {
             ws.send(JSON.stringify({
               type: 'npc_response',
@@ -200,6 +216,8 @@ agentWss.on('connection', (ws) => {
           }
           return;
         }
+        // Normalize the name going forward so downstream code looks up the right brain.
+        msg.npcName = resolvedName;
         if (typeof msg.text !== 'string' || !msg.text.trim()) {
           console.warn('[AgentWS] npc_conversation: invalid text payload');
           if (ws.readyState === 1) {

@@ -498,7 +498,15 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
       }
       return { action: 'work', thought: 'Focusing on my tasks', message: 'Working...', target: null };
     } catch (err) {
-      console.warn('[NpcBrains] ' + npcName + ' think error: ' + err.message);
+      // Throttle: one log per NPC per 60s. Otherwise a provider outage spams
+      // 16 NPCs * multiple retries/min = 200+ identical lines per minute.
+      const now = Date.now();
+      if (!this._lastThinkErrorLog) this._lastThinkErrorLog = {};
+      if (now - (this._lastThinkErrorLog[npcName] || 0) > 60000) {
+        const brief = String(err?.message ?? err).slice(0, 120);
+        console.warn(`[NpcBrains] ${npcName} think error: ${brief}`);
+        this._lastThinkErrorLog[npcName] = now;
+      }
       return { action: 'error', thought: 'Something went wrong', message: err.message || 'API error — taking a break', target: null };
     }
   }
@@ -662,6 +670,21 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
 
   _processQueue() {
     if (this._processingRequest || this._requestQueue.length === 0) return;
+
+    // Circuit breaker: if the provider is in cooldown after too many failures,
+    // reject queued requests fast instead of letting each one time out at 60s.
+    const now = Date.now();
+    if (!this._providerHealth) this._providerHealth = { consecutiveFailures: 0, cooldownUntil: 0 };
+    if (now < this._providerHealth.cooldownUntil) {
+      // Drain the queue quickly — NPCs will fall back to canned behavior.
+      while (this._requestQueue.length) {
+        const job = this._requestQueue.shift();
+        const remaining = Math.ceil((this._providerHealth.cooldownUntil - now) / 1000);
+        job.reject(new Error(`Provider cooling down (${remaining}s left)`));
+      }
+      return;
+    }
+
     this._processingRequest = true;
 
     const { config, systemPrompt, messages, opts, resolve, reject } = this._requestQueue.shift();
@@ -684,6 +707,22 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
       messages: oaiMessages,
     });
 
+    const markSuccess = () => {
+      this._providerHealth.consecutiveFailures = 0;
+    };
+    const markFailure = () => {
+      this._providerHealth.consecutiveFailures += 1;
+      if (this._providerHealth.consecutiveFailures >= 5) {
+        // 30s cooldown — long enough for LM Studio to reload the model after
+        // a crash/unload, short enough that we resume quickly when it recovers.
+        this._providerHealth.cooldownUntil = Date.now() + 30000;
+        if (!this._lastCooldownLog || Date.now() - this._lastCooldownLog > 30000) {
+          console.warn('[NpcBrains] Provider unhealthy — pausing inference for 30s (likely LM Studio model reload or overload)');
+          this._lastCooldownLog = Date.now();
+        }
+      }
+    };
+
     const done = () => {
       this._processingRequest = false;
       this._processQueue();
@@ -700,19 +739,41 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
         'Content-Length': Buffer.byteLength(body),
       },
     }, (res) => {
+      const contentType = res.headers['content-type'] || '';
       let data = '';
       res.on('data', c => data += c);
       res.on('end', () => {
+        // Detect HTML error page (LM Studio serves its dashboard on 404/error paths)
+        // before we try to JSON-parse it and get a useless "Unexpected token '<'" stack.
+        const looksHtml = /^\s*</.test(data) || contentType.includes('text/html');
+        if (looksHtml) {
+          markFailure();
+          done();
+          return reject(new Error(`LM Studio returned HTML (HTTP ${res.statusCode}) — model probably not loaded`));
+        }
         try {
           const p = JSON.parse(data);
-          if (p.error) { done(); return reject(new Error(p.error.message || JSON.stringify(p.error))); }
+          if (p.error) {
+            markFailure();
+            done();
+            return reject(new Error(p.error.message || JSON.stringify(p.error)));
+          }
+          markSuccess();
           done();
           resolve((p.choices?.[0]?.message?.content || '').trim().slice(0, sliceLen));
-        } catch (e) { done(); reject(e); }
+        } catch (e) {
+          markFailure();
+          done();
+          reject(e);
+        }
       });
     });
-    req.on('error', (err) => { done(); reject(err); });
-    req.setTimeout(60000, () => { req.destroy(new Error('LM Studio timeout')); done(); });
+    req.on('error', (err) => { markFailure(); done(); reject(err); });
+    req.setTimeout(60000, () => {
+      markFailure();
+      req.destroy(new Error('LM Studio timeout'));
+      done();
+    });
     req.write(body);
     req.end();
   }
