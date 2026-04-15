@@ -335,8 +335,8 @@ class AgentOfficeManager {
     });
 
     // The response comes back as 'npc_decision' in _handleServerMessage
-    // Schedule next think cycle (45-75 seconds) — spaced out so queued requests don't pile up
-    const nextDelay = 45000 + Math.random() * 30000;
+    // Schedule next think cycle (30-45 seconds) — more active NPCs, still comfortable for the queue
+    const nextDelay = 30000 + Math.random() * 15000;
     this.scene.time.delayedCall(nextDelay, () => this._npcThinkLoop(npcKey));
   }
 
