@@ -70,10 +70,12 @@ class NpcBrainManager {
         };
       }
 
-      // LM Studio — always available (no API key needed), local OpenAI-compatible API
+      // LM Studio — local OpenAI-compatible API
+      // If LM Studio has authentication enabled, set LM_STUDIO_API_KEY env var
+      // or pass 'lm-studio' as default (works when auth is disabled).
       this.providers.lmstudio = {
         baseUrl: 'http://localhost:1234',
-        apiKey: 'lm-studio',
+        apiKey: process.env.LM_STUDIO_API_KEY || 'lm-studio',
         model: process.env.LM_STUDIO_MODEL || 'qwen2.5-14b-instruct-1m',
         type: 'lmstudio',
       };
@@ -729,23 +731,30 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
     };
 
     const url = new URL('/v1/chat/completions', config.baseUrl);
+    const headers = {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+    };
+    // Send API key if the provider config has one (LM Studio may require auth)
+    if (config.apiKey) {
+      headers['Authorization'] = `Bearer ${config.apiKey}`;
+    }
     const req = http.request({
       hostname: url.hostname,
       port: url.port || 1234,
       path: url.pathname,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
+      headers,
     }, (res) => {
       const contentType = res.headers['content-type'] || '';
       let data = '';
       res.on('data', c => data += c);
       res.on('end', () => {
-        // Detect HTML error page (LM Studio serves its dashboard on 404/error paths)
-        // before we try to JSON-parse it and get a useless "Unexpected token '<'" stack.
-        const looksHtml = /^\s*</.test(data) || contentType.includes('text/html');
+        // Detect HTML error page — but only by actual body content, NOT content-type
+        // alone. LM Studio incorrectly sets content-type: text/html on valid JSON
+        // error responses (like 401 auth errors), so checking content-type would
+        // false-positive on parseable JSON.
+        const looksHtml = /^\s*</.test(data);
         if (looksHtml) {
           markFailure();
           done();
