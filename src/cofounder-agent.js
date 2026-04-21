@@ -299,6 +299,24 @@ YOUR JOB — create a LIVING office:
       if (spotlight) observations.push(`${spotlight.name} (${spotlight.role || 'team member'}) is currently ${spotlight.status || 'at their desk'}.`);
     }
 
+    // Pull real office events from the NPC brains' broadcast feed — these
+    // are things that actually happened (meetings, shipped work, blockers).
+    if (this.npcBrains && typeof this.npcBrains._getRecentEvents === 'function') {
+      const events = this.npcBrains._getRecentEvents(5);
+      if (events) observations.push(`Recent events:\n${events}`);
+    }
+
+    // Blocked/stuck agents get priority attention — that's what a CTO does.
+    if (this.npcBrains && this.npcBrains._lastDecisions) {
+      const stuck = Object.entries(this.npcBrains._lastDecisions)
+        .filter(([, d]) => d && (d.outcome === 'stuck' || d.outcome === 'blocked'))
+        .slice(0, 3)
+        .map(([n]) => n);
+      if (stuck.length > 0) {
+        observations.push(`PRIORITY: ${stuck.join(', ')} reported being stuck/blocked. Unblock them first.`);
+      }
+    }
+
     // Time-based suggestions
     const hour = new Date().getHours();
     if (hour >= 9 && hour < 10) observations.push('Morning — good time for a standup or team check-in.');
@@ -311,7 +329,7 @@ YOUR JOB — create a LIVING office:
 
     if (observations.length === 0) observations.push('The office is running. Look for opportunities to improve workflow.');
 
-    return `Office observations:\n${observations.join('\n')}\n\nAs CTO, decide what should happen next. Generate 2-4 commands that create natural office workflow — conversations, check-ins, task assignments, meetings, or just letting people work. Be specific about what each person should do and say.`;
+    return `Office observations:\n${observations.join('\n')}\n\nAs CTO, decide what should happen next. Generate 2-4 commands that create natural office workflow — conversations, check-ins, task assignments, meetings, or just letting people work. If anyone is stuck/blocked, address that first. Be specific about what each person should do and say.`;
   }
 
   /**

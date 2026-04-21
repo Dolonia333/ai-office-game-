@@ -1037,7 +1037,10 @@ class AgentOfficeManager {
         // Reply-back loop: if we're under the turn cap, have the original
         // speaker say something back. Creates a natural two-way conversation
         // instead of the one-shot "A speaks, B replies" we had before.
-        const MAX_CHAT_TURNS = 2;
+        // Raised from 2 to 4 — gives conversations room to actually exchange
+        // ideas instead of A-speaks/B-replies/done. NPCs can now follow up,
+        // disagree, or build on each other's lines across 4 turns.
+        const MAX_CHAT_TURNS = 4;
         const currentTurn = typeof msg.turn === 'number' ? msg.turn : 1;
         const canReplyBack =
           responderKey &&

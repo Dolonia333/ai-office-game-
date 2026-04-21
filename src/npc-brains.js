@@ -23,6 +23,14 @@ class NpcBrainManager {
     this._requestQueue = [];    // sequential queue for LM Studio requests
     this._processingRequest = false; // whether a request is in-flight
 
+    // Persistent intelligence state
+    this._npcGoals = {};          // npcName -> { goal, createdAt, progress }
+    this._dailyPlans = {};        // npcName -> { date, priorities:[], createdAt }
+    this._npcRelationships = {};  // npcName -> { otherName: { interactions, lastMood } }
+    this._eventFeed = [];         // recent office-wide events (bug, PR, visitor)
+    this._sharedTasks = [];       // global task board visible to all NPCs
+    this._sessionStart = new Date().toISOString().slice(0, 10);
+
     this._loadProviders();
     this._initBrains();
   }
@@ -191,6 +199,165 @@ class NpcBrainManager {
     } catch (err) {
       console.warn(`[NpcBrains] Failed to save memory for ${npcName}:`, String(err?.message ?? err));
     }
+  }
+
+  /**
+   * Seed or retrieve a persistent long-term goal for an NPC.
+   * Goals give the brain something to pull toward across think cycles —
+   * otherwise every cycle starts from scratch and NPCs drift.
+   */
+  _getGoalContext(npcName) {
+    if (!this._npcGoals[npcName]) {
+      const brain = this.brains[npcName];
+      if (!brain) return '';
+      // Derive a starter goal from role — gets refined as they work
+      const roleGoals = {
+        'CTO': 'Keep the team unblocked and shipping steadily',
+        'Senior Developer — team lead': 'Ship the current sprint and mentor juniors',
+        'Project Manager — coordinates sprints and deadlines': 'Keep every engineer moving on a clear task',
+        'Product Manager — defines what gets built': 'Convert user feedback into concrete next builds',
+        'Frontend Developer': 'Polish the UI and land the next visible feature',
+        'Backend Developer': 'Harden the API and fix the slow endpoints',
+        'Intern — learning from everyone': 'Learn one new skill this week by shadowing a senior',
+        'Developer — code review gatekeeper': 'Keep the main branch green — no bad PRs land',
+        'QA Engineer — tests everything': 'Catch the regressions before the user does',
+        'UI/UX Designer': 'Make every screen feel intentional',
+        'DevOps Engineer — CI/CD and deployments': 'Make deploys boring',
+        'Data Engineer — data pipelines': 'Keep data flowing, no missed events',
+        'Researcher — R&D': 'Find the one insight that changes our roadmap',
+        'IT Support — servers, networking': 'Keep the office humming — no blockers from infra',
+        'Receptionist — schedules, coordination': 'Everyone knows where they need to be',
+        'Security Guard — office security': 'Nothing walks in or out that shouldn\'t',
+      };
+      const starter = roleGoals[brain.role] || 'Do good work and help the team';
+      this._npcGoals[npcName] = {
+        goal: starter,
+        createdAt: new Date().toISOString().slice(0, 10),
+        progress: 0,
+      };
+    }
+    const g = this._npcGoals[npcName];
+    return `This Week: ${g.goal}`;
+  }
+
+  /**
+   * Generate or retrieve today's plan for an NPC — ~3 priorities for the day.
+   * Plans are generated once per day per NPC from their role + recent memory,
+   * then injected into every think prompt so actions point at something concrete.
+   */
+  getDailyPlan(npcName) {
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = this._dailyPlans[npcName];
+    if (existing && existing.date === today) return existing;
+
+    const brain = this.brains[npcName];
+    if (!brain) return null;
+
+    // Derive 3 concrete priorities from role, goal, and recent memory
+    const recentMem = (brain.longTermMemory || '').split('\n')
+      .filter(l => l.trim())
+      .slice(-8);
+    const goal = this._npcGoals[npcName]?.goal || '';
+
+    // Role-derived default priorities. LLM refines these later in normal thinking.
+    const rolePriorities = {
+      'CTO': ['Check in with every team lead', 'Unblock at least one stuck task', 'Review this week\'s roadmap'],
+      'Senior Developer — team lead': ['Review open PRs', 'Pair with Roki for 30 min', 'Ship my current task'],
+      'Project Manager — coordinates sprints and deadlines': ['Run standup', 'Update sprint board', 'Chase blockers'],
+      'Product Manager — defines what gets built': ['Triage feature requests', 'Spec next story', 'Sync with Abby'],
+      'Frontend Developer': ['Finish current component', 'Fix two visual bugs', 'Get review from Jenny'],
+      'Backend Developer': ['Close current ticket', 'Investigate slow endpoint', 'Code review Josh\'s PR'],
+      'Intern — learning from everyone': ['Ask Alex for a starter task', 'Read one new file', 'Shadow a code review'],
+      'Developer — code review gatekeeper': ['Clear PR queue', 'Flag bad patterns', 'Unblock merges'],
+      'QA Engineer — tests everything': ['Run regression pass', 'File any bugs found', 'Chat with devs about failures'],
+      'UI/UX Designer': ['Finish mockups', 'Walk the floor for feedback', 'Export assets'],
+      'DevOps Engineer — CI/CD and deployments': ['Green CI', 'Check server health', 'Ship today\'s deploy'],
+      'Data Engineer — data pipelines': ['Check pipeline health', 'Fix today\'s data gap', 'Document schema'],
+      'Researcher — R&D': ['Read one paper', 'Prototype idea', 'Share findings'],
+      'IT Support — servers, networking': ['Tour storage room', 'Fix one ticket', 'Back up logs'],
+      'Receptionist — schedules, coordination': ['Greet arrivals', 'Update calendar', 'Confirm meetings'],
+      'Security Guard — office security': ['Patrol reception', 'Check doors', 'Watch lobby'],
+    };
+    const priorities = rolePriorities[brain.role] || ['Do the work in front of me', 'Check in with a teammate', 'Take a break'];
+
+    this._dailyPlans[npcName] = {
+      date: today,
+      priorities,
+      createdAt: new Date().toISOString(),
+      goalReference: goal,
+    };
+    return this._dailyPlans[npcName];
+  }
+
+  /**
+   * Theory of mind — what do we think others are up to?
+   * Pulls each coworker's last decision (their most recent action/thought)
+   * so the NPC can reason about other people's intent, not just their own.
+   */
+  _getTheoryOfMind(npcName, limit = 4) {
+    const others = Object.keys(this._lastDecisions)
+      .filter(n => n !== npcName && this._lastDecisions[n])
+      .slice(-limit);
+    if (others.length === 0) return '';
+    const lines = others.map(n => {
+      const d = this._lastDecisions[n];
+      const t = this._taskProgress[n];
+      const task = t ? ` (working on "${t.task}")` : '';
+      return `- ${n}: just chose "${d.action}"${task}`;
+    });
+    return lines.join('\n');
+  }
+
+  /**
+   * Record a relationship interaction between two NPCs.
+   * Over time this builds a social graph — who talks to whom how often.
+   */
+  _recordRelationship(fromName, toName) {
+    if (!this._npcRelationships[fromName]) this._npcRelationships[fromName] = {};
+    const rel = this._npcRelationships[fromName][toName] || { interactions: 0, lastAt: null };
+    rel.interactions += 1;
+    rel.lastAt = new Date().toISOString();
+    this._npcRelationships[fromName][toName] = rel;
+  }
+
+  /**
+   * Office event feed — stuff that happened recently (bug filed, PR landed,
+   * visitor arrived). NPCs see a short log in their think prompt so they
+   * can react to the world instead of just grinding through their own tasks.
+   */
+  broadcastEvent(kind, text) {
+    this._eventFeed.push({
+      kind,
+      text: String(text || '').slice(0, 140),
+      at: new Date().toISOString().slice(11, 16),
+    });
+    if (this._eventFeed.length > 12) this._eventFeed = this._eventFeed.slice(-12);
+  }
+
+  _getRecentEvents(limit = 4) {
+    const evs = this._eventFeed.slice(-limit);
+    if (evs.length === 0) return '';
+    return evs.map(e => `[${e.at}] ${e.kind}: ${e.text}`).join('\n');
+  }
+
+  /**
+   * Shared task board — tasks that anyone on the team can pick up.
+   * Managers (Abby/Alex/Marcus) post tasks; everyone else sees them.
+   */
+  addSharedTask(task, postedBy = 'System') {
+    this._sharedTasks.push({
+      task: String(task || '').slice(0, 100),
+      postedBy,
+      at: new Date().toISOString().slice(11, 16),
+      claimedBy: null,
+    });
+    if (this._sharedTasks.length > 20) this._sharedTasks = this._sharedTasks.slice(-20);
+  }
+
+  _getTaskBoard(limit = 5) {
+    const open = this._sharedTasks.filter(t => !t.claimedBy).slice(-limit);
+    if (open.length === 0) return '';
+    return open.map(t => `- "${t.task}" (from ${t.postedBy})`).join('\n');
   }
 
   /**
@@ -374,6 +541,19 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
     const skillContext = this._getSkillContext(npcName);
 
+    // Persistent intelligence layer — goals + daily plan + theory of mind
+    // + office event feed + shared task board. Each is a short snippet
+    // injected into the system prompt so the LLM can reason about things
+    // beyond the current cycle.
+    const goalContext = this._getGoalContext(npcName);
+    const dailyPlan = this.getDailyPlan(npcName);
+    const planText = dailyPlan
+      ? dailyPlan.priorities.map((p, i) => `${i + 1}. ${p}`).join('\n')
+      : '';
+    const theoryOfMind = this._getTheoryOfMind(npcName, 4);
+    const eventsFeed = this._getRecentEvents(4);
+    const taskBoard = this._getTaskBoard(4);
+
     // #3 — Role-based room affinity: each NPC has a "natural hangout" room
     // based on their job. This biases location choices toward the whole map
     // instead of everyone defaulting to their desk or the conference room.
@@ -389,8 +569,13 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     const systemPrompt = brain.personality + '\n\n' +
       '## Hierarchy Rules\n' + hierarchyRules + '\n\n' +
       '## Your Teams\n' + (teamContext || 'No team assignments.') + '\n\n' +
+      (goalContext ? '## Your Long-Term Goal\n' + goalContext + '\n\n' : '') +
+      (planText ? '## Today\'s Priorities\n' + planText + '\n\n' : '') +
       (skillContext ? '## Skills & Growth\n' + skillContext + '\n\n' : '') +
       '## Your Coworkers\n' + coworkerContext + '\n\n' +
+      (theoryOfMind ? '## What Others Are Doing\n' + theoryOfMind + '\n\n' : '') +
+      (eventsFeed ? '## Recent Office Events\n' + eventsFeed + '\n\n' : '') +
+      (taskBoard ? '## Open Tasks (anyone can claim)\n' + taskBoard + '\n\n' : '') +
       '## Your Memories\n' + (recentMemory || 'No memories yet.') + '\n\n' +
       '## Recent Conversations\n' + (recentConversations || 'None yet today.') + '\n\n' +
       '## Task Continuity\n' + (continuitySection || 'No previous decision this session.') + '\n\n' +
@@ -433,8 +618,8 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
     const nudge = nudges.length > 0 ? nudges[Math.floor(Math.random() * nudges.length)] : '';
 
-    const userPrompt = `${nudge ? nudge + '\n\n' : ''}Decide what to do next. Respond with a single JSON object:
-{"thought": "your internal reasoning", "action": "talk|work|collaborate|break|check|meeting|report|read|visit|coffee|wander", "target": "NPC name or null", "location": "desk|breakroom|conference|storage|manager_office|reception|open_office|null", "message": "what you say out loud (under 120 chars)", "taskPhase": "starting|continuing|finished|none", "save": "brief note for your memory"}
+    const userPrompt = `${nudge ? nudge + '\n\n' : ''}Decide what to do next. Think step by step, then respond with a single JSON object:
+{"reasoning": "1-2 sentences tracing: what's my current state, what matters most, why this action", "plan": "one-line projected next 2 steps", "thought": "your internal monologue (one sentence)", "action": "talk|work|collaborate|break|check|meeting|report|read|visit|coffee|wander", "target": "NPC name or null", "location": "desk|breakroom|conference|storage|manager_office|reception|open_office|null", "message": "what you say out loud (under 120 chars)", "taskPhase": "starting|continuing|finished|none", "save": "brief note for your memory", "outcome": "ok|stuck|blocked|success|null"}
 
 ACTION MEANINGS:
 - talk/collaborate/report: interact with a specific coworker (set target)
@@ -498,6 +683,9 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
           if (decision.taskPhase && decision.taskPhase !== 'none') {
             enrichedSave = '[' + decision.taskPhase.toUpperCase() + '] ' + enrichedSave;
           }
+          if (decision.outcome && decision.outcome !== 'null' && decision.outcome !== 'none') {
+            enrichedSave = '[OUTCOME:' + decision.outcome + '] ' + enrichedSave;
+          }
           if (decision.target && h) {
             var targetH = this._hierarchy[decision.target];
             if (targetH) {
@@ -507,6 +695,28 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
             }
           }
           this.saveMemory(npcName, enrichedSave);
+        }
+
+        // Record relationship interaction for social graph tracking
+        if (decision.target && typeof decision.target === 'string') {
+          this._recordRelationship(npcName, decision.target);
+        }
+
+        // Auto-update goal progress when a task finishes successfully
+        if (decision.taskPhase === 'finished' && this._npcGoals[npcName]) {
+          this._npcGoals[npcName].progress = (this._npcGoals[npcName].progress || 0) + 1;
+        }
+
+        // Broadcast interesting decisions as office events
+        if (decision.action === 'meeting' || (decision.outcome === 'success' && decision.taskPhase === 'finished')) {
+          const kind = decision.action === 'meeting' ? 'meeting' : 'shipped';
+          const text = decision.action === 'meeting'
+            ? `${npcName} called a meeting${decision.target ? ' with ' + decision.target : ''}`
+            : `${npcName} finished: ${(decision.save || decision.message || '').slice(0, 80)}`;
+          this.broadcastEvent(kind, text);
+        }
+        if (decision.outcome === 'stuck' || decision.outcome === 'blocked') {
+          this.broadcastEvent('blocker', `${npcName} is ${decision.outcome}: ${(decision.save || '').slice(0, 60)}`);
         }
 
         // Cascade decisions from leaders to their reports
