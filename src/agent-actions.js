@@ -692,6 +692,83 @@ class AgentActions {
   }
 
   /**
+   * goToCoffee(npcKey) - Walk to coffee-like furniture in the breakroom.
+   * Falls back to a generic breakroom spot if no match is found.
+   */
+  goToCoffee(npcKey) {
+    if (this._sittingNpcs.has(npcKey)) {
+      this._standUpNpc(npcKey);
+    }
+    const item = (this.scene._interactables || []).find(it => {
+      return it.sprite && it.id && /coffee|espresso|kettle|vending|snack|fridge|microwave/i.test(it.id);
+    });
+    if (item && item.sprite) {
+      const x = item.sprite.x + Phaser.Math.Between(-10, 10);
+      const y = item.sprite.y + 20 + Phaser.Math.Between(-6, 6);
+      return this.walkTo(npcKey, x, y);
+    }
+    return this.goToBreakroom(npcKey);
+  }
+
+  /**
+   * visit(npcKey, targetNpcKey) - Walk toward a coworker's desk for a
+   * drop-by check-in. Does not speak; caller can follow up with speak()
+   * or speakTo() if they want a conversation. Returns a promise that
+   * resolves once the NPC has arrived (or given up).
+   */
+  visit(npcKey, targetNpcKey) {
+    return this.queueAction(npcKey, () => {
+      return new Promise((resolve) => {
+        const npc = this._getNpc(npcKey);
+        const target = this._getNpc(targetNpcKey);
+        if (!npc || !target) { resolve(); return; }
+
+        if (this._sittingNpcs.has(npcKey)) {
+          this._standUpNpc(npcKey);
+        }
+
+        // Aim for a walkable offset beside the target — snapped to the grid
+        // so we don't land inside a desk or wall.
+        let tx = target.x + (npc.x > target.x ? 30 : -30);
+        let ty = target.y + Phaser.Math.Between(-8, 8);
+        const pf = this.scene._pathfinder;
+        if (pf && typeof pf.findWalkableNear === 'function') {
+          const snapped = pf.findWalkableNear(tx, ty, 48);
+          if (snapped) { tx = snapped.x; ty = snapped.y; }
+        }
+
+        npc.ai.mode = 'agent_task';
+        npc.ai.taskTarget = { x: tx, y: ty };
+        npc.ai.taskState = 'walking';
+
+        const checkInterval = this.scene.time.addEvent({
+          delay: 100,
+          loop: true,
+          callback: () => {
+            const dist = Math.hypot(tx - npc.x, ty - npc.y);
+            if (dist <= 18) {
+              checkInterval.remove();
+              npc.body.setVelocity(0, 0);
+              // Face the target
+              npc.ai.facing = target.x > npc.x ? 'right' : 'left';
+              npc.anims.stop();
+              npc.setFrame(npc.ai.facing === 'left' ? 4 : 8);
+              resolve();
+            }
+          }
+        });
+
+        // Dropped 8s → 3s ceiling so jammed visitors abandon quickly.
+        this.scene.time.delayedCall(3000, () => {
+          checkInterval.remove();
+          npc.body.setVelocity(0, 0);
+          resolve();
+        });
+      });
+    });
+  }
+
+  /**
    * goToRoom(npcKey, roomKey) - Walk to center of a named room
    */
   goToRoom(npcKey, roomKey) {

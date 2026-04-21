@@ -242,6 +242,132 @@ class AgentOfficeManager {
       loop: true,
       callback: () => this._updateStatusIndicators(),
     });
+
+    // #5 — Per-role ambient routines. Runs every 60s on receptionist +
+    // security NPCs so they USE the reception area even when their
+    // LM think loop picks 'work'. Keeps Lucy/Pier/Bouncer from glueing
+    // to their desks all day.
+    this.scene.time.addEvent({
+      delay: 60000,
+      loop: true,
+      callback: () => this._tickRoleRoutines(),
+    });
+
+    // #8 — Reception visitor spawn. Every 5 minutes a conference_* NPC
+    // walks to the reception area and stands (as if a visitor arrived),
+    // giving Lucy a reason to greet them.
+    this.scene.time.addEvent({
+      delay: 300000,
+      loop: true,
+      callback: () => this._spawnReceptionVisitor(),
+    });
+    // Fire one ~45s after startup so the demo has early reception activity.
+    this.scene.time.delayedCall(45000, () => this._spawnReceptionVisitor());
+  }
+
+  /**
+   * #5 — Role-specific ambient routines. Called on a timer so Lucy/Pier/Bouncer
+   * actually use reception / patrol instead of always heading to their desk.
+   */
+  _tickRoleRoutines() {
+    if (!this.agents) return;
+    this.agents.forEach((agent, npcKey) => {
+      if (!agent || agent.status === 'task_override') return;
+      const role = (agent.role || '').toLowerCase();
+      const isRecept = role === 'receptionist' || agent.name === 'Lucy' || agent.name === 'Pier';
+      const isSec = role === 'security' || agent.name === 'Bouncer';
+      if (!isRecept && !isSec) return;
+
+      // Only interrupt benign statuses — don't break meetings/reports.
+      const interruptible = !agent.status
+        || ['working','idle','wandering','break','visiting','reading'].indexOf(agent.status) !== -1;
+      if (!interruptible) return;
+
+      if (isRecept) {
+        // Alternate between sitting at reception desk and standing to greet.
+        const variant = Math.random();
+        this.actions.standUp(npcKey);
+        if (variant < 0.5) {
+          this.actions.goToRoom(npcKey, 'reception');
+          agent.status = 'receptionist_patrol';
+          this.scene.time.delayedCall(2500, () => {
+            this.actions.speak(npcKey, 'Let me know if you need anything.');
+          });
+        } else {
+          this.actions.goToRoom(npcKey, 'reception');
+          agent.status = 'receptionist_patrol';
+          this.scene.time.delayedCall(2500, () => {
+            this.actions.emote(npcKey, 'wave');
+          });
+        }
+        this.scene.time.delayedCall(14000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+      } else if (isSec) {
+        // Security patrol loop: reception → open_office → reception → desk.
+        this.actions.standUp(npcKey);
+        agent.status = 'patrolling';
+        this.actions.goToRoom(npcKey, 'reception');
+        this.scene.time.delayedCall(6000, () => {
+          this.actions.goToRoom(npcKey, 'open_office');
+        });
+        this.scene.time.delayedCall(14000, () => {
+          this.actions.goToRoom(npcKey, 'reception');
+        });
+        this.scene.time.delayedCall(22000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * #8 — Scripted "visitor arrives" moment. Picks a non-core NPC
+   * (conference_man or conference_woman if free) to walk into reception
+   * and stand, giving receptionist NPCs something real to react to.
+   */
+  _spawnReceptionVisitor() {
+    if (!this.agents) return;
+    const candidates = ['xp_conference_man', 'xp_conference_woman'];
+    for (const key of candidates) {
+      const agent = this.agents.get(key);
+      if (!agent) continue;
+      if (agent.status === 'task_override') continue;
+      // Skip if already visiting
+      if (agent.status === 'visitor_arrival') return;
+
+      this.actions.standUp(key);
+      agent.status = 'visitor_arrival';
+      // Walk to reception center
+      this.actions.goToRoom(key, 'reception');
+      this.scene.time.delayedCall(3500, () => {
+        this.actions.emote(key, 'wave');
+        this.actions.speak(key, 'Hi, I\'m here for a meeting.');
+      });
+      // Nudge the receptionists to greet by name
+      const lucyKey = 'xp_lucy';
+      if (this.agents.get(lucyKey)) {
+        this.scene.time.delayedCall(5000, () => {
+          this.actions.standUp(lucyKey);
+          this.actions.goToRoom(lucyKey, 'reception');
+          this.scene.time.delayedCall(3500, () => {
+            this.actions.speak(lucyKey, 'Welcome! Let me check you in.');
+          });
+        });
+      }
+      // Visitor wanders off (heads to conference) after a bit
+      this.scene.time.delayedCall(16000, () => {
+        this.actions.goToRoom(key, 'conference');
+        agent.status = 'working';
+      });
+      return;
+    }
   }
 
   /**
@@ -322,9 +448,14 @@ class AgentOfficeManager {
       }
     });
 
+    // #4 — Compute nearby furniture so the NPC can pick concrete destinations.
+    // Sample the 5 closest interactables to the NPC's current position.
+    const nearbyFurniture = this._computeNearbyFurniture(npcKey, 5);
+
     const context = {
       description: `Office time: ${new Date().toLocaleTimeString()}. Your status: ${agent.status || 'idle'}. ` +
         `Nearby coworkers: ${nearbyNpcs.join(', ')}.`,
+      nearbyFurniture,
     };
 
     // Ask server for NPC's decision
@@ -338,6 +469,44 @@ class AgentOfficeManager {
     // Schedule next think cycle (30-45 seconds) — more active NPCs, still comfortable for the queue
     const nextDelay = 30000 + Math.random() * 15000;
     this.scene.time.delayedCall(nextDelay, () => this._npcThinkLoop(npcKey));
+  }
+
+  /**
+   * #4 — Return short human-readable labels for the N closest interactables
+   * to a given NPC. Used in the think prompt so the model can pick concrete
+   * destinations ("coffee machine 40px away") instead of vague "work".
+   */
+  _computeNearbyFurniture(npcKey, maxItems = 5) {
+    const npc = this.scene?.npcs?.find(n => n.npcKey === npcKey)
+      || (this.scene?.npcs || []).find(n => n._npcKey === npcKey)
+      || null;
+    // Fallback: the scene stores npcs by texture key, so look there too.
+    const sprite = npc || (Array.isArray(this.scene?.npcs) ? this.scene.npcs.find(n => n.texture?.key === npcKey) : null);
+    if (!sprite) return [];
+    const items = Array.isArray(this.scene?._interactables) ? this.scene._interactables : [];
+    if (items.length === 0) return [];
+    const scored = [];
+    for (const it of items) {
+      if (!it || !it.sprite || !it.id) continue;
+      const d = Math.hypot(it.sprite.x - sprite.x, it.sprite.y - sprite.y);
+      // Build a friendly short label
+      let kind = 'object';
+      const id = String(it.id);
+      if (/coffee|espresso|kettle/i.test(id)) kind = 'coffee machine';
+      else if (/vending|snack/i.test(id))      kind = 'vending machine';
+      else if (/fridge|microwave/i.test(id))   kind = 'kitchen appliance';
+      else if (/bookshelf|shelf|bookcase/i.test(id)) kind = 'bookshelf';
+      else if (/printer|copier/i.test(id))     kind = 'printer';
+      else if (/couch|sofa/i.test(id))         kind = 'couch';
+      else if (/desk/i.test(id))               kind = 'desk';
+      else if (/chair|seat|stool/i.test(id))   kind = 'chair';
+      else if (/whiteboard|board/i.test(id))   kind = 'whiteboard';
+      else if (/plant|pot/i.test(id))          continue; // decor clutter
+      else continue; // skip anything we can't label usefully
+      scored.push({ kind, d });
+    }
+    scored.sort((a, b) => a.d - b.d);
+    return scored.slice(0, maxItems).map(s => `${s.kind} (${Math.round(s.d)}px)`);
   }
 
   /**
@@ -380,11 +549,16 @@ class AgentOfficeManager {
       ([k, v]) => v.toLowerCase() === name.toLowerCase()
     )?.[0] : null;
 
-    // Helper: move to a location
+    // Helper: move to a location. Extended to cover every room in the map
+    // so NPCs can actually pick manager_office, reception, and open_office
+    // from the think prompt.
     const goToLocation = (key, loc) => {
-      if (loc === 'breakroom') this.actions.goToBreakroom(key);
-      else if (loc === 'conference') this.actions.goToRoom(key, 'conference');
-      else if (loc === 'storage') this.actions.goToRoom(key, 'storage');
+      if (loc === 'breakroom')           this.actions.goToBreakroom(key);
+      else if (loc === 'conference')     this.actions.goToRoom(key, 'conference');
+      else if (loc === 'storage')        this.actions.goToRoom(key, 'storage');
+      else if (loc === 'manager_office') this.actions.goToRoom(key, 'manager_office');
+      else if (loc === 'reception')      this.actions.goToRoom(key, 'reception');
+      else if (loc === 'open_office')    this.actions.goToRoom(key, 'open_office');
       else if (loc === 'desk' && this.agents.get(key)?.assignedDesk) {
         this.actions.useComputer(key, this.agents.get(key).assignedDesk);
       }
@@ -459,9 +633,29 @@ class AgentOfficeManager {
       }
 
       case 'work':
+        // #6 — Ambient wander: 30% of the time, if the NPC picks "work"
+        // without a fresh task/message, they take a short detour to a
+        // random nearby room before settling. Adds motion across the map
+        // instead of 16 NPCs glued to their desks.
         if (agent.assignedDesk) {
-          this.actions.useComputer(npcKey, agent.assignedDesk);
-          agent.status = 'working';
+          const noTask = !message || message === 'Working...';
+          if (noTask && Math.random() < 0.3) {
+            this.actions.standUp(npcKey);
+            const rooms = ['open_office', 'breakroom', 'reception', 'storage', 'conference'];
+            const pick = rooms[Math.floor(Math.random() * rooms.length)];
+            goToLocation(npcKey, pick);
+            agent.status = 'wandering';
+            // Return to desk after the ambient walk
+            this.scene.time.delayedCall(9000, () => {
+              if (agent.assignedDesk) {
+                this.actions.useComputer(npcKey, agent.assignedDesk);
+                agent.status = 'working';
+              }
+            });
+          } else {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
         } else {
           // No desk — go to breakroom rather than random center clustering
           const wx = 80 + Math.random() * 150;
@@ -620,6 +814,85 @@ class AgentOfficeManager {
             agent.status = 'working';
           } else {
             agent.status = 'idle';
+          }
+        });
+        break;
+      }
+
+      case 'read': {
+        // Walk to the bookshelf and read. Represents research / looking things up.
+        agent.status = 'reading';
+        this.actions.standUp(npcKey);
+        this.actions.checkBookshelf(npcKey);
+        if (message) {
+          this.scene.time.delayedCall(2500, () => this.actions.think(npcKey, message));
+        }
+        // Return to desk after a reading cycle
+        this.scene.time.delayedCall(18000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+        break;
+      }
+
+      case 'visit': {
+        // Drop-by check-in — walk to coworker's desk without necessarily talking.
+        const visitTargetKey = findTargetKey(target);
+        if (!visitTargetKey) break;
+        agent.status = 'visiting';
+        this.actions.standUp(npcKey);
+        this.actions.visit(npcKey, visitTargetKey);
+        if (message) {
+          this.scene.time.delayedCall(2500, () => {
+            this.actions.speakTo(npcKey, visitTargetKey, message);
+          });
+        }
+        // Return to desk after a short visit
+        this.scene.time.delayedCall(14000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+        break;
+      }
+
+      case 'coffee': {
+        // Grab a coffee / snack. Short breakroom hop.
+        agent.status = 'break';
+        this.actions.standUp(npcKey);
+        this.actions.goToCoffee(npcKey);
+        if (message) {
+          this.scene.time.delayedCall(3000, () => this.actions.speak(npcKey, message));
+        }
+        this.scene.time.delayedCall(12000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
+          }
+        });
+        break;
+      }
+
+      case 'wander': {
+        // Stretch the legs — walk to the NPC's natural hangout room, or a
+        // random room if location is unspecified. Used sparingly by the model.
+        agent.status = 'wandering';
+        this.actions.standUp(npcKey);
+        const wanderRooms = ['open_office', 'breakroom', 'conference', 'reception', 'storage', 'manager_office'];
+        const pick = location && wanderRooms.indexOf(location) !== -1
+          ? location
+          : wanderRooms[Math.floor(Math.random() * wanderRooms.length)];
+        goToLocation(npcKey, pick);
+        if (message) {
+          this.scene.time.delayedCall(3500, () => this.actions.speak(npcKey, message));
+        }
+        this.scene.time.delayedCall(12000, () => {
+          if (agent.assignedDesk) {
+            this.actions.useComputer(npcKey, agent.assignedDesk);
+            agent.status = 'working';
           }
         });
         break;

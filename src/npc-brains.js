@@ -374,6 +374,18 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
 
     const skillContext = this._getSkillContext(npcName);
 
+    // #3 — Role-based room affinity: each NPC has a "natural hangout" room
+    // based on their job. This biases location choices toward the whole map
+    // instead of everyone defaulting to their desk or the conference room.
+    const roomAffinity = this._getRoomAffinity(npcName);
+
+    // #4 — Nearby furniture context. Caller (agent-office-manager) passes
+    // an optional list so the model can choose concrete destinations
+    // ("coffee machine 40px away") instead of abstract "work".
+    const nearbyFurniture = (officeContext && Array.isArray(officeContext.nearbyFurniture))
+      ? officeContext.nearbyFurniture.slice(0, 5).join(', ')
+      : '';
+
     const systemPrompt = brain.personality + '\n\n' +
       '## Hierarchy Rules\n' + hierarchyRules + '\n\n' +
       '## Your Teams\n' + (teamContext || 'No team assignments.') + '\n\n' +
@@ -383,6 +395,8 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       '## Recent Conversations\n' + (recentConversations || 'None yet today.') + '\n\n' +
       '## Task Continuity\n' + (continuitySection || 'No previous decision this session.') + '\n\n' +
       '## Current Office State\n' + (officeContext.description || 'Normal workday. Everyone is at their desks.') + '\n\n' +
+      (nearbyFurniture ? '## Nearby\n' + nearbyFurniture + '\n\n' : '') +
+      (roomAffinity ? '## Your Natural Hangout\n' + roomAffinity + '\n\n' : '') +
       (fatigueHint ? '## Energy Level\n' + fatigueHint + '\n\n' : '') +
       'You are ' + npcName + ', ' + brain.role + ', in a pixel art office. Think about what to do RIGHT NOW.\n\n' +
       'HIERARCHY ENFORCEMENT:\n' +
@@ -420,9 +434,19 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     const nudge = nudges.length > 0 ? nudges[Math.floor(Math.random() * nudges.length)] : '';
 
     const userPrompt = `${nudge ? nudge + '\n\n' : ''}Decide what to do next. Respond with a single JSON object:
-{"thought": "your internal reasoning", "action": "talk|work|collaborate|break|check|meeting|report", "target": "NPC name or null", "location": "desk|breakroom|conference|storage|null", "message": "what you say out loud (under 120 chars)", "taskPhase": "starting|continuing|finished|none", "save": "brief note for your memory"}
+{"thought": "your internal reasoning", "action": "talk|work|collaborate|break|check|meeting|report|read|visit|coffee|wander", "target": "NPC name or null", "location": "desk|breakroom|conference|storage|manager_office|reception|open_office|null", "message": "what you say out loud (under 120 chars)", "taskPhase": "starting|continuing|finished|none", "save": "brief note for your memory"}
 
-IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Talk to people, collaborate, take breaks, report progress. An office where nobody talks is a dead office.`;
+ACTION MEANINGS:
+- talk/collaborate/report: interact with a specific coworker (set target)
+- work: heads-down at your desk
+- break/coffee: breakroom, grab a drink, recharge
+- check: look up info at the bookshelf, or go check something at a location
+- read: read at the bookshelf — useful when you need to research
+- visit: drop by a coworker's desk to check on them (set target, no conversation required)
+- wander: walk through the office, stretch, observe — use sparingly
+- meeting: call or join a meeting in the conference room
+
+IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use the WHOLE OFFICE — don't stay at your desk all day. Your natural hangout room is listed above — visit it. Read at the bookshelf, grab coffee, drop by teammates, take breaks. An office where nobody moves is a dead office.`;
 
     try {
       const response = await this._callProvider(brain.providerConfig, systemPrompt, [
@@ -806,6 +830,30 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Tal
     'Lucy':    { reportsTo: 'Abby', manages: [], title: 'Receptionist — schedules, coordination' },
     'Bouncer': { reportsTo: 'Dan', manages: [], title: 'Security Guard — office security' },
   };
+
+  // #3 — Room affinity by role. Each NPC has a natural hangout room
+  // injected into the think prompt so they actually use the whole map
+  // instead of defaulting to their desk. Engineers stay in open_office
+  // (the default), so they're omitted here.
+  _roomAffinityByName = {
+    'Abby':    { room: 'manager_office', hint: 'As CTO, you have a private office in the manager_office. Use it for 1-on-1s, planning, and focused thinking.' },
+    'Marcus':  { room: 'conference',     hint: 'As Project Manager you run standups and sprint planning — the conference room is your natural spot.' },
+    'Sarah':   { room: 'conference',     hint: 'As Product Manager you present and review in the conference room.' },
+    'Lucy':    { room: 'reception',      hint: 'As Receptionist, you greet people from the reception area and coordinate from there.' },
+    'Pier':    { room: 'reception',      hint: 'Your data workstation is near reception — that\'s where you camp.' },
+    'Bouncer': { room: 'reception',      hint: 'As Security Guard, patrol between reception and the front entrance.' },
+    'Dan':     { room: 'storage',        hint: 'As IT Support, the storage/server room is your turf. Check servers, fix racks.' },
+    'Oscar':   { room: 'storage',        hint: 'As DevOps, you keep an eye on the servers in the storage/IT room.' },
+    'Molly':   { room: 'open_office',    hint: 'QA moves between engineers\' desks to watch tests — roam the open_office.' },
+    'Rob':     { room: 'open_office',    hint: 'As designer, collaborate with engineers at their desks in the open_office.' },
+    'Bob':     { room: 'open_office',    hint: 'As researcher, you read a lot at the bookshelf and sketch at your desk.' },
+  };
+
+  _getRoomAffinity(npcName) {
+    const aff = this._roomAffinityByName[npcName];
+    if (!aff) return '';
+    return aff.hint;
+  }
 
   _teams = {
     'Engineering': { members: ['Alex', 'Josh', 'Edward', 'Roki', 'Jenny'], domain: 'building features, fixing bugs, code review', lead: 'Alex' },
