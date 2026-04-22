@@ -86,18 +86,22 @@ Denizen is a visual observability layer that renders AI agent workflows as a liv
 
 ```bash
 git clone https://github.com/Dolonia333/DENIZEN.git
-cd DENIZEN
+cd DENIZEN/pixel-office-game
 npm install
-node server.js
+npm start
 ```
 
-Open **http://localhost:8080** in your browser.
+Open **http://localhost:8080** in your browser. You should see 16 NPCs moving around, talking to each other, and taking breaks.
+
+`npm start` runs `node server.js`. `npm test` runs the 38-test suite under Node's built-in test runner.
+
+For the full stack install (including LM Studio and the optional Linux security feeders), see **[docs/SETUP.md](docs/SETUP.md)**.
 
 > **Port conflict?** If port 8080 is in use, kill the process first:
 > ```powershell
 > # Windows PowerShell
 > Stop-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess -Force
-> node server.js
+> npm start
 > ```
 
 ## Configuration
@@ -628,10 +632,21 @@ Uses the [LimeZu Modern Office Revamped](https://limezu.itch.io/) asset pack. Al
 
 ## Related Documentation
 
+The `docs/` directory has the canonical deep-dives for the runtime systems:
+
+| Document | Contents |
+|----------|----------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Whole-system topology — browser ↔ Node server ↔ LM Studio, decision loops, WebSocket message types |
+| [docs/AI-SYSTEM.md](docs/AI-SYSTEM.md) | NPC intelligence layer — goals, daily plans, theory of mind, chain-of-thought, memory tags, social graph |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat catalog (10 categories), robber archetype mappings, tuning knobs |
+| [docs/SETUP.md](docs/SETUP.md) | End-to-end install — Node + LM Studio baseline, plus Linux Wireshark/Nmap live feeders |
+
+Top-level legacy references (sprite tooling & asset pipeline):
+
 | Document | Contents |
 |----------|----------|
 | [TOOLS_GUIDE.md](TOOLS_GUIDE.md) | **All browser tools** — step-by-step usage for Sprite Cutter, Catalog Explorer, Asset Browser, and every other dev tool |
-| [ENGINE_AND_SPRITES.md](ENGINE_AND_SPRITES.md) | **How it all works** — Phaser scene lifecycle, sprite sheet formats, catalog schema, how a JSON entry becomes a rendered sprite |
+| [ENGINE_AND_SPRITES.md](ENGINE_AND_SPRITES.md) | **How rendering works** — Phaser scene lifecycle, sprite sheet formats, catalog schema, how a JSON entry becomes a rendered sprite |
 | [SYSTEM_SUMMARY.md](SYSTEM_SUMMARY.md) | Room Assembly system — sprite inventory, validation, templates |
 | [ROOM_ASSEMBLY_GUIDE.md](ROOM_ASSEMBLY_GUIDE.md) | Implementation guide for room layouts |
 | [ASSEMBLY.md](ASSEMBLY.md) | Sprite assembly blueprint (16px grid rules, pivot points) |
@@ -639,6 +654,14 @@ Uses the [LimeZu Modern Office Revamped](https://limezu.itch.io/) asset pack. Al
 | [CATALOG_OVERVIEW.md](CATALOG_OVERVIEW.md) | Asset pack contents (LimeZu Modern Office) |
 | [CATALOG_CONVENTIONS.md](CATALOG_CONVENTIONS.md) | Catalog field reference — type vocabulary, anchors, interact_distance |
 | [CHANGELOG.md](CHANGELOG.md) | Full development history — Phase 1-6 implementation details, bug fixes, architecture decisions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute — setup, branch conventions, commit style |
+
+## Deployment
+
+Two deployment shortcuts live at the repo root:
+
+- **Docker** — `docker compose up` uses [Dockerfile](Dockerfile) + [docker-compose.yml](docker-compose.yml) with a `node:20-alpine` image and API-key passthrough
+- **PM2** — [ecosystem.config.js](ecosystem.config.js) for classic process management with restart-on-crash
 
 ## License
 

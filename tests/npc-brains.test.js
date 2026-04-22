@@ -5,8 +5,21 @@
  * Uses Node.js built-in test runner (node:test) — no extra dependencies.
  */
 
-const { describe, it, before } = require('node:test');
+const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const os = require('node:os');
+const path = require('node:path');
+const fs = require('node:fs');
+
+// Isolate tests from the developer's real ~/.openclaw/openclaw.json.
+// NpcBrainManager reads USERPROFILE/HOME to find the config file; pointing
+// those at an empty temp dir forces the "no config" code path and keeps the
+// test deterministic across machines.
+const origHome = process.env.HOME;
+const origUser = process.env.USERPROFILE;
+const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'denizen-test-'));
+process.env.HOME = tmpHome;
+process.env.USERPROFILE = tmpHome;
 
 const NpcBrainManager = require('../src/npc-brains.js');
 
@@ -17,9 +30,17 @@ const NpcBrainManager = require('../src/npc-brains.js');
 let mgr;
 
 before(() => {
-  // Constructor reads openclaw.json (absent in CI → demo mode) and SOUL.md files.
-  // Both failures are handled silently, so this is safe to call unconditionally.
+  // Constructor reads openclaw.json (absent in our temp HOME → demo mode)
+  // and SOUL.md files. Both failures are handled silently, so this is safe
+  // to call unconditionally.
   mgr = new NpcBrainManager();
+});
+
+after(() => {
+  // Restore env + clean up temp dir so nothing leaks into other suites.
+  if (origHome === undefined) delete process.env.HOME; else process.env.HOME = origHome;
+  if (origUser === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = origUser;
+  try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}
 });
 
 // ---------------------------------------------------------------------------

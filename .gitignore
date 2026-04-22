@@ -15,6 +15,24 @@ openclaw.json
 *.pem
 *.key
 
+# Runtime-mutated NPC state — MEMORY.md files are rewritten every tick by the
+# NPC brains. Keeping them out of VCS avoids huge noisy diffs on every run.
+# SOUL.md files stay tracked (they define the NPC's personality).
+npcs/*/MEMORY.md
+
+# Persisted runtime data
+layouts/
+reports/run-*.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
 # OS
 .DS_Store
 Thumbs.db
