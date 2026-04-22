@@ -91,7 +91,21 @@ class SecurityMonitorServer {
     // 3. File watchers
     this._startFileWatchers();
 
-    // 4. Heartbeat
+    // 4. Linux-only: Wireshark (tshark) live packet anomaly feeder.
+    //    Translates real traffic into in-game robber spawns so non-technical
+    //    viewers can "see" what a log line means.
+    if (os.platform() === 'linux' && (process.env.ENABLE_TSHARK === '1' || this.config.enableTshark)) {
+      this._startLinuxPacketMonitor();
+    }
+
+    // 5. Linux-only: firewall/ufw/iptables scan-probe detector.
+    //    Passive — watches kernel/firewall logs for nmap-style scans against
+    //    this host. No outbound scanning performed.
+    if (os.platform() === 'linux' && (process.env.ENABLE_SCAN_DETECT !== '0')) {
+      this._startLinuxScanDetector();
+    }
+
+    // 6. Heartbeat
     this._intervals.push(setInterval(() => {
       this._broadcast({ type: 'heartbeat', timestamp: Date.now() });
     }, 30000));
@@ -105,6 +119,10 @@ class SecurityMonitorServer {
     this._intervals = [];
     this._watchers.forEach(w => w.close());
     this._watchers = [];
+    if (this._tsharkProc) {
+      try { this._tsharkProc.kill('SIGTERM'); } catch (_) {}
+      this._tsharkProc = null;
+    }
   }
 
   /** Check an HTTP request for suspicious patterns (call from server.js) */
@@ -439,6 +457,253 @@ class SecurityMonitorServer {
         console.warn(`[SecurityMonitor] Can't watch ${dir}:`, err.message);
       }
     });
+  }
+
+  // --- Linux live security feeders (Wireshark + scan detection) ---
+
+  /**
+   * Linux packet monitor — spawns `tshark` (Wireshark CLI) as a long-lived
+   * child process and parses its one-line-per-packet output. Each suspicious
+   * pattern becomes a threat event → robber spawns in the game.
+   *
+   * Requirements (documented in docs/SETUP.md):
+   *   - tshark installed (`sudo apt install tshark`)
+   *   - Non-root capture: `sudo setcap cap_net_raw,cap_net_admin+eip $(which dumpcap)`
+   *   - Or run the game server as a user in the `wireshark` group
+   *
+   * Toggle with env:
+   *   ENABLE_TSHARK=1          — opt-in, off by default
+   *   TSHARK_IFACE=any         — interface name (default "any")
+   *   TSHARK_BPF="not port 22" — optional extra BPF filter
+   */
+  _startLinuxPacketMonitor() {
+    const iface = process.env.TSHARK_IFACE || this.config.tsharkIface || 'any';
+    const extraFilter = process.env.TSHARK_BPF || this.config.tsharkBpf || '';
+
+    // tshark fields: time, src ip, dst ip, proto, src port, dst port, tcp flags,
+    // http host, http user-agent, dns query, packet length
+    const fields = [
+      '-T', 'fields',
+      '-E', 'separator=|',
+      '-E', 'occurrence=f',
+      '-e', 'frame.time_epoch',
+      '-e', 'ip.src',
+      '-e', 'ip.dst',
+      '-e', '_ws.col.Protocol',
+      '-e', 'tcp.srcport',
+      '-e', 'tcp.dstport',
+      '-e', 'tcp.flags',
+      '-e', 'http.host',
+      '-e', 'http.user_agent',
+      '-e', 'dns.qry.name',
+      '-e', 'frame.len',
+    ];
+
+    // BPF filter: skip our own game/LM Studio traffic so we don't spam events
+    // on every WebSocket frame, but keep it broad enough to see real badness.
+    const baseBpf = 'not (host 127.0.0.1 and (port 8080 or port 1234 or port 18789))';
+    const bpf = extraFilter ? `${baseBpf} and (${extraFilter})` : baseBpf;
+
+    let tshark;
+    try {
+      tshark = spawn('tshark', ['-i', iface, '-l', '-n', '-Q', ...fields, '-f', bpf], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      console.warn('[SecurityMonitor] tshark failed to spawn — is it installed?', err.message);
+      return;
+    }
+
+    tshark.on('error', (err) => {
+      console.warn('[SecurityMonitor] tshark error:', err.message);
+    });
+    tshark.stderr.on('data', (buf) => {
+      const msg = buf.toString().trim();
+      // Most tshark stderr is harmless ("Capturing on 'any'", "Running as user..."),
+      // only log actual errors.
+      if (/error|permission|denied|failed/i.test(msg)) {
+        console.warn('[SecurityMonitor] tshark stderr:', msg.slice(0, 200));
+      }
+    });
+
+    // Line buffer — tshark emits one line per packet
+    let buf = '';
+    const synTracker = new Map();  // src ip → [timestamps] for SYN-flood detection
+    const dnsTracker = new Map();  // src ip → [long-name counts] for DNS tunneling
+
+    tshark.stdout.on('data', (chunk) => {
+      buf += chunk.toString();
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        try {
+          this._parseTsharkLine(line, synTracker, dnsTracker);
+        } catch (_) { /* malformed line, skip */ }
+      }
+    });
+
+    tshark.on('exit', (code) => {
+      console.warn(`[SecurityMonitor] tshark exited (code=${code}) — live packet monitor stopped`);
+    });
+
+    this._tsharkProc = tshark;
+    console.log(`[SecurityMonitor] 🔍 tshark live packet monitor active on iface="${iface}"`);
+  }
+
+  /**
+   * Parse one tshark line and emit a threat if suspicious.
+   * Fields (pipe-separated):
+   *   0 time, 1 src, 2 dst, 3 proto, 4 srcPort, 5 dstPort, 6 tcpFlags,
+   *   7 httpHost, 8 httpUA, 9 dnsName, 10 frameLen
+   */
+  _parseTsharkLine(line, synTracker, dnsTracker) {
+    if (!line || !line.includes('|')) return;
+    const f = line.split('|');
+    const src = f[1];
+    const dst = f[2];
+    const proto = f[3] || '';
+    const tcpFlags = f[6] || '';
+    const httpHost = f[7] || '';
+    const httpUA = f[8] || '';
+    const dnsName = f[9] || '';
+    const frameLen = parseInt(f[10] || '0', 10);
+    if (!src) return;
+
+    const now = Date.now();
+
+    // 1. SYN flood detection — many SYN-only packets in a short window
+    //    TCP flag 0x02 = SYN only. Real connections follow with SYN-ACK (0x12).
+    if (tcpFlags === '0x02' || tcpFlags === '0x0002' || tcpFlags === '2') {
+      const list = synTracker.get(src) || [];
+      list.push(now);
+      // Keep only last 10 seconds
+      while (list.length && now - list[0] > 10000) list.shift();
+      synTracker.set(src, list);
+      if (list.length >= 30) {
+        this._emitThreat({
+          category: 'scan_probe',
+          severity: list.length >= 60 ? 'critical' : 'high',
+          source: src,
+          target: dst || 'this host',
+          detail: `tshark: ${list.length} SYN packets in 10s from ${src} — nmap-style scan`,
+        });
+        // Reset so we don't spam — dedup upstream handles short-term duplicates
+        synTracker.set(src, []);
+      }
+    }
+
+    // 2. Plaintext HTTP password in URL (?password=, ?token=, ?apikey=)
+    if (proto.includes('HTTP') && httpHost) {
+      if (/[?&](password|passwd|pwd|token|apikey|api_key|secret)=/i.test(httpUA) ||
+          /[?&](password|passwd|pwd|token|apikey|api_key|secret)=/i.test(httpHost)) {
+        this._emitThreat({
+          category: 'packet_anomaly',
+          severity: 'high',
+          source: src,
+          target: httpHost,
+          detail: `tshark: plaintext credential in HTTP to ${httpHost.slice(0, 40)}`,
+        });
+      }
+    }
+
+    // 3. DNS tunneling — unusually long subdomain names repeated from same src
+    if (proto.includes('DNS') && dnsName && dnsName.length > 50) {
+      const list = dnsTracker.get(src) || [];
+      list.push(now);
+      while (list.length && now - list[0] > 30000) list.shift();
+      dnsTracker.set(src, list);
+      if (list.length >= 5) {
+        this._emitThreat({
+          category: 'packet_anomaly',
+          severity: 'critical',
+          source: src,
+          target: dnsName.slice(0, 60),
+          detail: `tshark: DNS tunneling? ${list.length} long queries in 30s (${dnsName.length} chars)`,
+        });
+        dnsTracker.set(src, []);
+      }
+    }
+
+    // 4. Large outbound transfer to unknown external IP
+    //    Watch for >1MB single-packet frames (jumbo / bulk) — usually suspicious
+    if (frameLen > 100000 && dst && !/^(10\.|192\.168\.|172\.|127\.|fe80|::1)/.test(dst)) {
+      this._emitThreat({
+        category: 'exfiltration',
+        severity: 'high',
+        source: src || 'local',
+        target: dst,
+        detail: `tshark: large (${Math.round(frameLen / 1024)} KB) packet to external ${dst}`,
+      });
+    }
+
+    // 5. Suspicious user agent (sqlmap, nmap, nikto, hydra, etc.)
+    if (httpUA && /(sqlmap|nmap|nikto|hydra|dirbuster|gobuster|metasploit|havij|wpscan)/i.test(httpUA)) {
+      this._emitThreat({
+        category: 'api_abuse',
+        severity: 'critical',
+        source: src,
+        target: httpHost || 'web server',
+        detail: `tshark: attack tool in user-agent — "${httpUA.slice(0, 40)}"`,
+      });
+    }
+  }
+
+  /**
+   * Linux passive scan-probe detector — watches kernel/firewall logs for
+   * nmap-style scans against this host. Purely passive (no outbound scan).
+   *
+   * Reads journalctl and /var/log/ufw.log / /var/log/kern.log for
+   * "BLOCK"/"[UFW BLOCK]" patterns clustered from a single source IP.
+   */
+  _startLinuxScanDetector() {
+    const scanTracker = new Map(); // src ip → [{port, time}]
+
+    const checkFirewallLogs = () => {
+      // Try journalctl first (systemd), fall back to ufw.log, then kern.log.
+      const cmd = 'journalctl -k --since="30 seconds ago" --no-pager 2>/dev/null || ' +
+                  'tail -100 /var/log/ufw.log 2>/dev/null || ' +
+                  'tail -100 /var/log/kern.log 2>/dev/null';
+      exec(cmd, { timeout: 4000 }, (err, stdout) => {
+        if (err || !stdout) return;
+        const lines = stdout.split('\n');
+        const now = Date.now();
+        for (const line of lines) {
+          // Match UFW BLOCK / iptables DROP patterns:
+          //   "[UFW BLOCK] IN=eth0 OUT= MAC=... SRC=1.2.3.4 DST=5.6.7.8 ... DPT=22 ..."
+          if (!/BLOCK|DROP|REJECT/.test(line)) continue;
+          const srcMatch = line.match(/SRC=(\d+\.\d+\.\d+\.\d+)/);
+          const dptMatch = line.match(/DPT=(\d+)/);
+          if (!srcMatch) continue;
+          const src = srcMatch[1];
+          const port = dptMatch ? parseInt(dptMatch[1], 10) : 0;
+          // Skip local/RFC1918
+          if (src.startsWith('127.') || src === '0.0.0.0') continue;
+
+          const list = scanTracker.get(src) || [];
+          list.push({ port, time: now });
+          // Window: last 20 seconds
+          while (list.length && now - list[0].time > 20000) list.shift();
+          scanTracker.set(src, list);
+
+          // Distinct ports probed — classic nmap signature
+          const distinctPorts = new Set(list.map(e => e.port)).size;
+          if (distinctPorts >= 5) {
+            this._emitThreat({
+              category: 'scan_probe',
+              severity: distinctPorts >= 15 ? 'critical' : 'high',
+              source: src,
+              target: `${distinctPorts} ports`,
+              detail: `Firewall blocked ${list.length} probes on ${distinctPorts} ports from ${src} — nmap scan`,
+            });
+            scanTracker.set(src, []); // reset
+          }
+        }
+      });
+    };
+
+    checkFirewallLogs();
+    this._intervals.push(setInterval(checkFirewallLogs, 15000));
+    console.log('[SecurityMonitor] 🛡 Linux scan detector active (watching firewall/kernel logs)');
   }
 
   // --- Threat emission ---

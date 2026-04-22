@@ -14,6 +14,10 @@
  *   api_abuse      → Robber at computer, speech bubble shows endpoint
  *   process_spawn  → Robber spawns from outside, sneaks in through door
  *   exfiltration   → Robber carries bag, walks toward exit
+ *   scan_probe     → Scout robber patrols reception, "casing" the building
+ *                    (from Linux nmap scan detection via firewall logs)
+ *   packet_anomaly → Spy robber lurks near the server room, "listening"
+ *                    (from Linux Wireshark/tshark suspicious traffic)
  */
 
 // Target furniture/positions for each threat type
@@ -86,6 +90,41 @@ const THREAT_TARGETS = {
       { x: 400, y: 444 },  // move to corridor
       { x: 844, y: 444 },  // move to door
       { x: 1200, y: 600 }, // exit building
+    ],
+  },
+  // --- Linux live security feeds ---
+  // scan_probe: passive nmap-scan detection via firewall logs (ufw/iptables).
+  // Robber "cases the building" by patrolling reception/front entrance.
+  // Visual cue for the viewer: someone is checking every door from outside.
+  scan_probe: {
+    furnitureMatch: null,
+    fallback: { x: 200, y: 560 },  // reception area
+    action: 'sneaking',
+    bubble: '🗺️ Casing the office...',
+    bubbleFromDetail: true,
+    patrol: true,
+    patrolPoints: [
+      { x: 160, y: 560 },  // reception desk
+      { x: 320, y: 560 },  // reception seating
+      { x: 160, y: 620 },  // front door
+      { x: 320, y: 620 },  // window corner
+    ],
+  },
+  // packet_anomaly: Wireshark/tshark flagged suspicious traffic.
+  // Robber "listens in" near the server/IT room — conveys eavesdropping
+  // without needing the viewer to read pcap output.
+  packet_anomaly: {
+    furnitureMatch: /server|rack|router|switch/i,
+    fallback: { x: 1100, y: 400 },  // storage/IT room
+    action: 'hacking',
+    bubble: '📶 Sniffing traffic...',
+    bubbleFromDetail: true,
+    patrol: true,
+    patrolPoints: [
+      { x: 1100, y: 380 },
+      { x: 1150, y: 440 },
+      { x: 1080, y: 500 },
+      { x: 1130, y: 420 },
     ],
   },
 };
