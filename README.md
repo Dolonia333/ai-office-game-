@@ -136,24 +136,34 @@ Bob (Researcher) and Dan (IT Support) use **LM Studio** by default — no API ke
 
 | NPC | Role | AI Provider | Model |
 |-----|------|-------------|-------|
-| **Abby** | CTO | Claude (Anthropic) | claude-3-haiku |
-| **Alex** | Senior Developer | Grok (XAI) | grok-3-mini |
+| **Abby** | CTO | Claude (Anthropic) | claude-haiku-4-5 |
+| **Alex** | Senior Developer | Grok (XAI) | grok-4 |
 | **Bob** | Researcher | LM Studio (local) | dolphin3.0-llama3.1-8b |
-| **Jenny** | Code Review | Claude (Anthropic) | claude-3-haiku |
+| **Jenny** | Code Review | Claude (Anthropic) | claude-haiku-4-5 |
 | **Dan** | IT Support | LM Studio (local) | dolphin3.0-llama3.1-8b |
-| **Lucy** | Receptionist | Claude (Anthropic) | claude-3-haiku |
+| **Lucy** | Receptionist | Claude (Anthropic) | claude-haiku-4-5 |
 | **Bouncer** | Security Guard | LM Studio (local) | dolphin3.0-llama3.1-8b |
-| **Marcus** | Project Manager | Claude (Anthropic) | claude-3-haiku |
-| **Sarah** | Product Manager | Claude (Anthropic) | claude-3-haiku |
+| **Marcus** | Project Manager | Claude (Anthropic) | claude-haiku-4-5 |
+| **Sarah** | Product Manager | Claude (Anthropic) | claude-haiku-4-5 |
 | **Edward** | Backend Developer | LM Studio (local) | dolphin3.0-llama3.1-8b |
-| **Josh** | Frontend Developer | Grok (XAI) | grok-3-mini |
-| **Molly** | QA Engineer | Claude (Anthropic) | claude-3-haiku |
+| **Josh** | Frontend Developer | Grok (XAI) | grok-4 |
+| **Molly** | QA Engineer | Claude (Anthropic) | claude-haiku-4-5 |
 | **Oscar** | DevOps Engineer | LM Studio (local) | dolphin3.0-llama3.1-8b |
 | **Pier** | Data Engineer | LM Studio (local) | dolphin3.0-llama3.1-8b |
-| **Rob** | UI/UX Designer | Claude (Anthropic) | claude-3-haiku |
-| **Roki** | Intern | Grok (XAI) | grok-3-mini |
+| **Rob** | UI/UX Designer | Claude (Anthropic) | claude-haiku-4-5 |
+| **Roki** | Intern | Grok (XAI) | grok-4 |
 
 > NPCs fall back to Claude if their primary provider fails, then to smart scripted responses if all providers fail.
+>
+> Model names above are the **defaults**. Pin a specific snapshot per provider in `~/.openclaw/openclaw.json` — every provider entry honors a `model` field that overrides the default:
+> ```json
+> { "models": { "providers": {
+>     "anthropic": { "apiKey": "...", "model": "claude-haiku-4-5" },
+>     "google":    { "apiKey": "...", "model": "gemini-2.5-flash" },
+>     "xai":       { "apiKey": "...", "model": "grok-4" },
+>     "moonshot":  { "apiKey": "...", "model": "kimi-k2" }
+> } } }
+> ```
 
 ### Zero-Config Demo Mode (No API Keys Needed)
 

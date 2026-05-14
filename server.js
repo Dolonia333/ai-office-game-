@@ -8,6 +8,7 @@ const CofounderAgent = require('./src/cofounder-agent');
 const NpcBrainManager = require('./src/npc-brains');
 const worldState = require('./src/world-state');
 const agentBus = require('./src/agent-bus');
+const ExternalSink = require('./src/external-sink');
 
 const PORT = process.env.PORT || 8080;
 
@@ -64,29 +65,86 @@ const npcBrains = new NpcBrainManager();
 const cofounderAgent = new CofounderAgent();
 cofounderAgent.npcBrains = npcBrains; // Give the director access to individual NPC brains
 
-// --- WorldState change broadcast ---
-// Whenever any subsystem mutates the world, push a delta to every connected
-// /agent-ws client. The client merges this into its local mirror and the
-// browser UI (status bar, voice gate, threat banner) reacts in one place.
-worldState.on('change', ({ kind, payload }) => {
-  const data = JSON.stringify({ type: 'world_state', kind, payload, ts: Date.now() });
+// --- External sinks (Supabase / n8n outbound webhooks) ---
+// Forwards filtered worldState change events to whatever HTTP endpoints
+// the operator has configured via env vars. No-op when no env vars are set.
+const externalSink = new ExternalSink({ worldState });
+externalSink.attach();
+
+// --- WorldState change broadcast (throttled) ---
+// Whenever any subsystem mutates the world, queue a delta for every
+// connected /agent-ws client. Without throttling, a busy moment (e.g. a
+// tshark burst + every NPC thinking on the same tick) can fire dozens of
+// `change` events in <50ms, each cutting its own JSON.stringify and ws.send
+// per client. Coalesce into 500ms windows: the latest snapshot wins per
+// `kind`, and a single combined frame goes out at most twice per second.
+//
+// `presence` is special-cased: that flag is human-toggled and the UI must
+// feel instant, so we bypass the throttle for it. `threat` is also passed
+// through because a robber spawning >500ms after the bubble fires looks
+// wrong; the rest (npc state churn, task ticks, event-feed entries) absorb
+// the latency just fine.
+const WS_BROADCAST_INTERVAL_MS = 500;
+const IMMEDIATE_KINDS = new Set(['presence', 'threat', 'threat-cleared']);
+
+let _pendingChanges = new Map(); // kind -> { kind, payload, ts }
+let _broadcastTimer = null;
+let _agentBusBuffer = [];        // collected agent-bus messages
+
+function _broadcastFrame() {
+  _broadcastTimer = null;
+  const changes = Array.from(_pendingChanges.values());
+  const busMessages = _agentBusBuffer;
+  _pendingChanges = new Map();
+  _agentBusBuffer = [];
+  if (changes.length === 0 && busMessages.length === 0) return;
+
+  // One JSON.stringify, one ws.send per client per tick — irrespective of
+  // how many mutations happened during the window.
+  const frame = JSON.stringify({
+    type: 'world_state_batch',
+    changes,
+    busMessages,
+    ts: Date.now(),
+  });
   cofounderAgent.wsClients.forEach(ws => {
     if (ws.readyState === 1) {
-      try { ws.send(data); } catch (_) { /* drop */ }
+      try { ws.send(frame); } catch (_) { /* drop */ }
     }
   });
-});
+}
 
-// --- Agent bus mirror ---
-// Every direct NPC↔NPC message also gets fanned out to /agent-ws so the
-// client can render the speech bubble even when the CTO didn't broker it.
-agentBus.subscribe('*', (msg) => {
-  const data = JSON.stringify({ type: 'agent_bus', msg });
+function _scheduleBroadcast() {
+  if (_broadcastTimer) return;
+  _broadcastTimer = setTimeout(_broadcastFrame, WS_BROADCAST_INTERVAL_MS);
+}
+
+function _sendImmediate(payload) {
+  const data = JSON.stringify(payload);
   cofounderAgent.wsClients.forEach(ws => {
     if (ws.readyState === 1) {
       try { ws.send(data); } catch (_) {}
     }
   });
+}
+
+worldState.on('change', ({ kind, payload }) => {
+  const entry = { kind, payload, ts: Date.now() };
+  if (IMMEDIATE_KINDS.has(kind)) {
+    _sendImmediate({ type: 'world_state', ...entry });
+    return;
+  }
+  // Latest write wins per kind for the next window.
+  _pendingChanges.set(kind, entry);
+  _scheduleBroadcast();
+});
+
+// --- Agent bus mirror (also throttled in the same window) ---
+agentBus.subscribe('*', (msg) => {
+  _agentBusBuffer.push(msg);
+  // Cap the buffer in case something pathological happens.
+  if (_agentBusBuffer.length > 60) _agentBusBuffer.splice(0, _agentBusBuffer.length - 60);
+  _scheduleBroadcast();
 });
 
 function safeDecodePath(url) {
@@ -580,6 +638,10 @@ function gracefulShutdown(signal) {
   console.log(`[Server] ${signal} received — shutting down`);
   try { securityMonitor.stop?.(); } catch (e) { console.warn('[Server] securityMonitor.stop:', e?.message); }
   try { cofounderAgent.stop?.(); } catch (_) {}
+  try { externalSink.detach(); } catch (_) {}
+  try {
+    if (_broadcastTimer) clearTimeout(_broadcastTimer);
+  } catch (_) {}
   // Give in-flight requests up to 3s, then exit.
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 3000).unref();

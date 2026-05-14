@@ -13,7 +13,7 @@
 
 Instead, report them privately:
 
-1. Email: use GitHub's [private vulnerability reporting](https://github.com/Dolonia333/ai-office-game-/security/advisories/new) feature (Settings → Security → Report a vulnerability).
+1. Email: use GitHub's [private vulnerability reporting](https://github.com/Dolonia333/DENIZEN/security/advisories/new) feature (Settings → Security → Report a vulnerability).
 2. Include: a description of the issue, steps to reproduce, and potential impact.
 3. You'll receive a response within 48 hours.
 

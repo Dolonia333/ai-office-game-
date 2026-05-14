@@ -54,12 +54,15 @@ class NpcBrainManager {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const p = config?.models?.providers || {};
 
-      // Map each provider to a simple config
+      // Map each provider to a simple config. Each entry honors a `model`
+      // override from openclaw.json so users can pin a specific snapshot
+      // without editing this file. The defaults track the current
+      // generation of each vendor's small/fast tier.
       if (p.anthropic?.apiKey) {
         this.providers.claude = {
           baseUrl: 'https://api.anthropic.com',
           apiKey: p.anthropic.apiKey,
-          model: 'claude-3-haiku-20240307',
+          model: p.anthropic.model || 'claude-haiku-4-5',
           type: 'anthropic',
         };
       }
@@ -67,7 +70,7 @@ class NpcBrainManager {
         this.providers.gemini = {
           baseUrl: 'https://generativelanguage.googleapis.com',
           apiKey: p.google.apiKey,
-          model: 'gemini-2.0-flash',
+          model: p.google.model || 'gemini-2.5-flash',
           type: 'google',
         };
       }
@@ -75,7 +78,7 @@ class NpcBrainManager {
         this.providers.grok = {
           baseUrl: 'https://api.x.ai',
           apiKey: p.xai.apiKey,
-          model: 'grok-3-mini-beta',
+          model: p.xai.model || 'grok-4',
           type: 'openai',
         };
       }
@@ -83,7 +86,7 @@ class NpcBrainManager {
         this.providers.kimi = {
           baseUrl: p.moonshot.baseUrl || 'https://api.moonshot.cn',
           apiKey: p.moonshot.apiKey,
-          model: 'moonshot-v1-8k',
+          model: p.moonshot.model || 'kimi-k2',
           type: 'openai',
         };
       }

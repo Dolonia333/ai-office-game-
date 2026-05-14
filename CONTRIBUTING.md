@@ -5,8 +5,8 @@ Thanks for your interest in contributing! This guide will help you get set up an
 ## Getting Started
 
 ```bash
-git clone https://github.com/Dolonia333/ai-office-game-.git
-cd ai-office-game-
+git clone https://github.com/Dolonia333/DENIZEN.git
+cd DENIZEN/pixel-office-game
 npm install
 npm start
 ```
@@ -47,7 +47,7 @@ Use these prefixes so it's clear what a branch does:
 
 ## Workflow
 
-1. **Pick an issue** — Check [open issues](https://github.com/Dolonia333/ai-office-game-/issues) for something to work on. Issues labeled `good first issue` are great starting points.
+1. **Pick an issue** — Check [open issues](https://github.com/Dolonia333/DENIZEN/issues) for something to work on. Issues labeled `good first issue` are great starting points.
 
 2. **Create a branch** from `main`:
    ```bash

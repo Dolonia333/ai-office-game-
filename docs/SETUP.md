@@ -15,8 +15,8 @@ node --version
 ### Clone and install
 
 ```bash
-git clone <your-fork-url>
-cd multbot/pixel-office-game
+git clone https://github.com/Dolonia333/DENIZEN.git
+cd DENIZEN/pixel-office-game
 npm install
 ```
 
@@ -210,6 +210,12 @@ A **packet_anomaly** robber should appear in the IT/storage room.
 | `TSHARK_IFACE` | `any` | Interface for tshark to listen on |
 | `TSHARK_BPF` | unset | Extra BPF filter AND-ed with default self-exclude |
 | `ENABLE_SCAN_DETECT` | enabled on Linux | Set to `0` to disable firewall-log scan detector |
+| `SUPABASE_WEBHOOK_URL` | unset | If set, world-state changes POST to this URL — see [WORLD-STATE.md](WORLD-STATE.md#external-sinks-supabase--n8n-outbound) |
+| `SUPABASE_WEBHOOK_KEY` | unset | Sent as `Authorization: Bearer …` for the Supabase webhook |
+| `N8N_WEBHOOK_URL` | unset | Same as Supabase, but for n8n |
+| `N8N_WEBHOOK_KEY` | unset | Bearer token for the n8n webhook |
+| `EXTERNAL_SINK_KINDS` | `task,threat,threat-cleared,event,environment,presence` | Comma-sep filter on which kinds get forwarded |
+| `EXTERNAL_SINK_TIMEOUT` | `4000` | Per-request timeout for outbound webhooks (ms) |
 
 ## 5. Troubleshooting
 

@@ -190,19 +190,115 @@ spots his name in the assignee field and walks to his desk.
 ## How the client mirrors all of this
 
 Server side, every `worldState.on('change', …)` and every `agentBus.subscribe('*', …)`
-fans out a JSON message to every connected `/agent-ws` client:
+funnels into a **500ms throttled batch** (see `WS_BROADCAST_INTERVAL_MS` in
+`server.js`). At most twice per second, one combined frame goes out to every
+connected `/agent-ws` client:
 
 ```jsonc
-{ "type": "world_state", "kind": "presence", "payload": { "zionPresent": true }, "ts": 0 }
-{ "type": "world_state", "kind": "task",     "payload": { "task": {...}, "foreground": false } }
-{ "type": "world_state", "kind": "threat",   "payload": { ... } }
-{ "type": "agent_bus",   "msg": { "to": "Alex", "from": "Abby", "text": "..." } }
+{
+  "type": "world_state_batch",
+  "changes": [
+    { "kind": "task",        "payload": { "task": {...}, "foreground": false } },
+    { "kind": "event",       "payload": { "kind": "shipped", "text": "..." } },
+    { "kind": "npc",         "payload": { "name": "Alex", "state": {...} } }
+  ],
+  "busMessages": [
+    { "to": "Alex", "from": "Abby", "text": "PR ready", "kind": "speak", "ts": 0 }
+  ],
+  "ts": 0
+}
 ```
 
-`src/agent-office-manager.js` already attaches the WebSocket to
+**Latest write wins per kind** during a window — if Alex moves five times in
+500ms, only the final position ships. Two kinds bypass the throttle and fire
+immediately because the UI needs them instant:
+
+- `presence` — the voice gate has to feel reactive when you Alt+V.
+- `threat` / `threat-cleared` — a robber spawning a half-second after the
+  bubble would look wrong; spawn must be on the same tick.
+
+Immediate frames use the unbatched `{ "type": "world_state", "kind", "payload" }` shape.
+
+`src/agent-office-manager.js` attaches the WebSocket to
 `window.__DenizenAgentWs`, so any module — `voice-gate.js`,
 `openclaw-chat.js`, your own — can listen on the same connection without
 opening a second one.
+
+---
+
+## External sinks (Supabase / n8n outbound)
+
+The opposite direction of `/api/task-update`. When the world changes,
+`src/external-sink.js` POSTs the same payload to your Supabase Edge
+Function or n8n webhook so dashboards, logs, and downstream automations
+can react in real time.
+
+### Configuration
+
+Pure env vars — no code edits, no config file:
+
+| Variable | Required? | Meaning |
+|---|---|---|
+| `SUPABASE_WEBHOOK_URL` | optional | POST destination (e.g. `https://abc.supabase.co/functions/v1/denizen-events`) |
+| `SUPABASE_WEBHOOK_KEY` | optional | Sent as `Authorization: Bearer <key>` |
+| `N8N_WEBHOOK_URL`      | optional | Same shape, but for n8n |
+| `N8N_WEBHOOK_KEY`      | optional | Bearer token for n8n |
+| `EXTERNAL_SINK_KINDS`  | optional | Comma-separated whitelist. Default: `task,threat,threat-cleared,event,environment,presence` (NPC state churn excluded — too noisy) |
+| `EXTERNAL_SINK_TIMEOUT`| optional | Per-request timeout in ms (default 4000) |
+
+If no `*_WEBHOOK_URL` is set, the sink is a no-op.
+
+### Payload
+
+```jsonc
+POST /your-endpoint
+Authorization: Bearer <key>          // if *_KEY is set
+Content-Type: application/json
+
+{
+  "source": "denizen",
+  "kind":   "task",                  // matches the kind filter above
+  "payload": { /* same shape as the WS broadcast */ },
+  "ts":     1700000000000
+}
+```
+
+### Reliability
+
+- Errors log once per failure, then every 10th occurrence.
+- A sink that fails **5 times in a row** disables itself until process
+  restart — so a dead webhook can't hammer a downstream service forever.
+- Per-sink failure counters reset on the first successful POST.
+
+### Example: Supabase Edge Function
+
+```ts
+// supabase/functions/denizen-events/index.ts
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+serve(async (req) => {
+  const ev = await req.json(); // { source, kind, payload, ts }
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  await sb.from('office_events').insert({
+    kind: ev.kind,
+    payload: ev.payload,
+    ts: new Date(ev.ts).toISOString(),
+  });
+  return new Response('ok');
+});
+```
+
+Then run:
+
+```bash
+SUPABASE_WEBHOOK_URL=https://your-project.supabase.co/functions/v1/denizen-events \
+SUPABASE_WEBHOOK_KEY=eyJ... \
+npm start
+```
+
+Every task/threat/event/meeting now writes a row to `office_events` in
+Supabase, with the full payload as JSONB.
 
 ---
 
