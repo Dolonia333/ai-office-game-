@@ -8,6 +8,11 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Shared world-state singleton. Wrapped so unit tests that import this
+// module in isolation don't break if the file moves.
+let worldState = null;
+try { worldState = require('./world-state'); } catch (_) {}
+
 class CofounderAgent {
   constructor() {
     this.model = process.env.LM_STUDIO_MODEL || 'qwen2.5-14b-instruct-1m';
@@ -572,6 +577,18 @@ YOUR JOB — create a LIVING office:
           tasks: msg.tasks || [],
           time: msg.time || '09:00',
         };
+        // Mirror per-agent positions/status into the live world-state so any
+        // subsystem can ask "who is near (x,y)?" without poking the client.
+        if (worldState && Array.isArray(msg.agents)) {
+          for (const a of msg.agents) {
+            if (!a || !a.name) continue;
+            worldState.updateNpc(a.name, {
+              position: a.position || null,
+              state: a.status || a.state || 'idle',
+              room: a.room || null,
+            });
+          }
+        }
         break;
       case 'ceo_speak':
         this._ceoMessages.push(msg.text);

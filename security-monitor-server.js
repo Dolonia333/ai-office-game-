@@ -728,16 +728,33 @@ class SecurityMonitorServer {
     this.activeThreats.set(threatId, fullThreat);
     this.threatLog.push(fullThreat);
 
+    // Mirror into world-state so NPC brains can see it on their next think
+    // (Bouncer in particular uses this to decide whether to patrol).
+    if (this._worldState) {
+      try { this._worldState.pushThreat(threat); } catch (_) {}
+    }
+
     // Auto-resolve after 30 seconds (unless re-triggered)
     setTimeout(() => {
       if (this.activeThreats.has(threatId)) {
         this.activeThreats.delete(threatId);
         this._broadcast({ type: 'threat-resolved', threatId });
+        if (this._worldState) {
+          try { this._worldState.clearThreat(threat.category, threat.source); } catch (_) {}
+        }
       }
     }, 30000);
 
     // Broadcast to all connected game clients
     this._broadcast(fullThreat);
+  }
+
+  /**
+   * Optional: bind a WorldState instance so threats also flow into the
+   * single source of truth. Called from server.js after construction.
+   */
+  setWorldState(worldState) {
+    this._worldState = worldState || null;
   }
 
   _broadcast(msg) {

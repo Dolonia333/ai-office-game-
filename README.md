@@ -638,6 +638,7 @@ The `docs/` directory has the canonical deep-dives for the runtime systems:
 |----------|----------|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Whole-system topology — browser ↔ Node server ↔ LM Studio, decision loops, WebSocket message types |
 | [docs/AI-SYSTEM.md](docs/AI-SYSTEM.md) | NPC intelligence layer — goals, daily plans, theory of mind, chain-of-thought, memory tags, social graph |
+| [docs/WORLD-STATE.md](docs/WORLD-STATE.md) | **WorldState + AgentBus + Voice Gate** — single source of truth, peer-to-peer NPC messages, presence-gated TTS, n8n webhook |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat catalog (10 categories), robber archetype mappings, tuning knobs |
 | [docs/SETUP.md](docs/SETUP.md) | End-to-end install — Node + LM Studio baseline, plus Linux Wireshark/Nmap live feeders |
 

@@ -334,6 +334,14 @@ class PlayerChat {
       this.manager.actions.speak(npcKey, safeText);
     }
 
+    // Voice gate — bubbles always render; audio only fires when Zion is at
+    // the keyboard. The presence flag is mirrored from /api/presence into
+    // window.DenizenPresence by the world-state ws bridge below.
+    if (globalThis.DenizenPresence?.zionPresent && globalThis.DenizenSpeak) {
+      try { globalThis.DenizenSpeak(npcName, safeText); }
+      catch (err) { console.warn('[PlayerChat] DenizenSpeak failed:', err?.message || err); }
+    }
+
     // Handle delegation — NPC escalates to their superior
     if (delegation && delegation.delegateTo) {
       const superiorName = delegation.delegateTo;

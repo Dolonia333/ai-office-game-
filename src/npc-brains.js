@@ -11,6 +11,13 @@ const fs = require('fs');
 const path = require('path');
 const npcRoster = require('./npc-roster');
 
+// Shared world-state singleton + agent bus. Loaded lazily in a try/catch so
+// older test fixtures that import npc-brains in isolation don't break.
+let worldState = null;
+let agentBus = null;
+try { worldState = require('./world-state'); } catch (_) {}
+try { agentBus = require('./agent-bus'); } catch (_) {}
+
 class NpcBrainManager {
   constructor() {
     this.providers = {};   // provider configs loaded from openclaw.json
@@ -33,6 +40,9 @@ class NpcBrainManager {
 
     this._loadProviders();
     this._initBrains();
+    // Wire every NPC to the shared message bus once brains exist. If the
+    // bus module wasn't loaded (older test fixtures), this is a no-op.
+    this.subscribeAllToBus();
   }
 
   _loadProviders() {
@@ -360,6 +370,49 @@ class NpcBrainManager {
     return open.map(t => `- "${t.task}" (from ${t.postedBy})`).join('\n');
   }
 
+  // ---------------------------------------------------------------------
+  // Agent-bus integration — direct NPC↔NPC messaging without CTO brokering.
+  // Each NPC has a small per-name inbox; messages are buffered between
+  // think cycles and drained into the system prompt as "Direct Messages To
+  // You". This complements (not replaces) the cofounder dispatcher.
+  // ---------------------------------------------------------------------
+
+  /** Per-NPC inbox of messages received via agent-bus since the last think. */
+  _ensureInbox(npcName) {
+    if (!this._inboxes) this._inboxes = {};
+    if (!this._inboxes[npcName]) this._inboxes[npcName] = [];
+    return this._inboxes[npcName];
+  }
+
+  _drainInbox(npcName) {
+    const inbox = this._ensureInbox(npcName);
+    if (inbox.length === 0) return [];
+    // Cap delivered messages to keep prompts bounded.
+    const out = inbox.splice(0, 6);
+    return out;
+  }
+
+  /**
+   * Subscribe every loaded NPC to the agent-bus. Call once after init.
+   * Idempotent — repeated calls re-bind cleanly.
+   */
+  subscribeAllToBus() {
+    if (!agentBus) return;
+    if (this._busUnsubs) {
+      for (const fn of this._busUnsubs) { try { fn(); } catch (_) {} }
+    }
+    this._busUnsubs = [];
+    for (const name of Object.keys(this.brains)) {
+      const inbox = this._ensureInbox(name);
+      const unsub = agentBus.subscribe(name, (msg) => {
+        // Buffer with a small overflow guard. Newer messages win.
+        inbox.push(msg);
+        if (inbox.length > 12) inbox.splice(0, inbox.length - 12);
+      });
+      this._busUnsubs.push(unsub);
+    }
+  }
+
   /**
    * Get skill context for an NPC based on their accumulated SKILL entries in memory
    */
@@ -566,6 +619,19 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       ? officeContext.nearbyFurniture.slice(0, 5).join(', ')
       : '';
 
+    // Live world-state context — what is happening RIGHT NOW from this NPC's
+    // POV. Pulled from the singleton; empty if world-state isn't wired (e.g.
+    // running this file in unit tests). The block is rendered as a compact
+    // bullet list to keep token cost down.
+    const liveContextBlock = worldState ? worldState.renderContextBlock(npcName) : '';
+
+    // Buffered direct messages from peers via agent-bus. These are "you have
+    // mail" — the NPC should react to them on this think cycle if relevant.
+    const inbox = this._drainInbox(npcName);
+    const inboxText = inbox.length
+      ? inbox.map(m => `- from ${m.from}: ${m.text}`).join('\n')
+      : '';
+
     const systemPrompt = brain.personality + '\n\n' +
       '## Hierarchy Rules\n' + hierarchyRules + '\n\n' +
       '## Your Teams\n' + (teamContext || 'No team assignments.') + '\n\n' +
@@ -573,6 +639,8 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       (planText ? '## Today\'s Priorities\n' + planText + '\n\n' : '') +
       (skillContext ? '## Skills & Growth\n' + skillContext + '\n\n' : '') +
       '## Your Coworkers\n' + coworkerContext + '\n\n' +
+      (liveContextBlock ? '## Current State (live)\n' + liveContextBlock + '\n\n' : '') +
+      (inboxText ? '## Direct Messages To You (since last think)\n' + inboxText + '\n\n' : '') +
       (theoryOfMind ? '## What Others Are Doing\n' + theoryOfMind + '\n\n' : '') +
       (eventsFeed ? '## Recent Office Events\n' + eventsFeed + '\n\n' : '') +
       (taskBoard ? '## Open Tasks (anyone can claim)\n' + taskBoard + '\n\n' : '') +
@@ -728,6 +796,33 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
         // If action is "report", ensure it has a target (the manager)
         if (decision.action === 'report' && !decision.target && h) {
           decision.target = h.reportsTo !== 'CEO' ? h.reportsTo : null;
+        }
+
+        // Mirror the decision into world-state so anyone asking "what is
+        // Alex doing?" gets a fresh answer without round-tripping the LLM.
+        // Position is left to agent-office-manager to update when sprites
+        // actually move.
+        if (worldState) {
+          const summary = (decision.message || decision.thought || decision.action || '').toString().slice(0, 120);
+          worldState.updateNpc(npcName, {
+            state: decision.action || 'idle',
+            lastAction: summary,
+            currentTask: decision.taskPhase === 'finished' ? null : summary,
+          });
+        }
+
+        // If the NPC chose to talk to a specific peer, also publish on the
+        // agent-bus so the recipient sees the message directly on their next
+        // think — no CTO brokering required.
+        if (agentBus && decision.target && decision.message &&
+            (decision.action === 'talk' || decision.action === 'collaborate' ||
+             decision.action === 'report' || decision.action === 'meeting')) {
+          agentBus.publish(decision.target, {
+            from: npcName,
+            kind: decision.action,
+            text: decision.message,
+            meta: { taskPhase: decision.taskPhase || null, outcome: decision.outcome || null },
+          });
         }
 
         return decision;

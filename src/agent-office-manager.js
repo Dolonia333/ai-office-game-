@@ -941,6 +941,9 @@ class AgentOfficeManager {
 
     try {
       this.ws = new WebSocket(url);
+      // Expose globally so other modules (voice-gate, openclaw-chat) can
+      // listen on the same connection without opening a second one.
+      window.__DenizenAgentWs = this.ws;
     } catch (err) {
       console.warn('[AgentManager] WebSocket creation failed:', err);
       this._scheduleReconnect();

@@ -6,6 +6,8 @@ const { WebSocketServer } = require('ws');
 const SecurityMonitorServer = require('./security-monitor-server');
 const CofounderAgent = require('./src/cofounder-agent');
 const NpcBrainManager = require('./src/npc-brains');
+const worldState = require('./src/world-state');
+const agentBus = require('./src/agent-bus');
 
 const PORT = process.env.PORT || 8080;
 
@@ -50,12 +52,42 @@ const securityMonitor = new SecurityMonitorServer({
   portScanThreshold: 10,
   apiRateLimit: 100,
 });
+// Mirror threat events into the live WorldState so NPC brains and the UI
+// share a single source of truth for "what's currently bad in the office".
+if (typeof securityMonitor.setWorldState === 'function') {
+  securityMonitor.setWorldState(worldState);
+}
 securityMonitor.start();
 
 // --- Cofounder Agent (CTO AI brain) ---
 const npcBrains = new NpcBrainManager();
 const cofounderAgent = new CofounderAgent();
 cofounderAgent.npcBrains = npcBrains; // Give the director access to individual NPC brains
+
+// --- WorldState change broadcast ---
+// Whenever any subsystem mutates the world, push a delta to every connected
+// /agent-ws client. The client merges this into its local mirror and the
+// browser UI (status bar, voice gate, threat banner) reacts in one place.
+worldState.on('change', ({ kind, payload }) => {
+  const data = JSON.stringify({ type: 'world_state', kind, payload, ts: Date.now() });
+  cofounderAgent.wsClients.forEach(ws => {
+    if (ws.readyState === 1) {
+      try { ws.send(data); } catch (_) { /* drop */ }
+    }
+  });
+});
+
+// --- Agent bus mirror ---
+// Every direct NPC↔NPC message also gets fanned out to /agent-ws so the
+// client can render the speech bubble even when the CTO didn't broker it.
+agentBus.subscribe('*', (msg) => {
+  const data = JSON.stringify({ type: 'agent_bus', msg });
+  cofounderAgent.wsClients.forEach(ws => {
+    if (ws.readyState === 1) {
+      try { ws.send(data); } catch (_) {}
+    }
+  });
+});
 
 function safeDecodePath(url) {
   try {
@@ -135,6 +167,105 @@ const server = http.createServer((req, res) => {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(data);
+    });
+    return;
+  }
+
+  // --- World-state snapshot (read-only) ---
+  // Useful for debugging and for the n8n/Supabase integration to know what
+  // the office "looks like" before posting an update.
+  if (urlPath === '/api/world-state' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(worldState.snapshot()));
+    return;
+  }
+
+  // --- Presence flag (Zion at the keyboard) ---
+  // GET returns the current value; POST { present: bool } toggles it.
+  // The voice gate in the browser reads this on every speech bubble — when
+  // false, bubbles still render but no audio fires.
+  if (urlPath === '/api/presence' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ zionPresent: worldState.zionPresent }));
+    return;
+  }
+  if (urlPath === '/api/presence' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      try {
+        const payload = body ? JSON.parse(body) : {};
+        const next = worldState.setPresence(!!payload.present);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, zionPresent: next }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // --- Task webhook (n8n / Supabase / external workflows post here) ---
+  // Body shape: { id, source?, title, status?, assignee?, detail?, foreground? }
+  // We upsert into worldState; the change event then fans out to the browser
+  // and the next NPC think cycle picks it up via the Current State block.
+  if (urlPath === '/api/task-update' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      try {
+        const task = JSON.parse(body || '{}');
+        if (!task || typeof task !== 'object' || !task.id || !task.title) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'task requires { id, title }' }));
+          return;
+        }
+        const foreground = !!task.foreground;
+        const merged = worldState.upsertTask({
+          id: String(task.id),
+          source: task.source || 'external',
+          title: String(task.title).slice(0, 200),
+          status: task.status || 'queued',
+          assignee: task.assignee || null,
+          detail: task.detail ? String(task.detail).slice(0, 400) : null,
+        }, { foreground });
+        // Also surface as an office event so NPCs notice immediately.
+        worldState.pushEvent('task', `${merged.status}: ${merged.title}${merged.assignee ? ' → ' + merged.assignee : ''}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, task: merged }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // --- Agent-bus publish (let external systems poke a specific NPC) ---
+  // POST body: { to, from?, text, kind? }
+  if (urlPath === '/api/agent-bus' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const msg = agentBus.publish(payload.to, {
+          from: payload.from || 'external',
+          text: String(payload.text || '').slice(0, 600),
+          kind: payload.kind || 'speak',
+        });
+        if (!msg) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'requires { to, text }' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, msg }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
     });
     return;
   }
@@ -431,7 +562,27 @@ server.listen(PORT, () => {
   console.log(`Security Monitor active — WebSocket at ws://localhost:${PORT}/security-ws`);
   console.log(`Agent Office WebSocket at ws://localhost:${PORT}/agent-ws`);
   console.log(`Test threats: http://localhost:${PORT}/security-test?type=file_access&severity=high&detail=Someone+reading+passwords`);
+  console.log(`World-state snapshot: GET http://localhost:${PORT}/api/world-state`);
+  console.log(`Task webhook (n8n etc): POST http://localhost:${PORT}/api/task-update  body: {id,title,status?,assignee?}`);
+  console.log(`Presence toggle (voice gate): POST http://localhost:${PORT}/api/presence  body: {present:true|false}`);
 
   // Start the cofounder agent's autonomous thinking loop
   cofounderAgent.start();
 });
+
+// Graceful shutdown — stop the security monitor's intervals and child
+// processes (tshark, journalctl polling) so the process exits cleanly
+// instead of hanging on the event loop. Idempotent across signals.
+let _shuttingDown = false;
+function gracefulShutdown(signal) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.log(`[Server] ${signal} received — shutting down`);
+  try { securityMonitor.stop?.(); } catch (e) { console.warn('[Server] securityMonitor.stop:', e?.message); }
+  try { cofounderAgent.stop?.(); } catch (_) {}
+  // Give in-flight requests up to 3s, then exit.
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
