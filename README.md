@@ -55,6 +55,8 @@ Built with **Phaser 3** using the [LimeZu Modern Office](https://limezu.itch.io/
   - [Black screen](#visualization-shows-black-screen)
   - [OpenClaw panel doesn't load](#openclaw-chat-panel-doesnt-load)
 - [Testing](#testing)
+- [Asset Pipeline](#asset-pipeline)
+- [City Generator (experimental)](#city-generator-experimental)
 - [Asset Pack](#asset-pack)
 - [Related Documentation](#related-documentation)
 - [Deployment](#deployment)
@@ -727,6 +729,44 @@ Tests are not yet wired to a git hook. If you want one, add to `.git/hooks/pre-c
 #!/usr/bin/env bash
 cd pixel-office-game && npm test --silent || exit 1
 ```
+
+## Asset Pipeline
+
+When you drop a new spritesheet into `assets/`, you run the pipeline to extract, catalog, label, and manifest the new sprites:
+
+```bash
+npm run build:assets            # full pipeline
+npm run build:assets:dry        # show what would run without doing it
+npm run build:assets -- --skip-ai     # skip the AI labeling step
+npm run build:assets -- --only=3      # run only step 3 (labeling)
+npm run build:assets -- --from=2      # start at step 2
+```
+
+The pipeline runs these steps in order — see [docs/SCRIPTS.md](docs/SCRIPTS.md) for what each one does:
+
+1. `extract_all_sheets.ps1` — slice raw sheets into per-sprite PNGs
+2. `build_master_catalog.py` — index every sprite into `assets-catalog.json`
+3. `label_sprites_ai.py` — *(optional)* AI-label sprites that lack tags
+4. `make_sprite_mosaics.py` — visual reference contact sheets
+5. `build_singles_manifest.js` — browser-side manifest for the asset browser UI
+
+The orchestrator picks `pwsh` for `.ps1`, `python` for `.py`, `node` for `.js`, auto-detects a `.venv/` if one exists, and bails out the moment any step fails (no silent skips).
+
+## City Generator (experimental)
+
+Denizen ships with a deterministic, LLM-pluggable city generator that's wired to two HTTP endpoints but not yet rendering into the main office scene. See **[docs/CITY_GENERATOR.md](docs/CITY_GENERATOR.md)** for the full architecture.
+
+```bash
+# As JSON — useful for headless snapshots, n8n, tests:
+curl 'http://localhost:8080/api/generate-city?seed=demo&width=64&height=48&roadStride=12' | jq .chunk.buildings
+
+# With an LLM doing the zoning:
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"prompt":"coastal tech city","gridW":4,"gridH":3,"provider":"claude"}' \
+  http://localhost:8080/api/llm-city-plan
+```
+
+In the browser, append `?debug=city` to see a live overlay rendering each freshly-generated city — or run `window.DenizenCityDebug.show()` from the console.
 
 ## Asset Pack
 

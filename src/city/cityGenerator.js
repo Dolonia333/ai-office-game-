@@ -1,6 +1,17 @@
 import { makeRng } from '../world/rng.js';
 import { makeEmptyLayer } from './cityTypes.js';
-import exteriorsCatalog from '../../data/exteriors.json' assert { type: 'json' };
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// Replace `import … assert { type: 'json' }` (dropped in Node 22) with a
+// runtime fs read. Same data, but avoids the unstable import-attributes
+// syntax. The catalog is small (a few KB), so reading once at module
+// load is fine.
+const _here = dirname(fileURLToPath(import.meta.url));
+const exteriorsCatalog = JSON.parse(
+  readFileSync(join(_here, '..', '..', 'data', 'exteriors.json'), 'utf8')
+);
 
 // Simple city chunk generator:
 // - grid of tiles (ground, roads)

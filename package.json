@@ -1,25 +1,33 @@
 {
-  "name": "pixel-office-game",
+  "name": "denizen",
   "version": "1.0.0",
-  "description": "A pixel art office game that visualizes AI agent workflows as an RPG. Watch your AI agents work like office employees — walking to desks, typing, researching, and collaborating — all driven by real AI activity from [OpenClaw](https://github.com/nichochar/openclaw).",
-  "main": "asset-browser.js",
+  "description": "Real-time visual observability layer for AI agents — a pixel-art office where every NPC is an LLM-backed agent.",
+  "main": "server.js",
   "scripts": {
-    "test": "node --test tests/*.test.js",
-    "start": "node server.js"
+    "test": "node --test tests/*.test.js tests/*.test.mjs",
+    "start": "node server.js",
+    "build:assets": "node scripts/run-pipeline.js",
+    "build:assets:dry": "node scripts/run-pipeline.js --dry-run"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Dolonia333/ai-office-game-.git"
+    "url": "git+https://github.com/Dolonia333/DENIZEN.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "ai",
+    "agents",
+    "phaser",
+    "pixel-art",
+    "observability",
+    "llm"
+  ],
+  "author": "Dolonia333",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Dolonia333/ai-office-game-/issues"
+    "url": "https://github.com/Dolonia333/DENIZEN/issues"
   },
-  "homepage": "https://github.com/Dolonia333/ai-office-game-#readme",
+  "homepage": "https://github.com/Dolonia333/DENIZEN#readme",
   "dependencies": {
     "ws": "^8.20.0"
-
   }
 }

@@ -1,34 +1,51 @@
 // Lightweight planning layer that turns a text prompt or simple options
-// into a structured JSON \"city plan\" consumed by the deterministic generators.
+// into a structured JSON "city plan" consumed by the deterministic
+// generators.
+//
+// Two entry points:
+//   planCityZones()       — synchronous, pure heuristic. Always available.
+//   planCityZonesLLM()    — async, prefers the server's /api/llm-city-plan
+//                          endpoint (which proxies to a real provider via
+//                          NpcBrainManager) and falls back to the heuristic
+//                          on failure.
+//
+// Use `planCityZones` for tests and offline determinism. Use
+// `planCityZonesLLM` from the browser when you want an actual LLM to do
+// the zoning.
 
 import { makeRng } from '../world/rng.js';
 
 /**
  * @typedef {Object} CityZoneRect
- * @property {string} zone - e.g. 'downtown' | 'residential' | 'industrial' | 'park'
+ * @property {string} zone - 'downtown' | 'residential' | 'industrial' | 'park'
  * @property {{ x: number, y: number, w: number, h: number }} rect
  */
 
 /**
- * Generate a coarse city plan from a prompt string.
- *
- * This is where an external LLM could plug in: instead of using the simple
- * rule-based heuristic below, you can call an API and return its JSON.
+ * @typedef {Object} CityPlan
+ * @property {string} seed
+ * @property {number} gridW
+ * @property {number} gridH
+ * @property {CityZoneRect[]} zones
+ * @property {string} [source]  - 'heuristic' | 'claude' | 'grok' | …
+ */
+
+/**
+ * Synchronous heuristic. Same algorithm as the CJS twin at
+ * `planner-heuristic.js` — given the same seed string, both produce
+ * byte-identical plans. Keep them in sync if you change the heuristic.
  *
  * @param {Object} opts
- * @param {string} [opts.prompt]  - description, e.g. 'coastal tech city with rich downtown and poor suburbs'
+ * @param {string} [opts.prompt]
  * @param {string} [opts.seed]
- * @param {number} [opts.gridW]   - how many chunks horizontally
- * @param {number} [opts.gridH]   - how many chunks vertically
- * @returns {{ seed: string, gridW: number, gridH: number, zones: CityZoneRect[] }}
+ * @param {number} [opts.gridW]
+ * @param {number} [opts.gridH]
+ * @returns {CityPlan}
  */
 export function planCityZones({ prompt = '', seed = 'city-plan', gridW = 5, gridH = 3 } = {}) {
   const rng = makeRng(`${seed}:${prompt}`);
 
   const zones = [];
-
-  // Simple heuristic: central column is downtown, edges are residential/industrial,
-  // random parks sprinkled in.
   const midCol = Math.floor(gridW / 2);
 
   for (let gy = 0; gy < gridH; gy++) {
@@ -53,17 +70,52 @@ export function planCityZones({ prompt = '', seed = 'city-plan', gridW = 5, grid
     gridW,
     gridH,
     zones,
+    source: 'heuristic',
   };
 }
 
 /**
- * Example of how an external LLM could be integrated:
+ * LLM-aware planner. Hits the server endpoint that knows how to talk to
+ * Anthropic / xAI / Google / LM Studio. On any failure — endpoint
+ * unreachable, malformed JSON, validation reject — we silently fall
+ * back to the heuristic so nothing higher in the pipeline ever crashes.
  *
- * async function planCityWithLLM(prompt) {
- *   const response = await fetch('/api/llm-city-plan', { method: 'POST', body: JSON.stringify({ prompt }) });
- *   const json = await response.json();
- *   // Expected shape: { zones: [{ zone, rect: {x,y,w,h} }, ...] }
- *   return json;
- * }
+ * The endpoint URL is overridable for tests via `endpoint:` opt.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.prompt]
+ * @param {string} [opts.seed]
+ * @param {number} [opts.gridW]
+ * @param {number} [opts.gridH]
+ * @param {string} [opts.provider]   - 'claude' | 'grok' | 'gemini' | 'kimi' | 'lmstudio'
+ * @param {string} [opts.endpoint]   - default '/api/llm-city-plan'
+ * @returns {Promise<CityPlan>}
  */
-
+export async function planCityZonesLLM(opts = {}) {
+  const endpoint = opts.endpoint || '/api/llm-city-plan';
+  try {
+    if (typeof fetch !== 'function') throw new Error('no fetch in this runtime');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: opts.prompt || '',
+        seed: opts.seed || 'city-plan',
+        gridW: opts.gridW || 5,
+        gridH: opts.gridH || 3,
+        provider: opts.provider,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json || !Array.isArray(json.zones) || json.zones.length === 0) {
+      throw new Error('endpoint returned no zones');
+    }
+    return json;
+  } catch (err) {
+    // Tag the source so callers can see why they got heuristic output.
+    const fallback = planCityZones(opts);
+    fallback.source = `heuristic (LLM unavailable: ${err.message || err})`;
+    return fallback;
+  }
+}

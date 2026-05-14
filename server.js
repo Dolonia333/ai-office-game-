@@ -328,6 +328,140 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // --- LLM-backed city plan ---
+  // POST body: { prompt, seed?, gridW?, gridH?, provider? }
+  // Reuses NpcBrainManager's provider clients so we don't reimplement
+  // five HTTP integrations. The model is asked for a JSON-only response;
+  // we parse, validate shape, and fall back to the heuristic on any
+  // failure (no LLM, malformed JSON, missing zones field). The planner
+  // module itself calls into this endpoint when CITY_PLAN_PROVIDER is set
+  // — see src/city/planner.js.
+  if (urlPath === '/api/llm-city-plan' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', async () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const prompt = String(payload.prompt || '').slice(0, 1000);
+      const seed = String(payload.seed || 'city-plan').slice(0, 80);
+      const gridW = Math.max(1, Math.min(20, parseInt(payload.gridW, 10) || 5));
+      const gridH = Math.max(1, Math.min(20, parseInt(payload.gridH, 10) || 3));
+
+      // Pick a provider. Order: explicit body.provider → env → first available.
+      const providerKey = payload.provider
+        || process.env.CITY_PLAN_PROVIDER
+        || ['claude', 'grok', 'gemini', 'kimi', 'lmstudio'].find(k => npcBrains.providers[k]);
+      const providerConfig = providerKey ? npcBrains.providers[providerKey] : null;
+
+      const heuristic = () => {
+        // .cjs extension forces CommonJS even though src/city/ is an ESM
+        // folder (package.json type:module). Keep the lazy require here so
+        // boot stays fast.
+        const { planCityZones } = require('./src/city/planner-heuristic.cjs');
+        const plan = planCityZones({ prompt, seed, gridW, gridH });
+        return { ...plan, source: 'heuristic' };
+      };
+
+      if (!providerConfig || providerConfig.type === 'demo') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(heuristic()));
+        return;
+      }
+
+      const system = [
+        'You are a city planner. Given a free-form prompt and a grid size W x H, return ONE JSON object and NOTHING ELSE.',
+        'Shape: { "zones": [ { "zone": "downtown"|"residential"|"industrial"|"park", "rect": { "x": int, "y": int, "w": int, "h": int } }, ... ] }.',
+        'Constraints: 0 <= x < W, 0 <= y < H, x+w <= W, y+h <= H, no zones may overlap, every cell must be covered.',
+        'No prose. No markdown. Just the JSON object.',
+      ].join('\n');
+      const userMsg = `Prompt: ${prompt || '(none — invent a coherent small city)'}\nW=${gridW} H=${gridH}\nReturn the JSON now.`;
+
+      try {
+        const raw = await npcBrains._callProvider(providerConfig, system,
+          [{ role: 'user', content: userMsg }],
+          { maxTokens: 800, sliceLen: 1200, temperature: 0.5 });
+        const match = String(raw || '').match(/\{[\s\S]*\}/);
+        const parsed = match ? JSON.parse(match[0]) : null;
+        if (!parsed || !Array.isArray(parsed.zones)) {
+          throw new Error('LLM did not return { zones: [] }');
+        }
+        // Light validation — clamp every rect into bounds; drop bad entries.
+        const clean = parsed.zones
+          .filter(z => z && z.rect && typeof z.zone === 'string')
+          .map(z => ({
+            zone: z.zone,
+            rect: {
+              x: Math.max(0, Math.min(gridW - 1, parseInt(z.rect.x, 10) || 0)),
+              y: Math.max(0, Math.min(gridH - 1, parseInt(z.rect.y, 10) || 0)),
+              w: Math.max(1, parseInt(z.rect.w, 10) || 1),
+              h: Math.max(1, parseInt(z.rect.h, 10) || 1),
+            },
+          }));
+        if (clean.length === 0) throw new Error('All LLM zones invalid');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ seed, gridW, gridH, zones: clean, source: providerKey }));
+      } catch (err) {
+        console.warn(`[CityPlan] LLM failed (${err.message}) — falling back to heuristic`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(heuristic()));
+      }
+    });
+    return;
+  }
+
+  // --- Full city generation (planner → chunk → optional interior) as JSON ---
+  // Query: ?seed=…&prompt=…&width=…&height=…&roadStride=…&chunkX=…&chunkY=…
+  // Returns the same data the in-game phaserAdapter consumes — useful for
+  // a debug overlay (?debug=city) and for headless snapshot tests.
+  // Implementation uses dynamic import() because city/* are ES modules.
+  if (urlPath === '/api/generate-city' && req.method === 'GET') {
+    const params = new URL(req.url, `http://localhost:${PORT}`).searchParams;
+    const seed = params.get('seed') || 'office-demo';
+    const prompt = params.get('prompt') || '';
+    const width = Math.max(8, Math.min(256, parseInt(params.get('width'), 10) || 48));
+    const height = Math.max(8, Math.min(256, parseInt(params.get('height'), 10) || 48));
+    const roadStride = Math.max(2, Math.min(32, parseInt(params.get('roadStride'), 10) || 8));
+    const chunkX = parseInt(params.get('chunkX'), 10) || 0;
+    const chunkY = parseInt(params.get('chunkY'), 10) || 0;
+
+    (async () => {
+      try {
+        // Dynamic ESM import — these modules use `import/export`.
+        const cityMod = await import('./src/city/cityGenerator.js');
+        const interiorMod = await import('./src/city/interiorGenerator.js');
+        const plannerMod = await import('./src/city/planner.js');
+
+        // Plan (LLM if available, heuristic otherwise — planner module
+        // honors CITY_PLAN_PROVIDER + the /api/llm-city-plan endpoint when
+        // running in the browser; on the server we just call the local
+        // heuristic to keep this endpoint sync-cheap for snapshots).
+        const plan = plannerMod.planCityZones({ seed, prompt, gridW: 4, gridH: 3 });
+        const chunk = cityMod.generateCityChunk({ seed, chunkX, chunkY, width, height, roadStride });
+        const interior = chunk.buildings && chunk.buildings[0]
+          ? interiorMod.generateOfficeInterior({
+              seed: `${seed}:${chunk.buildings[0].id}`,
+              buildingId: chunk.buildings[0].id,
+              width: 24,
+              height: 16,
+            })
+          : null;
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ plan, chunk, sampleInterior: interior }));
+      } catch (err) {
+        console.warn('[GenerateCity] failed:', err?.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err?.message || String(err) }));
+      }
+    })();
+    return;
+  }
+
   // --- Security test endpoint: simulate threats for testing ---
   if (urlPath === '/security-test') {
     const category = new URL(req.url, `http://localhost:${PORT}`).searchParams.get('type') || 'network_scan';

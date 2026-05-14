@@ -7,14 +7,17 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const catalogPath = join(__dirname, '..', 'data', 'furniture_catalog_openplan.json');
 const catalogData = JSON.parse(readFileSync(catalogPath, 'utf8'));
 
-const { RoomGenerator } = await import(join('file://', __dirname, '..', 'src', 'RoomGenerator.js'));
+// Use pathToFileURL so the path-to-URL conversion is correct on Windows
+// (backslashes, drive letters). Older code used join('file://', …) which
+// breaks on Node 22 because the resolver no longer treats that as a URL.
+const { RoomGenerator } = await import(pathToFileURL(join(__dirname, '..', 'src', 'RoomGenerator.js')).href);
 
 // ---------------------------------------------------------------------------
 // Construction & Palette

@@ -1,9 +1,12 @@
 # Denizen — City Generator
 
-> Status: **scaffolded, not wired into the main game.** The pieces exist
-> as a working pipeline you can call from a test harness, but no production
-> code path reaches them yet. This doc tells you what's there, how it
-> composes, and what it would take to plug into the running game.
+> Status: **wired end-to-end to two HTTP endpoints + a debug overlay.**
+> The main office scene still uses the hand-laid layout — replacing that
+> is a deliberate later step (see "Hooking the city generator into the
+> running game" below) — but you can drive the full pipeline today
+> through `/api/generate-city`, watch it via `?debug=city`, and the LLM
+> hook in `planner.js` is connected to NpcBrainManager's existing
+> provider clients (Claude / Grok / Gemini / Kimi / LM Studio).
 
 The city generator turns a seed (and optionally a text prompt) into a
 deterministic city layout — orthogonal road grid, named building lots,
@@ -82,55 +85,64 @@ Three things to internalize:
    could be rendered to Three.js, a server-side PNG, or a JSON dump for
    tests.
 
-## planner.js — the LLM hook
+## planner.js — synchronous heuristic + async LLM
+
+Two exports:
 
 ```js
-import { planCityZones } from './src/city/planner.js';
+import { planCityZones, planCityZonesLLM } from './src/city/planner.js';
 
-const plan = planCityZones({
+// Synchronous. Always available. Deterministic on (seed, prompt).
+const offline = planCityZones({ prompt: 'coastal tech city', seed: 'demo', gridW: 5, gridH: 3 });
+// → { seed, gridW, gridH, zones: [...], source: 'heuristic' }
+
+// Async. Hits the server's /api/llm-city-plan endpoint which routes
+// the prompt through NpcBrainManager's existing provider clients.
+// Falls back to the heuristic on ANY failure — endpoint unreachable,
+// LLM unavailable, malformed JSON. The returned object tags `source`
+// so callers can tell what they actually got.
+const online = await planCityZonesLLM({
   prompt: 'coastal tech city with rich downtown and poor suburbs',
-  seed:   'demo-city',
+  seed:   'demo',
   gridW:  5,
   gridH:  3,
+  provider: 'claude',   // optional: claude | grok | gemini | kimi | lmstudio
 });
-// → { seed, gridW, gridH, zones: [{ zone: 'downtown', rect: { x:2, y:1, w:1, h:1 } }, ...] }
+// → { ..., source: 'claude' }   if the LLM succeeded
+// → { ..., source: 'heuristic (LLM unavailable: <reason>)' } on fallback
 ```
 
-Today the function uses a heuristic (central column = downtown, edges =
-residential/industrial, a few park cells). The file has a comment marking
-the swap point:
+The synchronous version matches a CJS twin at `planner-heuristic.cjs` —
+same algorithm, same seeded RNG. The server uses the `.cjs` version for
+the heuristic fallback so it doesn't pay a dynamic-import cost per
+request. If you change one, change both.
 
-> *"This is where an external LLM could plug in: instead of using the
-> simple rule-based heuristic below, you can call an API and return its
-> JSON."*
+### How the LLM hook works
 
-To actually wire an LLM, replace the body of `planCityZones` with an
-async call (the function needs to become `async`):
+`/api/llm-city-plan` in `server.js`:
 
-```js
-export async function planCityZones({ prompt, seed, gridW, gridH }) {
-  const res = await fetch('/api/llm-city-plan', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, seed, gridW, gridH }),
-  });
-  const { zones } = await res.json();
-  return { seed, gridW, gridH, zones };
-}
-```
+1. Picks a provider in this order:
+   - Explicit `body.provider` (if set)
+   - `CITY_PLAN_PROVIDER` env var
+   - First available from `claude → grok → gemini → kimi → lmstudio`
+2. Calls `npcBrains._callProvider(providerConfig, system, messages, opts)` —
+   the same code path NPC chat uses, so all five providers work without
+   reimplementing HTTP clients.
+3. The system prompt forces a JSON-only response of shape `{ "zones": [...] }`.
+4. Validates + clamps every zone rect into bounds before returning.
+5. **On any failure**, calls the heuristic and returns that with `source`
+   tagged so the client knows.
 
-…and add `/api/llm-city-plan` to `server.js` that proxies the prompt to
-your provider of choice (Anthropic / xAI / LM Studio — `NpcBrainManager`
-already has working clients for all of them; lift its provider calls and
-re-use them).
-
-A reasonable JSON-only system prompt:
+System prompt sent to the LLM:
 
 ```
-You are a city planner. Given a prompt and a grid size W×H, return ONLY
-a JSON object: { "zones": [{ "zone": "downtown"|"residential"|"industrial"|"park",
-"rect": { "x": <0..W-1>, "y": <0..H-1>, "w": int, "h": int } }] }.
-Every cell in the WxH grid must be covered by exactly one zone. No prose.
+You are a city planner. Given a free-form prompt and a grid size W x H,
+return ONE JSON object and NOTHING ELSE.
+Shape: { "zones": [ { "zone": "downtown"|"residential"|"industrial"|"park",
+  "rect": { "x": int, "y": int, "w": int, "h": int } }, ... ] }.
+Constraints: 0 <= x < W, 0 <= y < H, x+w <= W, y+h <= H,
+no zones may overlap, every cell must be covered.
+No prose. No markdown. Just the JSON object.
 ```
 
 ## cityGenerator.js — roads + lots
@@ -221,6 +233,75 @@ files, a factory for the assembly instance, and `renderRoomByName(name)`.
 draft, kept around for reference. `RoomBuilder.js:194` has a `TODO`
 marker (`// TODO: Implement lookup in sprite-assembly-system.json`) — if
 you adopt RoomBuilder over RoomAssembly, that's the gap.
+
+## HTTP endpoints
+
+Two GET/POST endpoints expose the full pipeline without touching the
+Phaser scene. Useful for debugging, headless snapshots, and the n8n
+integration story.
+
+### `GET /api/generate-city`
+
+Runs `planCityZones → generateCityChunk → generateOfficeInterior` for the
+first building, returns the lot as plain JSON.
+
+```
+GET /api/generate-city?seed=demo&width=64&height=48&roadStride=12
+```
+
+| Param | Default | Range | Meaning |
+|---|---|---|---|
+| `seed` | `office-demo` | string | Determinism key |
+| `prompt` | `` | string | Forwarded to the planner |
+| `width` | 48 | 8..256 | Chunk width in tiles |
+| `height` | 48 | 8..256 | Chunk height in tiles |
+| `roadStride` | 8 | 2..32 | Tile spacing between roads |
+| `chunkX`, `chunkY` | 0, 0 | int | Chunk coordinates |
+
+Response shape:
+
+```jsonc
+{
+  "plan": { "seed", "gridW", "gridH", "zones": [...], "source": "heuristic" },
+  "chunk": { "width", "height", "layers": [...], "buildings": [...] },
+  "sampleInterior": { "buildingId", "layers", "prefabs": [...] } | null
+}
+```
+
+### `POST /api/llm-city-plan`
+
+Returns just the planner output, with the LLM hook engaged (see above).
+
+```
+POST /api/llm-city-plan
+Content-Type: application/json
+
+{ "prompt": "tiny suburb with a single industrial block",
+  "seed":   "neighborhood-7",
+  "gridW":  4, "gridH": 3,
+  "provider": "claude" }      // optional — pick a specific provider
+```
+
+## Debug overlay (browser)
+
+`src/city-debug.js` is a small in-game HUD that fetches a fresh city from
+`/api/generate-city` and renders it into a hidden canvas overlay. Two
+ways to open it:
+
+```
+http://localhost:8080/?debug=city          # auto-shows on load
+```
+
+```js
+// from the browser console at any time:
+window.DenizenCityDebug.show();
+window.DenizenCityDebug.refresh('any-seed-string');
+```
+
+The overlay shows the plan source (heuristic/claude/grok/…), zone
+distribution, building count, and a top-down render of roads + buildings.
+**It does not modify the running office.** It's a verification view for
+the pipeline.
 
 ## Hooking the city generator into the running game
 
