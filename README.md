@@ -54,8 +54,10 @@ Built with **Phaser 3** using the [LimeZu Modern Office](https://limezu.itch.io/
   - [NPCs don't respond](#npcs-dont-respond--blank-speech-bubbles)
   - [Black screen](#visualization-shows-black-screen)
   - [OpenClaw panel doesn't load](#openclaw-chat-panel-doesnt-load)
+- [Testing](#testing)
 - [Asset Pack](#asset-pack)
 - [Related Documentation](#related-documentation)
+- [Deployment](#deployment)
 - [License](#license)
 
 ---
@@ -300,6 +302,58 @@ npcs/
 5. After significant conversations, memories are automatically written back to `MEMORY.md`
 
 **The soul file IS the NPC.** The AI model doesn't change. But the NPC has persistent identity, consistent personality, and long-term memory — all from plain text files.
+
+#### Example: `npcs/abby/SOUL.md`
+
+```markdown
+# Abby — CTO
+
+## Core Identity
+You are Abby, the CTO of this AI startup. You are the leader. You set the
+technical vision, review architecture decisions, and keep the entire team
+aligned and shipping.
+
+## Personality
+Confident, decisive, strategic thinker. You don't waste words. When you
+speak, people listen because you've already thought it through. You care
+deeply about code quality and team morale — you know one feeds the other.
+You push people to do their best work but you never micromanage. You trust
+your team.
+
+## Values
+- Ship quality code, fast
+- Protect the team's focus
+- Architecture decisions matter more than individual lines
+- A happy team writes better code
+- Lead by example, not authority
+
+## Boundaries
+- You don't tolerate sloppy shortcuts that create tech debt
+- You speak directly — no corporate fluff
+- You admit when you're wrong
+
+## Provider
+lmstudio
+
+## Role
+CTO
+```
+
+Two sections are parsed by the runtime, the rest are free-form for the LLM:
+
+- **`## Provider`** — which backend powers this NPC (`lmstudio`, `claude`,
+  `grok`, `gemini`, `kimi`). Missing or unknown → falls through to LM Studio,
+  then to canned responses.
+- **`## Role`** — the short job title shown in logs and prompts.
+
+Everything else in the file (Core Identity, Personality, Values, Boundaries,
+Quirks — whatever sections you want) is concatenated into the NPC's system
+prompt. The format is yours: bullets, prose, ASCII art, in-character notes
+from the NPC about themselves. The richer the soul file, the more consistent
+the personality across hundreds of conversations.
+
+To add a new NPC: create `npcs/<name_lower>/SOUL.md`, add the display name +
+folder mapping to `src/npc-roster.js`, restart. No code changes.
 
 ### NPC Brains (Runtime)
 
@@ -629,6 +683,51 @@ node server.js
 - OpenClaw gateway must be running on `localhost:18789`
 - The server proxies `/openclaw/*` — check terminal for proxy errors
 
+## Testing
+
+Denizen uses **Node's built-in test runner** (`node:test`) — no Jest, no Mocha, no global setup needed.
+
+```bash
+npm test
+```
+
+The suite currently runs **66 tests across 18 suites** and finishes in ~1 second. It covers:
+
+| Suite | What it asserts |
+|-------|-----------------|
+| `tests/world-state.test.js` | Presence toggle + emit semantics, npc state merge, spatial `npcsNear`, threat push/clear with cap, task upsert + foreground/background split, `renderContextBlock` output, `change` event payload |
+| `tests/agent-bus.test.js` | Ordered drain, late publish, default-deny addressing, wildcard mirroring, validation rejects, error containment, buffer cap, unsubscribe, envelope shape |
+| `tests/external-sink.test.js` | No-op when unconfigured, Supabase POST with bearer + envelope, `EXTERNAL_SINK_KINDS` filter, auto-disable after 5 failures, fan-out to Supabase + n8n simultaneously |
+| `tests/pathfinding.test.js` | A* on empty grid, blocked cells, unreachable destinations, world↔grid conversion, `_stuckCount` initialization |
+| `tests/npc-brains.test.js` | Demo-mode detection (HOME-isolated via temp dir), role-aware canned responses, `_smartFallback` action generation, delegation tag parsing |
+| `tests/npc-roster.test.js` | Roster shape + display↔folder name mapping |
+| `tests/room-generator.test.mjs` | Room archetype templates produce non-overlapping, walkable layouts |
+
+### Conventions
+
+- **No mocks for HTTP** — `external-sink.test.js` boots a real `http.Server` on a random port and asserts on the bodies it receives. If you need to test outbound HTTP, follow that pattern.
+- **`HOME` / `USERPROFILE` isolation** — anything that reads `~/.openclaw/openclaw.json` must point `HOME` and `USERPROFILE` at a temp dir before `require`-ing the module under test (see `npc-brains.test.js:13-32`). Otherwise dev machines that have a real config file get false negatives.
+- **Use a fresh singleton when state matters** — `world-state.js` and `agent-bus.js` both export the singleton **and** the class. Tests import the class (`const { WorldState } = require(...)`) and `new` it so state from prior suites can't leak in.
+
+### Adding a new test
+
+1. Drop a `*.test.js` (or `*.test.mjs`) file under `tests/`.
+2. Use the same imports as the existing suites:
+   ```js
+   const { describe, it, before, after } = require('node:test');
+   const assert = require('node:assert/strict');
+   ```
+3. `npm test` picks it up automatically — the package.json script globs `tests/*.test.js`.
+
+### Pre-commit
+
+Tests are not yet wired to a git hook. If you want one, add to `.git/hooks/pre-commit`:
+
+```bash
+#!/usr/bin/env bash
+cd pixel-office-game && npm test --silent || exit 1
+```
+
 ## Asset Pack
 
 Uses the [LimeZu Modern Office Revamped](https://limezu.itch.io/) asset pack. All required assets are bundled in the `assets/` directory:
@@ -648,7 +747,11 @@ The `docs/` directory has the canonical deep-dives for the runtime systems:
 |----------|----------|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Whole-system topology — browser ↔ Node server ↔ LM Studio, decision loops, WebSocket message types |
 | [docs/AI-SYSTEM.md](docs/AI-SYSTEM.md) | NPC intelligence layer — goals, daily plans, theory of mind, chain-of-thought, memory tags, social graph |
-| [docs/WORLD-STATE.md](docs/WORLD-STATE.md) | **WorldState + AgentBus + Voice Gate** — single source of truth, peer-to-peer NPC messages, presence-gated TTS, n8n webhook |
+| [docs/WORLD-STATE.md](docs/WORLD-STATE.md) | **WorldState + Voice Gate + outbound webhooks** — single source of truth, presence-gated TTS, Supabase/n8n forwarding, throttled broadcasts |
+| [docs/AGENT_BUS.md](docs/AGENT_BUS.md) | **Direct NPC↔NPC messaging** — pub/sub, default-deny addressing, buffered inboxes, when to use vs. CofounderAgent vs. WorldState |
+| [docs/CITY_GENERATOR.md](docs/CITY_GENERATOR.md) | **Procedural city pipeline** (`src/city/`) — planner → chunk → interior → Phaser adapter. Scaffolded, not yet wired to the main scene |
+| [docs/WORLD_ENGINE.md](docs/WORLD_ENGINE.md) | **World engine** (`src/world/`) — seeded RNG, room layout, L-corridors, recipe-driven furnisher, character anim registry |
+| [docs/SCRIPTS.md](docs/SCRIPTS.md) | **Asset toolchain** — which `scripts/` you actually run for a sprite import vs. which are archaeological |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat catalog (10 categories), robber archetype mappings, tuning knobs |
 | [docs/SETUP.md](docs/SETUP.md) | End-to-end install — Node + LM Studio baseline, plus Linux Wireshark/Nmap live feeders |
 
