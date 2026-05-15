@@ -1,0 +1,128 @@
+{
+  "id": "modern_office_reception_v1",
+  "theme": "modern_office",
+  "roomType": "reception_lobby",
+  "tileSize": 16,
+  "size": { "w": 32, "h": 20 },
+  "palette": {
+    "floor": "office_floor_light",
+    "wall": "office_wall_white",
+    "carpet": "office_rug_dark"
+  },
+  "prefabs": [
+    { "id": "reception_counter", "from": "office", "kind": "counter" },
+    { "id": "office_chair", "from": "interiors", "kind": "seat", "action": "sit" },
+    { "id": "waiting_chair", "from": "interiors", "kind": "seat", "action": "sit" },
+    { "id": "pc_monitor", "from": "office", "kind": "device", "action": "use_pc" },
+    { "id": "plant_pot_tall", "from": "interiors", "kind": "decor" },
+    { "id": "wall_logo_panel", "from": "office", "kind": "wall_decor" },
+    { "id": "info_poster", "from": "office", "kind": "wall_decor" },
+    { "id": "coffee_table_small", "from": "interiors", "kind": "table" },
+    { "id": "magazine_stack", "from": "interiors", "kind": "decor" },
+    { "id": "door_glass_double", "from": "exteriors", "kind": "door" }
+  ],
+  "layout": {
+    "receptionDesk": {
+      "counter": {
+        "prefab": "reception_counter",
+        "start": { "x": 8, "y": 6 },
+        "lengthTiles": 10,
+        "orientation": "horizontal"
+      },
+      "frontChairs": [
+        {
+          "prefab": "waiting_chair",
+          "start": { "x": 9, "y": 10 },
+          "count": 3,
+          "spacing": { "x": 3, "y": 0 },
+          "facing": "up"
+        }
+      ],
+      "staff": [
+        {
+          "role": "receptionist",
+          "chairPrefab": "office_chair",
+          "pos": { "x": 13, "y": 7 },
+          "facing": "down",
+          "attach": {
+            "monitor": {
+              "prefab": "pc_monitor",
+              "offsetPixels": { "x": 0, "y": -16 }
+            }
+          }
+        }
+      ]
+    },
+    "waitingArea": {
+      "seats": [
+        {
+          "prefab": "waiting_chair",
+          "start": { "x": 4, "y": 12 },
+          "count": 4,
+          "spacing": { "x": 2, "y": 0 },
+          "facing": "up"
+        },
+        {
+          "prefab": "waiting_chair",
+          "start": { "x": 22, "y": 12 },
+          "count": 4,
+          "spacing": { "x": 2, "y": 0 },
+          "facing": "up"
+        }
+      ],
+      "tables": [
+        {
+          "prefab": "coffee_table_small",
+          "pos": { "x": 8, "y": 14 },
+          "attach": [
+            { "prefab": "magazine_stack", "offsetPixels": { "x": 0, "y": -4 } }
+          ]
+        },
+        {
+          "prefab": "coffee_table_small",
+          "pos": { "x": 24, "y": 14 },
+          "attach": [
+            { "prefab": "magazine_stack", "offsetPixels": { "x": 0, "y": -4 } }
+          ]
+        }
+      ]
+    },
+    "decor": {
+      "plants": [
+        { "prefab": "plant_pot_tall", "pos": { "x": 3, "y": 6 } },
+        { "prefab": "plant_pot_tall", "pos": { "x": 29, "y": 6 } }
+      ],
+      "wallArt": [
+        {
+          "prefab": "wall_logo_panel",
+          "side": "top",
+          "offsetTiles": { "x": 14 },
+          "repeat": 1
+        },
+        {
+          "prefab": "info_poster",
+          "side": "right",
+          "offsetTiles": { "y": 8 },
+          "repeat": 2,
+          "spacing": 2
+        }
+      ]
+    },
+    "doors": [
+      {
+        "prefab": "door_glass_double",
+        "side": "bottom",
+        "offsetTiles": { "x": 14 }
+      }
+    ]
+  },
+  "spawnPoints": {
+    "player": { "x": 14, "y": 17 },
+    "npcs": [
+      { "role": "receptionist", "x": 13, "y": 7 },
+      { "role": "visitor", "x": 10, "y": 13 },
+      { "role": "visitor", "x": 22, "y": 13 }
+    ]
+  }
+}
+

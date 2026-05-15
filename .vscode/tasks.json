@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "openclaw:gateway:watch",
+      "type": "shell",
+      "command": "pnpm gateway:watch",
+      "options": {
+        "cwd": "${workspaceFolder}/openclaw",
+        "env": {
+          "OPENCLAW_TS_COMPILER": "tsc"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openclaw:gateway:watch:log",
+      "type": "shell",
+      "command": "pnpm gateway:watch > gateway-watch.log 2>&1",
+      "options": {
+        "cwd": "${workspaceFolder}/openclaw",
+        "env": {
+          "OPENCLAW_TS_COMPILER": "tsc"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openclaw:gateway:run",
+      "type": "shell",
+      "command": "node openclaw.mjs gateway",
+      "options": {
+        "cwd": "${workspaceFolder}/openclaw"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openclaw:gateway:run:log",
+      "type": "shell",
+      "command": "node openclaw.mjs gateway > gateway-watch.log 2>&1",
+      "options": {
+        "cwd": "${workspaceFolder}/openclaw"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

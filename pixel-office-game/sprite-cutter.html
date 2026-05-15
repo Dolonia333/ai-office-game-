@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Sprite Cutter Tool</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',system-ui,sans-serif; overflow:hidden; height:100vh; }
+
+  #toolbar {
+    position:fixed; top:0; left:0; right:0; height:48px; background:#16213e;
+    display:flex; align-items:center; gap:12px; padding:0 16px; z-index:100;
+    border-bottom:2px solid #0f3460;
+  }
+  #toolbar label { font-size:13px; color:#a0a0c0; }
+  #toolbar input[type=checkbox] { margin-right:2px; }
+  #toolbar select, #toolbar input[type=text] {
+    background:#0f3460; color:#e0e0e0; border:1px solid #1a4080; border-radius:4px;
+    padding:4px 8px; font-size:13px;
+  }
+  #toolbar button {
+    background:#e94560; color:#fff; border:none; border-radius:4px;
+    padding:6px 14px; font-size:13px; cursor:pointer; font-weight:600;
+  }
+  #toolbar button:hover { background:#ff6b81; }
+  #toolbar button.secondary { background:#0f3460; }
+  #toolbar button.secondary:hover { background:#1a4080; }
+  .toolbar-sep { width:1px; height:28px; background:#0f3460; }
+
+  #main {
+    display:flex; position:fixed; top:48px; left:0; right:0; bottom:0;
+  }
+
+  #sheet-panel {
+    flex:1; overflow:auto; position:relative; cursor:crosshair;
+    background: repeating-conic-gradient(#2a2a3e 0% 25%, #222238 0% 50%) 50% / 16px 16px;
+  }
+  #sheet-canvas { display:block; image-rendering:pixelated; }
+  #selection-box {
+    position:absolute; border:2px solid #e94560; background:rgba(233,69,96,0.15);
+    pointer-events:none; display:none; z-index:10;
+  }
+  #grid-overlay { position:absolute; top:0; left:0; pointer-events:none; z-index:5; }
+  #hover-highlight {
+    position:absolute; border:1px dashed rgba(255,255,255,0.4);
+    background:rgba(255,255,255,0.05); pointer-events:none; display:none; z-index:8;
+  }
+
+  #right-panel {
+    width:380px; background:#16213e; border-left:2px solid #0f3460;
+    display:flex; flex-direction:column; overflow-y:auto;
+  }
+  .panel-section {
+    padding:12px 16px; border-bottom:1px solid #0f3460;
+  }
+  .panel-section h3 {
+    font-size:13px; color:#e94560; text-transform:uppercase; letter-spacing:1px;
+    margin-bottom:8px;
+  }
+
+  #preview-area {
+    display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;
+  }
+  .preview-box {
+    background: repeating-conic-gradient(#2a2a3e 0% 25%, #222238 0% 50%) 50% / 8px 8px;
+    border:1px solid #0f3460; display:inline-block; image-rendering:pixelated;
+  }
+  .preview-box canvas { image-rendering:pixelated; display:block; }
+  .preview-label { font-size:10px; color:#888; text-align:center; margin-top:2px; }
+
+  #coords-display {
+    font-family:'Consolas','Courier New',monospace; font-size:14px; line-height:1.8;
+    color:#7ec8e3; background:#0a0a1a; padding:10px; border-radius:4px;
+  }
+  #coords-display span { color:#e94560; }
+
+  #json-output {
+    font-family:'Consolas','Courier New',monospace; font-size:11px;
+    background:#0a0a1a; color:#a0d0a0; padding:10px; border-radius:4px;
+    white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto;
+    cursor:pointer; border:1px solid #0f3460;
+  }
+  #json-output:hover { border-color:#e94560; }
+
+  #name-input {
+    width:100%; background:#0a0a1a; color:#e0e0e0; border:1px solid #0f3460;
+    border-radius:4px; padding:6px 8px; font-size:13px; margin-bottom:8px;
+  }
+
+  #saved-list {
+    max-height:300px; overflow-y:auto;
+  }
+  .saved-item {
+    display:flex; align-items:center; gap:8px; padding:6px 0;
+    border-bottom:1px solid #0f3460; cursor:pointer; font-size:12px;
+  }
+  .saved-item:hover { background:rgba(233,69,96,0.1); }
+  .saved-item canvas { image-rendering:pixelated; border:1px solid #333; }
+  .saved-item .name { color:#7ec8e3; flex:1; }
+  .saved-item .coords { color:#888; font-family:monospace; font-size:10px; }
+  .saved-item .del { color:#e94560; cursor:pointer; padding:2px 6px; }
+
+  #status-bar {
+    position:fixed; bottom:0; left:0; right:380px; height:24px;
+    background:#0a0a1a; display:flex; align-items:center; padding:0 12px;
+    font-size:11px; color:#888; z-index:100; gap:16px;
+  }
+  #mouse-pos { color:#7ec8e3; }
+
+  .zoom-controls { display:flex; align-items:center; gap:4px; }
+  .zoom-controls button { padding:4px 8px; font-size:12px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span style="font-weight:700;color:#e94560;font-size:15px;">Sprite Cutter</span>
+  <div class="toolbar-sep"></div>
+  <label><input type="checkbox" id="snap-grid" checked> Snap 32px</label>
+  <label><input type="checkbox" id="show-grid" checked> Show Grid</label>
+  <div class="toolbar-sep"></div>
+  <div class="zoom-controls">
+    <label>Zoom:</label>
+    <button class="secondary" onclick="setZoom(sheetZoom-1)">−</button>
+    <span id="zoom-label">2x</span>
+    <button class="secondary" onclick="setZoom(sheetZoom+1)">+</button>
+  </div>
+  <div class="toolbar-sep"></div>
+  <button class="secondary" onclick="document.getElementById('file-input').click()">Load Spritesheet</button>
+  <input type="file" id="file-input" accept="image/*" style="display:none">
+  <div class="toolbar-sep"></div>
+  <button onclick="exportAllJSON()">Export All JSON</button>
+  <button class="secondary" onclick="importFromCatalog()">Import Catalog</button>
+</div>
+
+<div id="main">
+  <div id="sheet-panel" onmousemove="onMouseMove(event)" onmousedown="onMouseDown(event)" onmouseup="onMouseUp(event)" onmouseleave="onMouseLeave()">
+    <canvas id="sheet-canvas"></canvas>
+    <canvas id="grid-overlay"></canvas>
+    <div id="selection-box"></div>
+    <div id="hover-highlight"></div>
+  </div>
+
+  <div id="right-panel">
+    <div class="panel-section">
+      <h3>Current Selection</h3>
+      <div id="coords-display">
+        <span>x:</span> — &nbsp; <span>y:</span> — &nbsp; <span>w:</span> — &nbsp; <span>h:</span> —
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Preview</h3>
+      <div id="preview-area">
+        <div>
+          <div class="preview-box"><canvas id="prev-1x" width="0" height="0"></canvas></div>
+          <div class="preview-label">1x</div>
+        </div>
+        <div>
+          <div class="preview-box"><canvas id="prev-2x" width="0" height="0"></canvas></div>
+          <div class="preview-label">2x</div>
+        </div>
+        <div>
+          <div class="preview-box"><canvas id="prev-4x" width="0" height="0"></canvas></div>
+          <div class="preview-label">4x</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Save Cut</h3>
+      <input type="text" id="name-input" placeholder="Sprite name (e.g. desk_pod)">
+      <button onclick="saveCut()" style="width:100%;background:#e94560;color:#fff;border:none;border-radius:4px;padding:8px;cursor:pointer;font-weight:600;font-size:13px;">
+        Save Cut ✂️
+      </button>
+    </div>
+
+    <div class="panel-section">
+      <h3>JSON Output (click to copy)</h3>
+      <div id="json-output" onclick="copyJSON()">Select a region on the spritesheet...</div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Saved Cuts (<span id="saved-count">0</span>)</h3>
+      <div id="saved-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span id="mouse-pos">Mouse: —</span>
+  <span id="sheet-size">Sheet: not loaded</span>
+  <span>Tip: Click & drag to select. Shift+drag for freeform.</span>
+</div>
+
+<script>
+// State
+let sheetImg = null;
+let sheetZoom = 2;
+let selecting = false;
+let selStart = {x:0, y:0};
+let sel = {x:0, y:0, w:0, h:0}; // in sheet pixels
+let hasSel = false;
+let savedCuts = [];
+
+// Load default spritesheet
+const defaultPath = '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Office_Revamped_v1.2/2_Modern_Office_Black_Shadow/Modern_Office_Black_Shadow_32x32.png';
+
+function loadSheet(src) {
+  const img = new Image();
+  img.onload = () => {
+    sheetImg = img;
+    document.getElementById('sheet-size').textContent = `Sheet: ${img.width}×${img.height}`;
+    renderSheet();
+  };
+  img.onerror = () => { alert('Failed to load spritesheet. Use the Load button to select the file manually.'); };
+  img.src = src;
+}
+
+// Try loading from file input or default path
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  loadSheet(url);
+});
+
+function setZoom(z) {
+  sheetZoom = Math.max(1, Math.min(6, z));
+  document.getElementById('zoom-label').textContent = sheetZoom + 'x';
+  renderSheet();
+}
+
+function renderSheet() {
+  if (!sheetImg) return;
+  const c = document.getElementById('sheet-canvas');
+  const w = sheetImg.width * sheetZoom;
+  const h = sheetImg.height * sheetZoom;
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sheetImg, 0, 0, w, h);
+
+  // Grid overlay
+  const gc = document.getElementById('grid-overlay');
+  gc.width = w;
+  gc.height = h;
+  gc.style.width = w + 'px';
+  gc.style.height = h + 'px';
+  const gctx = gc.getContext('2d');
+  if (document.getElementById('show-grid').checked) {
+    gctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    gctx.lineWidth = 1;
+    const step = 32 * sheetZoom;
+    for (let x = 0; x <= w; x += step) {
+      gctx.beginPath(); gctx.moveTo(x+0.5, 0); gctx.lineTo(x+0.5, h); gctx.stroke();
+    }
+    for (let y = 0; y <= h; y += step) {
+      gctx.beginPath(); gctx.moveTo(0, y+0.5); gctx.lineTo(w, y+0.5); gctx.stroke();
+    }
+    // Thicker lines every 64px
+    gctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    const step2 = 64 * sheetZoom;
+    for (let x = 0; x <= w; x += step2) {
+      gctx.beginPath(); gctx.moveTo(x+0.5, 0); gctx.lineTo(x+0.5, h); gctx.stroke();
+    }
+    for (let y = 0; y <= h; y += step2) {
+      gctx.beginPath(); gctx.moveTo(0, y+0.5); gctx.lineTo(w, y+0.5); gctx.stroke();
+    }
+  }
+
+  // Redraw selection box
+  if (hasSel) updateSelectionBox();
+}
+
+function snapToGrid(val) {
+  if (!document.getElementById('snap-grid').checked) return val;
+  return Math.round(val / 32) * 32;
+}
+
+function getSheetCoords(e) {
+  const panel = document.getElementById('sheet-panel');
+  const canvas = document.getElementById('sheet-canvas');
+  const rect = canvas.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) / sheetZoom;
+  const sy = (e.clientY - rect.top) / sheetZoom;
+  return {x: sx, y: sy};
+}
+
+function onMouseMove(e) {
+  if (!sheetImg) return;
+  const {x, y} = getSheetCoords(e);
+  const gx = Math.floor(x);
+  const gy = Math.floor(y);
+  document.getElementById('mouse-pos').textContent = `Mouse: ${gx}, ${gy}`;
+
+  // Hover highlight (snap cell)
+  const hh = document.getElementById('hover-highlight');
+  if (!selecting) {
+    const snap = document.getElementById('snap-grid').checked;
+    if (snap) {
+      const cx = Math.floor(x / 32) * 32;
+      const cy = Math.floor(y / 32) * 32;
+      hh.style.display = 'block';
+      hh.style.left = (cx * sheetZoom) + 'px';
+      hh.style.top = (cy * sheetZoom) + 'px';
+      hh.style.width = (32 * sheetZoom) + 'px';
+      hh.style.height = (32 * sheetZoom) + 'px';
+    } else {
+      hh.style.display = 'none';
+    }
+  } else {
+    hh.style.display = 'none';
+  }
+
+  if (selecting) {
+    const freeform = e.shiftKey;
+    let ex = freeform ? x : snapToGrid(x);
+    let ey = freeform ? y : snapToGrid(y);
+
+    sel.x = Math.min(selStart.x, ex);
+    sel.y = Math.min(selStart.y, ey);
+    sel.w = Math.abs(ex - selStart.x);
+    sel.h = Math.abs(ey - selStart.y);
+
+    // Clamp
+    sel.x = Math.max(0, sel.x);
+    sel.y = Math.max(0, sel.y);
+    if (sel.x + sel.w > sheetImg.width) sel.w = sheetImg.width - sel.x;
+    if (sel.y + sel.h > sheetImg.height) sel.h = sheetImg.height - sel.y;
+
+    updateSelectionBox();
+    updatePreview();
+  }
+}
+
+function onMouseDown(e) {
+  if (!sheetImg || e.button !== 0) return;
+  selecting = true;
+  const {x, y} = getSheetCoords(e);
+  const freeform = e.shiftKey;
+  selStart.x = freeform ? x : snapToGrid(x);
+  selStart.y = freeform ? y : snapToGrid(y);
+  sel = {x: selStart.x, y: selStart.y, w: 0, h: 0};
+  hasSel = true;
+  updateSelectionBox();
+}
+
+function onMouseUp(e) {
+  if (!selecting) return;
+  selecting = false;
+  // Snap end point
+  const {x, y} = getSheetCoords(e);
+  const freeform = e.shiftKey;
+  let ex = freeform ? x : snapToGrid(x);
+  let ey = freeform ? y : snapToGrid(y);
+
+  sel.x = Math.round(Math.min(selStart.x, ex));
+  sel.y = Math.round(Math.min(selStart.y, ey));
+  sel.w = Math.round(Math.abs(ex - selStart.x));
+  sel.h = Math.round(Math.abs(ey - selStart.y));
+
+  if (sel.w < 2 || sel.h < 2) {
+    // Click without drag — select the 32x32 or 64x64 cell
+    const snap = document.getElementById('snap-grid').checked;
+    if (snap) {
+      sel.x = Math.floor(selStart.x / 32) * 32;
+      sel.y = Math.floor(selStart.y / 32) * 32;
+      sel.w = 32;
+      sel.h = 32;
+    }
+  }
+
+  // Clamp
+  sel.x = Math.max(0, sel.x);
+  sel.y = Math.max(0, sel.y);
+  if (sel.x + sel.w > sheetImg.width) sel.w = sheetImg.width - sel.x;
+  if (sel.y + sel.h > sheetImg.height) sel.h = sheetImg.height - sel.y;
+
+  hasSel = sel.w > 0 && sel.h > 0;
+  updateSelectionBox();
+  updatePreview();
+  updateJSON();
+}
+
+function onMouseLeave() {
+  document.getElementById('hover-highlight').style.display = 'none';
+}
+
+function updateSelectionBox() {
+  const box = document.getElementById('selection-box');
+  if (!hasSel || sel.w <= 0 || sel.h <= 0) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  box.style.left = (sel.x * sheetZoom) + 'px';
+  box.style.top = (sel.y * sheetZoom) + 'px';
+  box.style.width = (sel.w * sheetZoom) + 'px';
+  box.style.height = (sel.h * sheetZoom) + 'px';
+
+  document.getElementById('coords-display').innerHTML =
+    `<span>x:</span> ${sel.x} &nbsp; <span>y:</span> ${sel.y} &nbsp; <span>w:</span> ${sel.w} &nbsp; <span>h:</span> ${sel.h}`;
+}
+
+function updatePreview() {
+  if (!sheetImg || !hasSel || sel.w <= 0 || sel.h <= 0) return;
+  [1,2,4].forEach(z => {
+    const c = document.getElementById(`prev-${z}x`);
+    c.width = sel.w * z;
+    c.height = sel.h * z;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(sheetImg, sel.x, sel.y, sel.w, sel.h, 0, 0, sel.w * z, sel.h * z);
+  });
+}
+
+function updateJSON() {
+  if (!hasSel || sel.w <= 0) return;
+  const name = document.getElementById('name-input').value || 'my_sprite';
+  const json = `"${name}": {
+  "sheet": "mo_black_shadow_32",
+  "x": ${sel.x},
+  "y": ${sel.y},
+  "w": ${sel.w},
+  "h": ${sel.h},
+  "origin": "bottom",
+  "depth": 1.5,
+  "display_w": ${sel.w},
+  "display_h": ${sel.h},
+  "type": "furniture"
+}`;
+  document.getElementById('json-output').textContent = json;
+}
+
+function copyJSON() {
+  const text = document.getElementById('json-output').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const el = document.getElementById('json-output');
+    el.style.borderColor = '#0f0';
+    setTimeout(() => el.style.borderColor = '#0f3460', 800);
+  });
+}
+
+function saveCut() {
+  if (!hasSel || sel.w <= 0 || sel.h <= 0) return;
+  const name = document.getElementById('name-input').value.trim();
+  if (!name) { alert('Enter a name first!'); return; }
+
+  // Check for duplicate name
+  const existing = savedCuts.findIndex(c => c.name === name);
+
+  const cut = { name, x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+  if (existing >= 0) {
+    savedCuts[existing] = cut;
+  } else {
+    savedCuts.push(cut);
+  }
+  renderSavedList();
+  saveToLocalStorage();
+}
+
+function renderSavedList() {
+  document.getElementById('saved-count').textContent = savedCuts.length;
+  const list = document.getElementById('saved-list');
+  list.innerHTML = '';
+  savedCuts.forEach((cut, i) => {
+    const div = document.createElement('div');
+    div.className = 'saved-item';
+
+    // Mini preview
+    const mc = document.createElement('canvas');
+    mc.width = 32; mc.height = 32;
+    mc.style.width = '32px'; mc.style.height = '32px';
+    const mctx = mc.getContext('2d');
+    mctx.imageSmoothingEnabled = false;
+    if (sheetImg) {
+      const scale = Math.min(32/cut.w, 32/cut.h);
+      const dw = cut.w * scale, dh = cut.h * scale;
+      mctx.drawImage(sheetImg, cut.x, cut.y, cut.w, cut.h, (32-dw)/2, (32-dh)/2, dw, dh);
+    }
+    div.appendChild(mc);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'name';
+    nameSpan.textContent = cut.name;
+    div.appendChild(nameSpan);
+
+    const coordSpan = document.createElement('span');
+    coordSpan.className = 'coords';
+    coordSpan.textContent = `${cut.x},${cut.y} ${cut.w}×${cut.h}`;
+    div.appendChild(coordSpan);
+
+    const del = document.createElement('span');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.onclick = (e) => { e.stopPropagation(); savedCuts.splice(i, 1); renderSavedList(); saveToLocalStorage(); };
+    div.appendChild(del);
+
+    div.onclick = () => {
+      sel = {x: cut.x, y: cut.y, w: cut.w, h: cut.h};
+      hasSel = true;
+      document.getElementById('name-input').value = cut.name;
+      updateSelectionBox();
+      updatePreview();
+      updateJSON();
+      // Scroll sheet to show the selection
+      const panel = document.getElementById('sheet-panel');
+      panel.scrollLeft = sel.x * sheetZoom - 100;
+      panel.scrollTop = sel.y * sheetZoom - 100;
+    };
+
+    list.appendChild(div);
+  });
+}
+
+function exportAllJSON() {
+  if (savedCuts.length === 0) { alert('No saved cuts to export!'); return; }
+  let json = '{\n';
+  savedCuts.forEach((cut, i) => {
+    json += `  "${cut.name}": {\n`;
+    json += `    "sheet": "mo_black_shadow_32",\n`;
+    json += `    "x": ${cut.x},\n`;
+    json += `    "y": ${cut.y},\n`;
+    json += `    "w": ${cut.w},\n`;
+    json += `    "h": ${cut.h},\n`;
+    json += `    "origin": "bottom",\n`;
+    json += `    "depth": 1.5,\n`;
+    json += `    "display_w": ${cut.w},\n`;
+    json += `    "display_h": ${cut.h},\n`;
+    json += `    "type": "furniture"\n`;
+    json += `  }${i < savedCuts.length - 1 ? ',' : ''}\n`;
+  });
+  json += '}';
+
+  // Download as file
+  const blob = new Blob([json], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sprite_cuts.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importFromCatalog() {
+  fetch('./data/furniture_catalog_openplan.json?v=' + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      const objs = data.objects || {};
+      savedCuts = [];
+      for (const [name, def] of Object.entries(objs)) {
+        if (def.sheet && def.x !== undefined && def.y !== undefined && def.w && def.h) {
+          savedCuts.push({ name, x: def.x, y: def.y, w: def.w, h: def.h });
+        }
+      }
+      renderSavedList();
+      saveToLocalStorage();
+      alert(`Imported ${savedCuts.length} spritesheet-based cuts from catalog.`);
+    })
+    .catch(err => alert('Failed to load catalog: ' + err.message));
+}
+
+function saveToLocalStorage() {
+  try { localStorage.setItem('spriteCuts', JSON.stringify(savedCuts)); } catch(e) {}
+}
+
+function loadFromLocalStorage() {
+  try {
+    const data = localStorage.getItem('spriteCuts');
+    if (data) { savedCuts = JSON.parse(data); renderSavedList(); }
+  } catch(e) {}
+}
+
+// Event listeners
+document.getElementById('show-grid').addEventListener('change', renderSheet);
+document.getElementById('snap-grid').addEventListener('change', () => {});
+document.getElementById('name-input').addEventListener('input', updateJSON);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '+' || e.key === '=') setZoom(sheetZoom + 1);
+  if (e.key === '-') setZoom(sheetZoom - 1);
+  if (e.key === 'g') document.getElementById('show-grid').click();
+  if (e.key === 's' && !e.ctrlKey) document.getElementById('snap-grid').click();
+  if (e.key === 'Enter' && hasSel) saveCut();
+});
+
+// Init
+loadSheet(defaultPath);
+loadFromLocalStorage();
+</script>
+</body>
+</html>

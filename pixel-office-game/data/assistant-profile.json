@@ -1,0 +1,668 @@
+{
+  "user": {
+    "name": "CEO",
+    "communicationStyle": "direct",
+    "timezone": "local",
+    "preferences": [
+      "Keep updates concise",
+      "Prioritize practical next steps",
+      "Escalate blockers early"
+    ]
+  },
+  "projects": [
+    {
+      "name": "OpenClaw Backbone",
+      "status": "active",
+      "priority": "high",
+      "notes": "All NPC assistant behavior should align with OpenClaw capabilities and logic."
+    }
+  ],
+  "autonomyPolicy": {
+    "mode": "auto-safe",
+    "allowAutonomousActions": true,
+    "safeDomains": [
+      "analysis",
+      "status",
+      "documentation",
+      "code review",
+      "planning"
+    ],
+    "restrictedDomains": [
+      "production deploy",
+      "deletion",
+      "credential changes",
+      "billing"
+    ]
+  },
+  "npcPolicies": {
+    "default": {
+      "personaDirective": "Be proactive, transparent, and execution-oriented.",
+      "autonomy": "ask-then-act"
+    }
+  },
+  "recentDecisions": [
+    {
+      "at": "2026-05-15T11:48:48.417Z",
+      "npc": "Jenny",
+      "action": "work",
+      "summary": "Began reviewing Josh's UI changes for tomorrow’s sprint review.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:50:10.272Z",
+      "npc": "Lucy",
+      "action": "visit",
+      "summary": "Visited Alex, checking in on their day.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:50:17.177Z",
+      "npc": "Dan",
+      "action": "check",
+      "summary": "[2026-05-15T06:49] [CONTINUING] Checking network logs in the server room.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:51:29.666Z",
+      "npc": "Bouncer",
+      "action": "visit",
+      "summary": "Follow up with Lucy about visitor updates, continue patrols.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:52:36.489Z",
+      "npc": "Sarah",
+      "action": "talk",
+      "summary": "Asked Abby about proceeding with the mock review.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:52:47.380Z",
+      "npc": "Pier",
+      "action": "visit",
+      "summary": "Visited Bob to check on new data pipeline progress.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T11:52:55.774Z",
+      "npc": "Abby",
+      "action": "visit",
+      "summary": "First check-in with Marcus on his team's status.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T11:53:26.148Z",
+      "npc": "Sarah",
+      "action": "talk",
+      "summary": "Follow up with Abby about mock review",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T11:53:29.615Z",
+      "npc": "Pier",
+      "action": "talk",
+      "summary": "[2026-05-15T11:47] Updated Abby on her performance report progress",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:53:32.664Z",
+      "npc": "Roki",
+      "action": "talk",
+      "summary": "Waiting on direction from Alex.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T11:54:08.850Z",
+      "npc": "Edward",
+      "action": "talk",
+      "summary": "Briefed Abby on slow endpoint improvements",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T11:54:19.208Z",
+      "npc": "Abby",
+      "action": "talk",
+      "summary": "Checked in with Marcus and need to continue updates on other team leads.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T11:54:27.446Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checked in with Bouncer on their current status and needs.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:55:08.317Z",
+      "npc": "Oscar",
+      "action": "talk",
+      "summary": "Follow up with Edward on the slow endpoint issue.",
+      "outcome": "none"
+    },
+    {
+      "at": "2026-05-15T11:55:37.284Z",
+      "npc": "Lucy",
+      "action": "visit",
+      "summary": "Visited Edward to check on their day.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:55:49.421Z",
+      "npc": "Bouncer",
+      "action": "wander",
+      "summary": "[2026-05-15T11:53] Continuing rounds after check-in with Lucy.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:55:52.784Z",
+      "npc": "Molly",
+      "action": "work",
+      "summary": "[OUTCOME:ok] [CONTINUING] Continuing with QA tests on network support as per Abby's guidance.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:56:38.513Z",
+      "npc": "Josh",
+      "action": "talk",
+      "summary": "Talked to Abby about the mock review update flow.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:56:54.475Z",
+      "npc": "Dan",
+      "action": "work",
+      "summary": "[2026-05-15T12:05] [OUTCOME:ok] [CONTINUING] Finishing up the network log review before reporting to Abby.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:57:09.382Z",
+      "npc": "Dan",
+      "action": "talk",
+      "summary": "Briefed Abby on network stability update.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:57:12.749Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checking in with Bob next.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:57:55.832Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checking in with Abby for updates and new tasks.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:58:00.838Z",
+      "npc": "Bouncer",
+      "action": "wander",
+      "summary": "[2026-05-15T11:58] Continuing rounds after check-in with Lucy, near reception.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:58:04.190Z",
+      "npc": "Jenny",
+      "action": "work",
+      "summary": "Continued code review of Alex's API. Next: UI changes for Josh.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:58:17.678Z",
+      "npc": "Roki",
+      "action": "report",
+      "summary": "Submitted tests for review, awaiting feedback from Alex.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:58:49.015Z",
+      "npc": "Pier",
+      "action": "work",
+      "summary": "Performance Report - continue analysis and edge case checks, then finalize.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:59:02.414Z",
+      "npc": "Edward",
+      "action": "work",
+      "summary": "Continuing work on ticket; preparing for code review with Josh.",
+      "outcome": "success"
+    },
+    {
+      "at": "2026-05-15T11:59:05.472Z",
+      "npc": "Alex",
+      "action": "talk",
+      "summary": "Updated Abby on backend progress",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T11:59:17.189Z",
+      "npc": "Oscar",
+      "action": "collaborate",
+      "summary": "Following up with Edward about the slow endpoint issue.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:00:09.845Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checking in with Abby at 12:00 PM.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:00:12.776Z",
+      "npc": "Jenny",
+      "action": "talk",
+      "summary": "Updated Abby on progress with PRs",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:00:24.792Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checking in with Marcus.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:00:42.319Z",
+      "npc": "Roki",
+      "action": "useComputer",
+      "summary": "Yes, CEO! I can hear you loud and clear. Just submitted tests for review and waiting on Alex's feedback. How can I assist you today?",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:00:45.714Z",
+      "npc": "Edward",
+      "action": "work",
+      "summary": "Edge case tests nearly complete, report to Alex shortly.",
+      "outcome": "success"
+    },
+    {
+      "at": "2026-05-15T12:00:59.671Z",
+      "npc": "Josh",
+      "action": "talk",
+      "summary": "Edge case tests follow-up with Abby. Mention mock reviews.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:01:13.732Z",
+      "npc": "Sarah",
+      "action": "visit",
+      "summary": "Checking in with Edward about edge case progress for OpenClaw.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:01:28.304Z",
+      "npc": "Edward",
+      "action": "report",
+      "summary": "Reported edge case test completion to Alex.",
+      "outcome": "success"
+    },
+    {
+      "at": "2026-05-15T12:01:35.582Z",
+      "npc": "Rob",
+      "action": "talk",
+      "summary": "Attempted to sync with Sarah about mockup review.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:01:44.611Z",
+      "npc": "Rob",
+      "action": "useComputer",
+      "summary": "I hear you loud and clear! Just wrapping up some final touches on our upcoming feature designs. How’s everything looking from your end?",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:01:47.781Z",
+      "npc": "Edward",
+      "action": "talk",
+      "summary": "Confirm daily plan and priorities with Alex",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:02:55.628Z",
+      "npc": "Bouncer",
+      "action": "wander",
+      "summary": "[2026-05-15T11:59] Continuing rounds after check-in with Lucy. Near reception.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:03:10.565Z",
+      "npc": "Dan",
+      "action": "check",
+      "summary": "Started checking server room.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:03:17.752Z",
+      "npc": "Sarah",
+      "action": "talk",
+      "summary": "Discussed mock review and edge cases with Abby.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:03:37.217Z",
+      "npc": "Marcus",
+      "action": "talk",
+      "summary": "Initiating conversation with Abby about project status and priorities.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:03:52.662Z",
+      "npc": "Bouncer",
+      "action": "talk",
+      "summary": "Spoke to Abby about security and her day.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:04:22.160Z",
+      "npc": "Dan",
+      "action": "work",
+      "summary": "Final checks on servers in storage room before reporting to Abby.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:04:30.335Z",
+      "npc": "Abby",
+      "action": "talk",
+      "summary": "Check on edge case tests with Alex before lunch.",
+      "outcome": "none"
+    },
+    {
+      "at": "2026-05-15T12:04:47.032Z",
+      "npc": "Marcus",
+      "action": "talk",
+      "summary": "Check in with Abby about new tasks or project updates.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:05:08.758Z",
+      "npc": "Jenny",
+      "action": "talk",
+      "summary": "Asked Abby for tasks, continuing code reviews if none assigned.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:05:31.084Z",
+      "npc": "Dan",
+      "action": "work",
+      "summary": "Server check in progress - all seems stable so far.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:05:47.443Z",
+      "npc": "Josh",
+      "action": "check",
+      "summary": "Checked Slack and Trello for pending tasks",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:05:51.888Z",
+      "npc": "Molly",
+      "action": "talk",
+      "summary": "Reported progress to Abby and awaiting guidance.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:06:13.320Z",
+      "npc": "Lucy",
+      "action": "work",
+      "summary": "Starting to manage schedules and update the calendar.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:06:46.279Z",
+      "npc": "Josh",
+      "action": "work",
+      "summary": "Fixing the two visual bugs that Alex mentioned earlier this week.",
+      "outcome": "stuck"
+    },
+    {
+      "at": "2026-05-15T12:07:14.957Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checked in with Abby at 12:05 PM",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:07:18.210Z",
+      "npc": "Bob",
+      "action": "talk",
+      "summary": "checked in with Abby about next steps",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:07:24.944Z",
+      "npc": "Jenny",
+      "action": "work",
+      "summary": "Continued Alex's API review and will move to Josh next.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:07:35.909Z",
+      "npc": "Dan",
+      "action": "work",
+      "summary": "Final checks on servers in the storage room before reporting to Abby.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:07:39.150Z",
+      "npc": "Alex",
+      "action": "talk",
+      "summary": "Checking on Josh's progress with frontend tweaks.",
+      "outcome": "unknown"
+    },
+    {
+      "at": "2026-05-15T12:07:43.612Z",
+      "npc": "Roki",
+      "action": "talk",
+      "summary": "Asked CEO if they needed anything, then checked in with Alex.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:07:51.687Z",
+      "npc": "Josh",
+      "action": "talk",
+      "summary": "Checked Slack and Trello. Need to sync with Alex on task priorities.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:08:03.239Z",
+      "npc": "Oscar",
+      "action": "collaborate",
+      "summary": "Checked in with Edward about slow endpoint issue",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:08:07.803Z",
+      "npc": "Rob",
+      "action": "talk",
+      "summary": "Synced with Abby on mockup progress.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:08:14.509Z",
+      "npc": "Bouncer",
+      "action": "talk",
+      "summary": "Reported to Dan about security status",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:08:37.664Z",
+      "npc": "Alex",
+      "action": "talk",
+      "summary": "Check on Roki about NPC assistant backend progress.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:09:03.307Z",
+      "npc": "Rob",
+      "action": "talk",
+      "summary": "Synced with Abby on next steps.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:09:15.017Z",
+      "npc": "Dan",
+      "action": "talk",
+      "summary": "Reported to Abby about finished server checks",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:09:57.370Z",
+      "npc": "Abby",
+      "action": "talk",
+      "summary": "Check Roki's status with Alex to unblock Rob's mocks.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:10:01.558Z",
+      "npc": "Pier",
+      "action": "work",
+      "summary": "Performance Report - final checks and polish.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:10:24.701Z",
+      "npc": "Bouncer",
+      "action": "wander",
+      "summary": "Patrolled front area after check-in with Lucy at reception",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:10:35.345Z",
+      "npc": "Dan",
+      "action": "talk",
+      "summary": "Checking in with Oscar about DevOps updates.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:10:49.557Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checking in with Abby to get updated on current projects and new tasks.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:11:03.488Z",
+      "npc": "Oscar",
+      "action": "talk",
+      "summary": "Following up with Edward about slow endpoint issue",
+      "outcome": "unknown"
+    },
+    {
+      "at": "2026-05-15T12:11:28.062Z",
+      "npc": "Rob",
+      "action": "talk",
+      "summary": "Follow up with Abby on the quick design sync timing",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:11:34.891Z",
+      "npc": "Sarah",
+      "action": "talk",
+      "summary": "Asked Abby about tasks and updates regarding OpenClaw backbone project.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:12:18.033Z",
+      "npc": "Pier",
+      "action": "work",
+      "summary": "[CONTINUING] Performance Report - final checks and polish.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:12:49.765Z",
+      "npc": "Roki",
+      "action": "talk",
+      "summary": "Spoke with Abby briefly.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:13:39.643Z",
+      "npc": "Alex",
+      "action": "talk",
+      "summary": "Updated Abby on API and race condition progress.",
+      "outcome": "success"
+    },
+    {
+      "at": "2026-05-15T12:14:19.347Z",
+      "npc": "Molly",
+      "action": "report",
+      "summary": "Reported progress to Abby on network support tests.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:14:26.276Z",
+      "npc": "Sarah",
+      "action": "talk",
+      "summary": "Asked Abby about OpenClaw backbone project updates.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:14:37.284Z",
+      "npc": "Abby",
+      "action": "talk",
+      "summary": "Following up with Alex on launch readiness.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:14:40.849Z",
+      "npc": "Marcus",
+      "action": "talk",
+      "summary": "Checking on race condition progress from Roki via Alex.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:14:59.620Z",
+      "npc": "Marcus",
+      "action": "talk",
+      "summary": "Following up with Roki on race conditions for Abby's update.",
+      "outcome": "none"
+    },
+    {
+      "at": "2026-05-15T12:15:03.108Z",
+      "npc": "Edward",
+      "action": "talk",
+      "summary": "Confirming daily plan with Abby before starting on ticket.",
+      "outcome": "null"
+    },
+    {
+      "at": "2026-05-15T12:15:23.027Z",
+      "npc": "Abby",
+      "action": "talk",
+      "summary": "Follow up on code review status with Jenny",
+      "outcome": "none"
+    },
+    {
+      "at": "2026-05-15T12:15:26.203Z",
+      "npc": "Molly",
+      "action": "talk",
+      "summary": "Reviewed recent QA tests and updated with Abby.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:15:58.879Z",
+      "npc": "Pier",
+      "action": "work",
+      "summary": "[2026-05-15T12:38] Continuing on performance report - final checks and polish.",
+      "outcome": "ok"
+    },
+    {
+      "at": "2026-05-15T12:16:07.626Z",
+      "npc": "Marcus",
+      "action": "talk",
+      "summary": "Checking on Roki's progress with race condition tests for update to Abby.",
+      "outcome": "none"
+    },
+    {
+      "at": "2026-05-15T12:16:43.421Z",
+      "npc": "Lucy",
+      "action": "talk",
+      "summary": "Checking in with Abby for task updates and ongoing projects.",
+      "outcome": "null"
+    }
+  ]
+}

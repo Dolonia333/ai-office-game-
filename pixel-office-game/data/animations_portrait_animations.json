@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "portraitSize": { "w": 96, "h": 96 },
+    "sourcePack": "modernuserinterface",
+    "notes": [
+      "Portrait sheets come from the Modern User Interface portrait generator exports.",
+      "Frame indices are 0-based and can be remapped if sheet layouts change."
+    ]
+  },
+  "animations": {
+    "portrait_talk": {
+      "sheet": "ui/portraits/hero1_talk.png",
+      "frames": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      "fps": 12,
+      "loop": true
+    },
+    "portrait_nod": {
+      "sheet": "ui/portraits/hero1_nod.png",
+      "frames": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      "fps": 10,
+      "loop": false
+    },
+    "portrait_shake": {
+      "sheet": "ui/portraits/hero1_shake.png",
+      "frames": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      "fps": 10,
+      "loop": false
+    }
+  }
+}
+

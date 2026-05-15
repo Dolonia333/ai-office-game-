@@ -1,0 +1,26 @@
+{
+  "info": "Exact pixel coordinates for LimeZu Classroom_and_Library_01.png so desk/computer placement does not rely on guessing.",
+  "sheet": "Classroom_and_Library_01.png",
+  "sheetPath": "Modern_Interiors_RPG_Maker_Version/.../RPG_MAKER_MV/Interiors/Theme_Sorter_MV/Classroom_and_Library_01.png",
+  "tileWidth": 32,
+  "tileHeight": 32,
+  "tilesPerRow": 24,
+  "baseGridSize": 16,
+  "objects": {
+    "desk_basic": {
+      "topLeftTileIndex": 10,
+      "pixelRect": { "x": 320, "y": 0, "w": 32, "h": 32 },
+      "sizeInBaseTiles": { "w": 2, "h": 2 },
+      "layer": "furniture",
+      "depth": 1.5
+    },
+    "computer_basic": {
+      "topLeftTileIndex": 20,
+      "pixelRect": { "x": 640, "y": 0, "w": 32, "h": 32 },
+      "sizeInBaseTiles": { "w": 2, "h": 2 },
+      "layer": "decor",
+      "depth": 2,
+      "render_offset_px": { "x": 0, "y": -8 }
+    }
+  }
+}

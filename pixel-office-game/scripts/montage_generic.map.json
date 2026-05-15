@@ -1,0 +1,46 @@
+{
+  "source": {
+    "scanPath": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel-office-game\\scripts\\generic.scan.json",
+    "imagePath": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Interiors_RPG_Maker_Version\\Modern_Interiors_RPG_Maker_Version\\RPG_MAKER_XP\\1_Generic.png",
+    "width": 256,
+    "height": 3936
+  },
+  "cell": 96,
+  "pad": 6,
+  "cols": 12,
+  "count": 2,
+  "items": [
+    {
+      "i": 0,
+      "name": "obj_5",
+      "rect": {
+        "x": 224,
+        "y": 2960,
+        "w": 32,
+        "h": 16
+      },
+      "grid": {
+        "x": 14,
+        "y": 185,
+        "w": 2,
+        "h": 1
+      }
+    },
+    {
+      "i": 1,
+      "name": "obj_8",
+      "rect": {
+        "x": 192,
+        "y": 3696,
+        "w": 64,
+        "h": 48
+      },
+      "grid": {
+        "x": 12,
+        "y": 231,
+        "w": 4,
+        "h": 3
+      }
+    }
+  ]
+}

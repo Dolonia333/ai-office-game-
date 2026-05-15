@@ -1,0 +1,37 @@
+{
+  "moves": [
+    {
+      "id": "search_blast",
+      "name": "Search Blast",
+      "kind": "active",
+      "target": "task",
+      "element": "search",
+      "power": 50,
+      "accuracy": 0.9,
+      "cost": { "energy": 5 },
+      "effects": [
+        { "type": "progress", "amount": 0.25 }
+      ],
+      "conditions": [
+        { "type": "requires_tag", "target": "task", "tag": "needs_search" }
+      ]
+    },
+    {
+      "id": "code_strike",
+      "name": "Code Strike",
+      "kind": "active",
+      "target": "task",
+      "element": "code",
+      "power": 60,
+      "accuracy": 0.85,
+      "cost": { "energy": 8 },
+      "effects": [
+        { "type": "progress", "amount": 0.35 }
+      ],
+      "conditions": [
+        { "type": "requires_tag", "target": "task", "tag": "code" }
+      ]
+    }
+  ]
+}
+

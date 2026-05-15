@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Catalog Explorer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --red: #f85149;
+    --yellow: #d29922; --purple: #bc8cff; --orange: #ffa657;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* TABS */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 16px; gap: 4px; }
+  .tab { padding: 12px 20px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13px; font-weight: 500; transition: all .15s; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .panel.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .card-title { font-weight: 600; font-size: 13px; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-blue { background: #1f3a5f; color: var(--accent); }
+  .badge-green { background: #1a3a2a; color: var(--green); }
+  .badge-red { background: #3d1a1a; color: var(--red); }
+  .badge-yellow { background: #3a2e0a; color: var(--yellow); }
+  .badge-purple { background: #2a1a44; color: var(--purple); }
+  .badge-orange { background: #3a2010; color: var(--orange); }
+
+  /* CATALOG MAP */
+  .catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .cat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .cat-card:hover { border-color: var(--accent); }
+  .cat-name { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .cat-file { font-size: 11px; color: var(--muted); font-family: monospace; margin-bottom: 8px; }
+  .cat-count { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .cat-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .cat-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+
+  /* FLOW */
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .flow-node { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-family: monospace; }
+  .flow-arrow { color: var(--muted); font-size: 16px; }
+  .flow-node.highlight { border-color: var(--accent); color: var(--accent); }
+  .flow-node.broken { border-color: var(--red); color: var(--red); }
+
+  /* ISSUES */
+  .issue { background: var(--bg2); border-left: 3px solid var(--red); border-radius: 0 8px 8px 0; padding: 14px 16px; margin-bottom: 12px; }
+  .issue-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--red); }
+  .issue-body { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .issue-fix { background: var(--bg3); border: 1px solid var(--green); border-radius: 6px; padding: 8px 12px; margin-top: 10px; font-size: 12px; color: var(--green); }
+
+  /* SCHEMA */
+  .schema-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media(max-width:700px){ .schema-grid { grid-template-columns: 1fr; } }
+  .field-row { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; }
+  .field-name { font-family: monospace; font-size: 13px; color: var(--purple); margin-bottom: 3px; }
+  .field-type { font-size: 11px; color: var(--orange); margin-bottom: 4px; }
+  .field-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .field-example { font-family: monospace; font-size: 11px; color: var(--green); margin-top: 5px; background: var(--bg2); padding: 4px 8px; border-radius: 4px; }
+  .new-field { border-color: var(--purple); }
+
+  /* TAGGER */
+  .tagger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media(max-width:700px){ .tagger-grid { grid-template-columns: 1fr; } }
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+  input, select, textarea {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 7px 10px; font-size: 13px; font-family: inherit;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  select option { background: var(--bg3); }
+  .btn { background: var(--accent); color: #000; border: none; border-radius: 6px; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .output-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 12px; white-space: pre; overflow-x: auto; min-height: 200px; max-height: 420px; overflow-y: auto; color: var(--green); }
+  .copy-bar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+  /* MISC */
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--muted); }
+  p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .mono { font-family: monospace; font-size: 12px; }
+  .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .stat { text-align: center; }
+  .stat-num { font-size: 28px; font-weight: 800; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">🗺️ System Overview</div>
+  <div class="tab" onclick="switchTab('broken')">🔴 What's Broken</div>
+  <div class="tab" onclick="switchTab('schema')">📐 Unified Schema</div>
+  <div class="tab" onclick="switchTab('tagger')">🏷️ Sprite Tagger</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB 1: OVERVIEW -->
+<div class="panel active" id="panel-overview">
+  <h2>Catalog System Architecture</h2>
+  <p>Your game has 6 catalogs. They were built separately and don't share a common format. Here's what each one does, how big it is, and how they connect (or fail to connect) at runtime.</p>
+
+  <div class="stats-row">
+    <div class="card stat"><div class="stat-num" style="color:var(--accent)">6</div><div class="stat-label">Catalogs total</div></div>
+    <div class="card stat"><div class="stat-num" style="color:var(--green)">50,470</div><div class="stat-label">Master objects</div></div>
+    <div class="card stat"><div class="stat-num" style="color:var(--yellow)">1,952</div><div class="stat-label">Tile entries</div></div>
+    <div class="card stat"><div class="stat-num" style="color:var(--purple)">339</div><div class="stat-label">Local singles</div></div>
+    <div class="card stat"><div class="stat-num" style="color:var(--orange)">~10</div><div class="stat-label">Actually placed</div></div>
+  </div>
+
+  <div class="catalog-grid">
+    <div class="cat-card">
+      <div class="cat-name">🏗️ master_furniture_catalog</div>
+      <div class="cat-file">data/master_furniture_catalog.json</div>
+      <div class="cat-count" style="color:var(--accent)">50,470</div>
+      <div class="cat-desc">Auto-generated by <code>build_master_catalog.py</code>. Indexes every single-file PNG and every grid-cell slice from the Black Shadow sheets. Guesses <code>type</code> and <code>entity_type</code> from filename keywords.</div>
+      <div class="cat-tags">
+        <span class="badge badge-blue">auto-generated</span>
+        <span class="badge badge-yellow">22 MB</span>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-name">🪑 furniture_catalog</div>
+      <div class="cat-file">data/furniture_catalog.json</div>
+      <div class="cat-count" style="color:var(--green)">7</div>
+      <div class="cat-desc">Hand-crafted default layout. Has two sections: <code>objects</code> (pixel-exact sheet crops) and <code>placements</code> (x,y + optional parent). Supports decor stacking via <code>parentInstanceId</code>.</div>
+      <div class="cat-tags">
+        <span class="badge badge-green">hand-crafted</span>
+        <span class="badge badge-blue">used in game</span>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-name">🏢 furniture_catalog_openplan</div>
+      <div class="cat-file">data/furniture_catalog_openplan.json</div>
+      <div class="cat-count" style="color:var(--green)">11</div>
+      <div class="cat-desc">Open-plan office layout using the <code>mo_black_shadow_32</code> sheet. Used by <code>?layout=openplan</code> and <code>?layout=reference_office</code>. Objects come from the Black Shadow 32×32 spritesheet.</div>
+      <div class="cat-tags">
+        <span class="badge badge-green">hand-crafted</span>
+        <span class="badge badge-blue">used in game</span>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-name">🧩 interiors (prefabs)</div>
+      <div class="cat-file">data/interiors.json</div>
+      <div class="cat-count" style="color:var(--green)">6</div>
+      <div class="cat-desc">Prefab catalog for the procedural interior generator (<code>?mode=officegen</code> and seeded world). References XP sheets by Phaser key. Has named anchor points for chair and PC placement.</div>
+      <div class="cat-tags">
+        <span class="badge badge-green">hand-crafted</span>
+        <span class="badge badge-purple">proc-gen</span>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-name">🗺️ tiles-catalog</div>
+      <div class="cat-file">tiles-catalog.json</div>
+      <div class="cat-count" style="color:var(--yellow)">1,952</div>
+      <div class="cat-desc">Built by <code>build_tiles_catalog.py</code> from <code>tilesheets-config.json</code>. Indexes every tile in 10 tilesheets. Used for floor/wall picking by category. NOT the same system as furniture.</div>
+      <div class="cat-tags">
+        <span class="badge badge-yellow">auto-generated</span>
+        <span class="badge badge-blue">used for floors/walls</span>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-name">📦 assets-catalog.scanned</div>
+      <div class="cat-file">assets-catalog.scanned.json</div>
+      <div class="cat-count" style="color:var(--muted)">3,064</div>
+      <div class="cat-desc">Raw file-system scan by <code>build_assets_catalog.py</code>. Walks <code>pixel game stuff/</code> and records every PNG by pack. No per-sprite breakdown. Mostly a reference index, not used by the game engine.</div>
+      <div class="cat-tags">
+        <span class="badge badge-yellow">auto-generated</span>
+        <span class="badge badge-red">not used in game</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider"/>
+  <h3>Runtime Flow — what actually happens when you open the game</h3>
+
+  <div class="card">
+    <div class="card-title">Default layout (no URL params)</div>
+    <div class="flow">
+      <div class="flow-node highlight">furniture_catalog.json</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">placements[]</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">objects[id] → sheet key + x,y,w,h</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">canvas.drawImage(sheet, x,y,w,h)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">Phaser image placed at pl.x, pl.y</div>
+    </div>
+    <div class="cat-desc">If <code>id</code> is not in local <code>objects</code>, the game falls back to <code>master_furniture_catalog</code> to look it up.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Open-plan / reference_office layout</div>
+    <div class="flow">
+      <div class="flow-node highlight">furniture_catalog_openplan.json</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">mo_black_shadow_32 sheet</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">crop pixel rect</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">placed with depth + origin</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Seeded world (?seed=…) or officegen</div>
+    <div class="flow">
+      <div class="flow-node highlight">src/world/generator.js</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">world.objects[] with prefabId</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">interiors.json prefabs</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">XP sheet crop</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">rendered</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Tiles (floors + walls)</div>
+    <div class="flow">
+      <div class="flow-node highlight">tilesheets-config.json</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">tiles-catalog.json</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">filter by category</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node broken">SEPARATE from furniture system</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">tileSprite stamped on canvas</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="color:var(--yellow)">⚠️ master catalog singles</div>
+    <div class="flow">
+      <div class="flow-node">49,168 single-file entries</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node broken">no placements defined</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node broken">never loaded</div>
+    </div>
+    <div class="cat-desc" style="margin-top:8px">These exist only in the master catalog as a reference. None of them appear in any furniture_catalog placements array unless you add them manually.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB 2: BROKEN -->
+<div class="panel" id="panel-broken">
+  <h2>🔴 Root Causes & Fixes</h2>
+  <p>Four fundamental disconnects in the current system.</p>
+
+  <div class="issue">
+    <div class="issue-title">1. No layer / depth rules</div>
+    <div class="issue-body">
+      Depth is a hand-coded number per object (1.2, 1.5, 1.6, 2…). There's no rule like "decor always above furniture" or "floor always at 0". When you add a new object you have to guess the right depth, and things draw in the wrong order constantly.<br><br>
+      The tile system uses a completely different depth convention — corridor floor is 0.1, clinic floor is 0.5, walls are 5. Furniture is 1.5. Characters are somewhere around 2–3. There's no single source of truth.
+    </div>
+    <div class="issue-fix">✅ Fix: define a layer enum (floor → 0, rug → 0.5, furniture → 1.5, decor → 2, character → 3, wall → 5, ui → 100) and derive depth from layer name.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-title">2. Tiles and furniture are completely disconnected</div>
+    <div class="issue-body">
+      <code>tiles-catalog.json</code> handles floors and walls. <code>furniture_catalog*.json</code> handles props. They use different ID schemes, different coordinate systems, and there's no way to ask "what tile should go under this desk?" or "can this furniture be placed on top of this floor type?"<br><br>
+      The tilesheets-config only defines index ranges by category — it has no semantic tag like "walkable", "solid", "water-only", or "connects_to: wall".
+    </div>
+    <div class="issue-fix">✅ Fix: add <code>layer</code>, <code>tile_repeat</code>, <code>connects_to</code> fields to both systems. A desk could say <code>allowed_floors: ["floor_office_wood"]</code>.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-title">3. 49,168 singles with no placement rules</div>
+    <div class="issue-body">
+      The master catalog has entries for all your LimeZu singles, but zero of them have placement info. You can't use them in any layout without manually writing a furniture_catalog entry for each one.<br><br>
+      The semantics guessing (<code>extract_semantics()</code>) is also unreliable — it only detects a handful of keyword categories and defaults everything else to <code>"type": "furniture"</code>. Most entries have wrong or missing types.
+    </div>
+    <div class="issue-fix">✅ Fix: add a <code>verified: false</code> field and the Sprite Tagger tool (Tab 4) to confirm/override auto-guessed fields. Then generate placements from verified singles.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-title">4. No snap-to-grid or collision metadata</div>
+    <div class="issue-body">
+      Every object's collision is hard-coded in <code>office-scene.js</code> as a 16px-tall invisible rectangle at the sprite's feet. There's no way for the catalog to say "this desk is 2 tiles wide and 1 deep" or "this wall blocks all movement". Furniture size is not connected to the tile grid.<br><br>
+      Decor (monitors, lamps) correctly has no physics body — but this is determined by checking <code>def.type !== 'decor'</code>, which breaks if <code>type</code> is wrong.
+    </div>
+    <div class="issue-fix">✅ Fix: add <code>snap_to_grid</code> (tile dimensions), <code>collision</code> (none/feet/full), and <code>footprint</code> (w×h in tiles) to each catalog entry.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB 3: SCHEMA -->
+<div class="panel" id="panel-schema">
+  <h2>📐 Unified Sprite Entry Schema</h2>
+  <p>A single JSON format that could replace all 6 catalogs. Existing fields are preserved; <span style="color:var(--purple)">purple fields are new</span>.</p>
+
+  <div class="schema-grid">
+    <div class="field-row"><div class="field-name">id</div><div class="field-type">string — required</div><div class="field-desc">Unique stable identifier. Never changes once assigned.</div><div class="field-example">"desk_pod_black_32"</div></div>
+
+    <div class="field-row"><div class="field-name">source_type</div><div class="field-type">"sheet_slice" | "single_file"</div><div class="field-desc">How the sprite pixels are retrieved at runtime.</div><div class="field-example">"sheet_slice"</div></div>
+
+    <div class="field-row"><div class="field-name">sheet</div><div class="field-type">string — for sheet_slice</div><div class="field-desc">Phaser texture key that must be preloaded.</div><div class="field-example">"mo_black_shadow_32"</div></div>
+
+    <div class="field-row"><div class="field-name">url_path</div><div class="field-type">string — for single_file</div><div class="field-desc">Relative path from pixel game stuff root.</div><div class="field-example">"assets/Modern_Office.../Singles_1.png"</div></div>
+
+    <div class="field-row"><div class="field-name">rect</div><div class="field-type">{ x, y, w, h } — pixels</div><div class="field-desc">Exact crop rectangle on the sheet.</div><div class="field-example">{ "x": 0, "y": 0, "w": 64, "h": 64 }</div></div>
+
+    <div class="field-row"><div class="field-name">origin</div><div class="field-type">"bottom" | "center"</div><div class="field-desc">Anchor point for placement. "bottom" = setOrigin(0.5, 1).</div><div class="field-example">"bottom"</div></div>
+
+    <div class="field-row new-field"><div class="field-name">layer</div><div class="field-type">enum — NEW ✦</div><div class="field-desc">Controls draw order. One of: floor, rug, furniture, decor, character, wall, ui.</div><div class="field-example">"furniture"</div></div>
+
+    <div class="field-row new-field"><div class="field-name">collision</div><div class="field-type">"none" | "feet" | "full" — NEW ✦</div><div class="field-desc">"feet" = 16px invisible box at bottom (current default). "full" = entire bounding box. "none" = no physics.</div><div class="field-example">"feet"</div></div>
+
+    <div class="field-row new-field"><div class="field-name">snap_to_grid</div><div class="field-type">boolean — NEW ✦</div><div class="field-desc">If true, placement x/y should snap to 32px tile grid.</div><div class="field-example">true</div></div>
+
+    <div class="field-row new-field"><div class="field-name">footprint</div><div class="field-type">{ w, h } tiles — NEW ✦</div><div class="field-desc">How many tiles this sprite occupies. Used for grid placement and collision sizing.</div><div class="field-example">{ "w": 2, "h": 2 }</div></div>
+
+    <div class="field-row new-field"><div class="field-name">tile_repeat</div><div class="field-type">boolean — NEW ✦</div><div class="field-desc">If true, this sprite is a tile that should be stamped in a repeating tileSprite (floors, walls, rugs).</div><div class="field-example">false</div></div>
+
+    <div class="field-row new-field"><div class="field-name">connects_to</div><div class="field-type">string[] — NEW ✦</div><div class="field-desc">IDs or categories this can connect to. Walls say "wall". Floors say "floor_office_wood".</div><div class="field-example">["wall_interior"]</div></div>
+
+    <div class="field-row new-field"><div class="field-name">allowed_floors</div><div class="field-type">string[] — NEW ✦</div><div class="field-desc">Floor categories this object can sit on. Empty = any floor.</div><div class="field-example">["floor_office_wood"]</div></div>
+
+    <div class="field-row new-field"><div class="field-name">variants</div><div class="field-type">string[] — NEW ✦</div><div class="field-desc">Color/material variants that exist. Used for theming rooms.</div><div class="field-example">["black", "white", "wood"]</div></div>
+
+    <div class="field-row"><div class="field-name">type</div><div class="field-type">string — existing, clarified</div><div class="field-desc">Semantic type. Use: surface, seat, decor, furniture, floor, wall, character, terrain, water, storage.</div><div class="field-example">"surface"</div></div>
+
+    <div class="field-row new-field"><div class="field-name">action</div><div class="field-type">string | null — NEW ✦</div><div class="field-desc">What happens when a character interacts: seat, use_computer, sleep, use_it, drink, print.</div><div class="field-example">"seat"</div></div>
+
+    <div class="field-row new-field"><div class="field-name">animation</div><div class="field-type">object | null — NEW ✦</div><div class="field-desc">For animated singles: { frameW, frameH, frameCount, fps, loop }.</div><div class="field-example">{ "frameW": 16, "fps": 8, "loop": true }</div></div>
+
+    <div class="field-row new-field"><div class="field-name">verified</div><div class="field-type">boolean — NEW ✦</div><div class="field-desc">Whether a human has confirmed this entry is correct. Auto-generated entries start as false.</div><div class="field-example">false</div></div>
+
+    <div class="field-row new-field"><div class="field-name">label</div><div class="field-type">string — NEW ✦</div><div class="field-desc">Human-readable display name for the asset browser and tagger.</div><div class="field-example">"Black shadow office desk (32px)"</div></div>
+
+    <div class="field-row new-field"><div class="field-name">tags</div><div class="field-type">string[] — NEW ✦</div><div class="field-desc">Free-form searchable tags. Used by asset browser and proc-gen to find sprites.</div><div class="field-example">["office", "desk", "work"]</div></div>
+  </div>
+
+  <hr class="divider"/>
+  <h3>Example complete entry</h3>
+  <div class="output-box">{
+  "id": "desk_pod_black_32",
+  "source_type": "sheet_slice",
+  "sheet": "mo_black_shadow_32",
+  "rect": { "x": 0, "y": 0, "w": 64, "h": 64 },
+  "origin": "bottom",
+  "label": "Office desk pod (Black Shadow 32px)",
+  "type": "surface",
+  "layer": "furniture",
+  "collision": "feet",
+  "snap_to_grid": true,
+  "footprint": { "w": 2, "h": 2 },
+  "tile_repeat": false,
+  "connects_to": [],
+  "allowed_floors": ["floor_office_wood"],
+  "variants": ["black"],
+  "action": null,
+  "animation": null,
+  "tags": ["office", "desk", "work", "blackshadow"],
+  "verified": true
+}</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB 4: TAGGER -->
+<div class="panel" id="panel-tagger">
+  <h2>🏷️ Sprite Tagger</h2>
+  <p>Fill in the fields and click Generate to get a ready-to-paste unified-schema JSON entry.</p>
+
+  <div class="tagger-grid">
+    <div>
+      <div class="form-group"><label>ID (unique, no spaces)</label><input id="t-id" type="text" placeholder="desk_pod_black_32"/></div>
+      <div class="form-group"><label>Label (human name)</label><input id="t-label" type="text" placeholder="Office desk pod (Black Shadow 32px)"/></div>
+      <div class="form-group">
+        <label>Source type</label>
+        <select id="t-source" onchange="toggleSource()">
+          <option value="sheet_slice">sheet_slice — crop from a spritesheet</option>
+          <option value="single_file">single_file — standalone PNG</option>
+        </select>
+      </div>
+      <div id="sheet-fields">
+        <div class="form-group"><label>Sheet (Phaser texture key)</label><input id="t-sheet" type="text" placeholder="mo_black_shadow_32"/></div>
+        <div class="form-group"><label>Rect — x, y, w, h (pixels)</label>
+          <div class="row">
+            <input id="t-rx" type="number" placeholder="x" style="width:60px"/>
+            <input id="t-ry" type="number" placeholder="y" style="width:60px"/>
+            <input id="t-rw" type="number" placeholder="w" style="width:60px"/>
+            <input id="t-rh" type="number" placeholder="h" style="width:60px"/>
+          </div>
+        </div>
+      </div>
+      <div id="single-fields" style="display:none">
+        <div class="form-group"><label>URL path (relative to assets root)</label><input id="t-url" type="text" placeholder="assets/Modern_Office_.../Singles_1.png"/></div>
+        <div class="form-group"><label>Size — w, h (pixels)</label>
+          <div class="row">
+            <input id="t-sw" type="number" placeholder="w" style="width:80px" value="16"/>
+            <input id="t-sh" type="number" placeholder="h" style="width:80px" value="16"/>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="t-type">
+          <option value="surface">surface (desk, counter, table)</option>
+          <option value="seat">seat (chair, stool, bench)</option>
+          <option value="furniture">furniture (shelf, plant, cooler)</option>
+          <option value="decor">decor (monitor, lamp, papers)</option>
+          <option value="floor">floor</option>
+          <option value="wall">wall</option>
+          <option value="character">character / NPC</option>
+          <option value="storage">storage (cabinet, locker)</option>
+          <option value="terrain">terrain</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Layer (draw order)</label>
+        <select id="t-layer">
+          <option value="floor">floor (depth ~0)</option>
+          <option value="rug">rug (depth ~0.5)</option>
+          <option value="furniture" selected>furniture (depth ~1.5)</option>
+          <option value="decor">decor (depth ~2)</option>
+          <option value="character">character (depth ~3)</option>
+          <option value="wall">wall (depth ~5)</option>
+          <option value="ui">ui (depth ~100)</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <div class="form-group">
+        <label>Collision</label>
+        <select id="t-collision">
+          <option value="feet">feet — 16px box at bottom (default)</option>
+          <option value="none">none — no physics (decor)</option>
+          <option value="full">full — whole bounding box</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Origin</label>
+        <select id="t-origin">
+          <option value="bottom">bottom — anchor at feet</option>
+          <option value="center">center — anchor at center</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Footprint (tiles)</label>
+        <div class="row">
+          <input id="t-fw" type="number" placeholder="w tiles" style="width:90px" value="1"/>
+          <input id="t-fh" type="number" placeholder="h tiles" style="width:90px" value="1"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Snap to grid?</label>
+        <select id="t-snap">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Action (on interact)</label>
+        <select id="t-action">
+          <option value="">none</option>
+          <option value="seat">seat</option>
+          <option value="use_computer">use_computer</option>
+          <option value="sleep">sleep</option>
+          <option value="use_it">use_it</option>
+          <option value="drink">drink</option>
+          <option value="print">print</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Variants (comma-separated)</label><input id="t-variants" type="text" placeholder="black, white, wood"/></div>
+      <div class="form-group"><label>Tags (comma-separated)</label><input id="t-tags" type="text" placeholder="office, desk, work"/></div>
+      <div class="form-group"><label>Allowed floors (comma-separated, blank = any)</label><input id="t-floors" type="text" placeholder="floor_office_wood"/></div>
+      <div class="form-group">
+        <label>Tile repeat? (floors/walls)</label>
+        <select id="t-repeat">
+          <option value="false">No (furniture/decor)</option>
+          <option value="true">Yes (floors/walls that tile)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Verified?</label>
+        <select id="t-verified">
+          <option value="true">Yes — I've confirmed this is correct</option>
+          <option value="false">No — auto-generated / uncertain</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="btn" onclick="generateEntry()">⚡ Generate JSON entry</button>
+    <button class="btn btn-outline" onclick="clearForm()">Clear</button>
+  </div>
+
+  <div class="output-box" id="tagger-output">// Fill in the fields above and click Generate</div>
+  <div class="copy-bar">
+    <button class="btn btn-outline" onclick="copyOutput()">📋 Copy to clipboard</button>
+  </div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const idx = ['overview','broken','schema','tagger'].indexOf(name);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+function toggleSource() {
+  const v = document.getElementById('t-source').value;
+  document.getElementById('sheet-fields').style.display = v === 'sheet_slice' ? '' : 'none';
+  document.getElementById('single-fields').style.display = v === 'single_file' ? '' : 'none';
+}
+
+function sv(id) { return (document.getElementById(id)?.value || '').trim(); }
+function ni(id) { const v = parseInt(sv(id)); return isNaN(v) ? 0 : v; }
+function splitComma(s) { return s ? s.split(',').map(x => x.trim()).filter(Boolean) : []; }
+
+function generateEntry() {
+  const src = sv('t-source');
+  const entry = {
+    id: sv('t-id') || 'unnamed_sprite',
+    label: sv('t-label') || '',
+    source_type: src,
+  };
+
+  if (src === 'sheet_slice') {
+    entry.sheet = sv('t-sheet');
+    entry.rect = { x: ni('t-rx'), y: ni('t-ry'), w: ni('t-rw'), h: ni('t-rh') };
+  } else {
+    entry.url_path = sv('t-url');
+    entry.w = ni('t-sw');
+    entry.h = ni('t-sh');
+  }
+
+  entry.type = sv('t-type');
+  entry.layer = sv('t-layer');
+  entry.origin = sv('t-origin');
+  entry.collision = sv('t-collision');
+  entry.snap_to_grid = sv('t-snap') === 'true';
+  entry.footprint = { w: ni('t-fw'), h: ni('t-fh') };
+  entry.tile_repeat = sv('t-repeat') === 'true';
+  const act = sv('t-action');
+  entry.action = act || null;
+  const variants = splitComma(sv('t-variants'));
+  if (variants.length) entry.variants = variants;
+  const floors = splitComma(sv('t-floors'));
+  entry.allowed_floors = floors;
+  entry.tags = splitComma(sv('t-tags'));
+  entry.verified = sv('t-verified') === 'true';
+
+  document.getElementById('tagger-output').textContent = JSON.stringify(entry, null, 2);
+}
+
+function copyOutput() {
+  const text = document.getElementById('tagger-output').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy to clipboard', 1500);
+  });
+}
+
+function clearForm() {
+  ['t-id','t-label','t-sheet','t-url','t-rx','t-ry','t-rw','t-rh','t-sw','t-sh','t-variants','t-tags','t-floors'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('tagger-output').textContent = '// Fill in the fields above and click Generate';
+}
+</script>
+</body>
+</html>

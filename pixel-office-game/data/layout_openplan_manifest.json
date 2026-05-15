@@ -1,0 +1,49 @@
+{
+  "layoutId": "openplan",
+  "sourceImage": "Hu4Gzs-b4f88a09-6596-4d5f-b9ba-e3779f16bda9.png",
+  "intent": "Recreate the open-plan office like a floor plan (walls + workstation grid + lounge + small offices).",
+  "status": {
+    "implementedInGame": [
+      "workstation desks (placeholder: desk_basic)",
+      "monitors (placeholder: decor_pc)"
+    ],
+    "missingAssetMatches": [
+      "office chair variants",
+      "desk lamps",
+      "keyboards/mice",
+      "paper stacks",
+      "whiteboard",
+      "bookshelf",
+      "wall AC unit",
+      "water cooler",
+      "printer/copier",
+      "potted plants",
+      "lounge couch + coffee table",
+      "side-room desks + laptops",
+      "wall art frames"
+    ]
+  },
+  "zones": [
+    {
+      "name": "Open-plan",
+      "notes": [
+        "Two rows of workstations",
+        "Top wall has whiteboard + bookshelf + framed art",
+        "Right wall has water cooler + plant"
+      ]
+    },
+    {
+      "name": "Lounge corner",
+      "notes": [
+        "Couch, coffee table, plant cluster, brick accent wall"
+      ]
+    },
+    {
+      "name": "Two small offices",
+      "notes": [
+        "Each has a desk, laptop/monitor, chair, lamp, plants"
+      ]
+    }
+  ]
+}
+

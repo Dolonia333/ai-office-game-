@@ -1,0 +1,33 @@
+{
+  "name": "denizen",
+  "version": "1.0.0",
+  "description": "Real-time visual observability layer for AI agents — a pixel-art office where every NPC is an LLM-backed agent.",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "node server.js",
+    "build:assets": "node scripts/run-pipeline.js",
+    "build:assets:dry": "node scripts/run-pipeline.js --dry-run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dolonia333/DENIZEN.git"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "phaser",
+    "pixel-art",
+    "observability",
+    "llm"
+  ],
+  "author": "Dolonia333",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Dolonia333/DENIZEN/issues"
+  },
+  "homepage": "https://github.com/Dolonia333/DENIZEN#readme",
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}

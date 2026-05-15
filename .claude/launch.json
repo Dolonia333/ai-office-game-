@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pixel-office-game",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--no-warnings", "server.js"],
+      "cwd": "pixel-office-game",
+      "port": 8080,
+      "waitForPort": 5000
+    }
+  ]
+}

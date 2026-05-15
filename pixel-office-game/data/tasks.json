@@ -1,0 +1,31 @@
+{
+  "info": {
+    "purpose": "Simple task/workflow model used when interacting with certain objects (PCs, meeting tables, etc.).",
+    "notes": [
+      "These tasks are stubs for now; real implementations can be wired to OpenClaw or other backends later."
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pc_research",
+      "label": "Do Research on PC",
+      "kind": "workflow",
+      "tags": ["pc", "knowledge", "ai"],
+      "ui": {
+        "window": "modern_ui_console",
+        "portraitAnimation": "portrait_talk"
+      }
+    },
+    {
+      "id": "team_meeting",
+      "label": "Team Meeting",
+      "kind": "workflow",
+      "tags": ["meeting", "conversation"],
+      "ui": {
+        "window": "modern_ui_dialog",
+        "portraitAnimation": "portrait_talk"
+      }
+    }
+  ]
+}
+

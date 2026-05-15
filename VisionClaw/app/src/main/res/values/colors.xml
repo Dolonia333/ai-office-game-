@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="background_dark">#FF121212</color>
+    <color name="surface_dark">#FF1E1E1E</color>
+    <color name="primary">#FF6750A4</color>
+    <color name="primary_variant">#FF3700B3</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="on_background">#FFE0E0E0</color>
+    <color name="status_connected">#FF4CAF50</color>
+    <color name="status_streaming">#FF2196F3</color>
+    <color name="status_disconnected">#FF9E9E9E</color>
+    <color name="status_error">#FFF44336</color>
+    <color name="log_tool_call">#FFFFAB40</color>
+    <color name="log_tool_result">#FF69F0AE</color>
+    <color name="log_error">#FFEF5350</color>
+    <color name="log_text">#FFE0E0E0</color>
+</resources>

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>DENIZEN</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+    <style>
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+      }
+      body {
+        margin: 0;
+        background: #020617;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100dvh;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+        padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+      }
+      #game-container {
+        width: min(100vw, 100dvw, calc(100dvh * 16 / 9));
+        height: min(100dvh, calc(100vw * 9 / 16));
+        max-width: 1280px;
+        max-height: 720px;
+        aspect-ratio: 16 / 9;
+        border: 1px solid #1f2937;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        background: #020617;
+        position: relative;
+        touch-action: none;
+      }
+      #game-container canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        touch-action: none;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      @media (max-width: 1024px), (max-height: 900px) {
+        body {
+          align-items: flex-start;
+          justify-content: center;
+          background: radial-gradient(circle at 20% 10%, #0b1220, #020617 55%);
+        }
+        #game-container {
+          width: min(100dvw - 8px, calc((100dvh - 8px) * 16 / 9));
+          height: min(100dvh - 8px, calc((100dvw - 8px) * 9 / 16));
+          border-width: 1px;
+          box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
+        }
+      }
+    </style>
+    <script>
+      // Show runtime errors on screen (helps when canvas is just a blank color).
+      (function () {
+        function ensureOverlay() {
+          let el = document.getElementById('runtime-error');
+          if (!el) {
+            el = document.createElement('pre');
+            el.id = 'runtime-error';
+            el.style.position = 'fixed';
+            el.style.left = '12px';
+            el.style.top = '12px';
+            el.style.right = '12px';
+            el.style.maxHeight = '45vh';
+            el.style.overflow = 'auto';
+            el.style.padding = '10px 12px';
+            el.style.margin = '0';
+            el.style.background = 'rgba(2, 6, 23, 0.92)';
+            el.style.border = '1px solid #7f1d1d';
+            el.style.color = '#fecaca';
+            el.style.fontSize = '12px';
+            el.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace';
+            el.style.whiteSpace = 'pre-wrap';
+            el.style.zIndex = '999999';
+            el.textContent = '';
+            document.body.appendChild(el);
+          }
+          return el;
+        }
+
+        window.addEventListener('error', function (ev) {
+          const el = ensureOverlay();
+          el.textContent += `[error] ${ev.message}\n${ev.filename || ''}:${ev.lineno || ''}:${ev.colno || ''}\n\n`;
+        });
+        window.addEventListener('unhandledrejection', function (ev) {
+          const el = ensureOverlay();
+          el.textContent += `[unhandledrejection] ${String(ev.reason)}\n\n`;
+        });
+      })();
+    </script>
+    <!-- World generator modules (ESM) -->
+    <script type="module" src="./src/world/rng.js"></script>
+    <script type="module" src="./src/world/generator.js"></script>
+    <script type="module" src="./src/world/renderer.js"></script>
+    <script type="module" src="./src/world/debug.js"></script>
+    <!-- Phaser 3 from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
+    <!-- OpenClaw Gateway Bridge -->
+    <script src="./src/gateway-bridge.js" defer></script>
+    <script src="./src/npc-agent-controller.js" defer></script>
+    <script src="./src/openclaw-chat.js" defer></script>
+    <!-- Pathfinding -->
+    <script src="./src/pathfinding.js" defer></script>
+    <script src="./src/npc-roster.js" defer></script>
+    <!-- Agent Office System -->
+    <script src="./src/agent-actions.js" defer></script>
+    <script src="./src/agent-office-manager.js" defer></script>
+    <!-- Voice gate (Zion-presence flag + speech provider plug) -->
+    <script src="./src/voice-gate.js" defer></script>
+    <!-- ElevenLabs voice provider (auto-installs if /api/tts/health says yes) -->
+    <script src="./src/elevenlabs-provider.js" defer></script>
+    <!-- SFX (ambient + event sounds; missing files silently skipped) -->
+    <script src="./src/sfx.js" defer></script>
+    <!-- OpenClaw → WorldState bridge (translator must load BEFORE the bridge runner) -->
+    <script src="./src/openclaw-translator.js?v=mobfix2" defer></script>
+    <script src="./src/openclaw-worldstate-bridge.js?v=mobfix2" defer></script>
+    <!-- OpenClaw outbound dispatch (action classifier + gateway forward) -->
+    <script src="./src/openclaw-dispatch.js?v=mobfix2" defer></script>
+    <!-- Voice input (push-to-talk STT) — requires Chrome's webkitSpeechRecognition -->
+    <script src="./src/voice-input.js" defer></script>
+    <!-- Mobile/iPad touch controls + responsive viewport sync -->
+    <script src="./src/mobile-controls.js?v=mobfix3" defer></script>
+    <!-- Live office diagnostics chip (bottom-left, polls /api/health every 5s) -->
+    <script src="./src/diag.js" defer></script>
+    <!-- City Debug overlay (?debug=city, or window.DenizenCityDebug.show()) -->
+    <script src="./src/city-debug.js" defer></script>
+    <!-- Player Chat (CEO talks to NPCs) -->
+    <script src="./src/player-chat.js" defer></script>
+    <!-- Security Monitor + Robber Visualization -->
+    <script src="./src/security-monitor.js" defer></script>
+    <script src="./src/robber-controller.js" defer></script>
+    <!-- Demo / Cutscene system -->
+    <script src="./src/demo-scene.js" defer></script>
+    <!-- Game scene -->
+    <!-- Cache-bust during development so changes always show up -->
+    <script src="./office-scene.js?v=dev37" defer></script>
+  </head>
+  <body>
+    <div id="game-container"></div>
+  </body>
+</html>
+

@@ -1,0 +1,68 @@
+{
+  "id": "modern_office_openplan_bullpen_v1",
+  "theme": "modern_office",
+  "roomType": "openplan_bullpen",
+  "tileSize": 16,
+  "size": { "w": 40, "h": 24 },
+  "palette": {
+    "floor": "office_floor_light",
+    "wall": "office_wall_white",
+    "carpet": "office_rug_blue"
+  },
+  "prefabs": [
+    { "id": "desk_cluster_2x2", "from": "interiors", "kind": "furniture" },
+    { "id": "office_chair", "from": "interiors", "kind": "seat", "action": "sit" },
+    { "id": "pc_monitor", "from": "office", "kind": "device", "action": "use_pc" },
+    { "id": "plant_pot_small", "from": "interiors", "kind": "decor" },
+    { "id": "whiteboard_wall", "from": "office", "kind": "wall_decor" },
+    { "id": "bookshelf", "from": "interiors", "kind": "furniture" },
+    { "id": "water_dispenser", "from": "office", "kind": "utility" },
+    { "id": "printer_large", "from": "office", "kind": "utility" }
+  ],
+  "layout": {
+    "deskRows": [
+      {
+        "rowIndex": 0,
+        "start": { "x": 4, "y": 6 },
+        "count": 5,
+        "spacing": { "x": 4, "y": 0 },
+        "attach": {
+          "chair": { "prefab": "office_chair", "anchor": "chair_1" },
+          "monitor": { "prefab": "pc_monitor", "anchor": "pc_1" },
+          "plant": { "prefab": "plant_pot_small", "anchor": "pc_2", "frequency": 0.3 }
+        }
+      },
+      {
+        "rowIndex": 1,
+        "start": { "x": 4, "y": 12 },
+        "count": 5,
+        "spacing": { "x": 4, "y": 0 },
+        "attach": {
+          "chair": { "prefab": "office_chair", "anchor": "chair_2" },
+          "monitor": { "prefab": "pc_monitor", "anchor": "pc_2" }
+        }
+      }
+    ],
+    "wallDecor": [
+      {
+        "prefab": "whiteboard_wall",
+        "side": "top",
+        "offsetTiles": { "x": 10 },
+        "repeat": 1
+      }
+    ],
+    "utilities": [
+      { "prefab": "water_dispenser", "pos": { "x": 2, "y": 18 } },
+      { "prefab": "printer_large", "pos": { "x": 32, "y": 18 } }
+    ]
+  },
+  "spawnPoints": {
+    "player": { "x": 6, "y": 20 },
+    "npcs": [
+      { "role": "worker", "x": 8, "y": 8 },
+      { "role": "worker", "x": 20, "y": 8 },
+      { "role": "manager", "x": 10, "y": 5 }
+    ]
+  }
+}
+

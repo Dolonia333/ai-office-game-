@@ -1,0 +1,178 @@
+{
+  "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Interiors_RPG_Maker_Version\\Modern_Interiors_RPG_Maker_Version\\RPG_MAKER_XP\\1_Generic.png",
+  "width": 256,
+  "height": 3936,
+  "grid": 16,
+  "objects": [
+    {
+      "name": "obj_0",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 1536
+      },
+      "grid": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 96
+      },
+      "origin": "bottom",
+      "pivot_y": 1536
+    },
+    {
+      "name": "obj_1",
+      "rect": {
+        "x": 16,
+        "y": 0,
+        "w": 64,
+        "h": 144
+      },
+      "grid": {
+        "x": 1,
+        "y": 0,
+        "w": 4,
+        "h": 9
+      },
+      "origin": "bottom",
+      "pivot_y": 144
+    },
+    {
+      "name": "obj_2",
+      "rect": {
+        "x": 0,
+        "y": 1568,
+        "w": 256,
+        "h": 1216
+      },
+      "grid": {
+        "x": 0,
+        "y": 98,
+        "w": 16,
+        "h": 76
+      },
+      "origin": "bottom",
+      "pivot_y": 2784
+    },
+    {
+      "name": "obj_3",
+      "rect": {
+        "x": 0,
+        "y": 2256,
+        "w": 128,
+        "h": 48
+      },
+      "grid": {
+        "x": 0,
+        "y": 141,
+        "w": 8,
+        "h": 3
+      },
+      "origin": "bottom",
+      "pivot_y": 2304
+    },
+    {
+      "name": "obj_4",
+      "rect": {
+        "x": 0,
+        "y": 2800,
+        "w": 256,
+        "h": 176
+      },
+      "grid": {
+        "x": 0,
+        "y": 175,
+        "w": 16,
+        "h": 11
+      },
+      "origin": "bottom",
+      "pivot_y": 2976
+    },
+    {
+      "name": "obj_5",
+      "rect": {
+        "x": 224,
+        "y": 2960,
+        "w": 32,
+        "h": 16
+      },
+      "grid": {
+        "x": 14,
+        "y": 185,
+        "w": 2,
+        "h": 1
+      },
+      "origin": "bottom",
+      "pivot_y": 2976
+    },
+    {
+      "name": "obj_6",
+      "rect": {
+        "x": 0,
+        "y": 2992,
+        "w": 256,
+        "h": 544
+      },
+      "grid": {
+        "x": 0,
+        "y": 187,
+        "w": 16,
+        "h": 34
+      },
+      "origin": "bottom",
+      "pivot_y": 3536
+    },
+    {
+      "name": "obj_7",
+      "rect": {
+        "x": 0,
+        "y": 3488,
+        "w": 256,
+        "h": 240
+      },
+      "grid": {
+        "x": 0,
+        "y": 218,
+        "w": 16,
+        "h": 15
+      },
+      "origin": "bottom",
+      "pivot_y": 3728
+    },
+    {
+      "name": "obj_8",
+      "rect": {
+        "x": 192,
+        "y": 3696,
+        "w": 64,
+        "h": 48
+      },
+      "grid": {
+        "x": 12,
+        "y": 231,
+        "w": 4,
+        "h": 3
+      },
+      "origin": "bottom",
+      "pivot_y": 3744
+    },
+    {
+      "name": "obj_9",
+      "rect": {
+        "x": 0,
+        "y": 3744,
+        "w": 192,
+        "h": 192
+      },
+      "grid": {
+        "x": 0,
+        "y": 234,
+        "w": 12,
+        "h": 12
+      },
+      "origin": "bottom",
+      "pivot_y": 3936
+    }
+  ]
+}

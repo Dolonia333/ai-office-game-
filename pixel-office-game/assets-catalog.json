@@ -1,0 +1,51 @@
+{
+  "root": "C:/Users/zionv/OneDrive/Desktop/multbot/pixel game stuff/pixel game assets and stuff",
+  "packs": [
+    {
+      "id": "modern_interiors_32",
+      "name": "Modern Interiors 32x32",
+      "kind": "tileset_pack",
+      "basePath": "Modern_Interiors_RPG_Maker_Version/Modern_Interiors_RPG_Maker_Version",
+      "license": {
+        "author": "LimeZu",
+        "url": "https://limezu.itch.io/moderninteriors",
+        "redistributionAllowed": false
+      },
+      "assets": [
+        {
+          "id": "office_floor_1",
+          "file": "RPG_MAKER_MV/Tileset_A/MI_Office_A1_32x32.png",
+          "category": "tileset_floor",
+          "tileSize": 32,
+          "tags": ["office", "floor"]
+        }
+      ]
+    },
+    {
+      "id": "modern_ui",
+      "name": "Modern User Interface",
+      "kind": "ui_pack",
+      "basePath": "modernuserinterface-win",
+      "license": {
+        "author": "LimeZu",
+        "url": "https://limezu.itch.io/modernuserinterface",
+        "redistributionAllowed": false
+      },
+      "assets": [
+        {
+          "id": "window_frame_basic",
+          "file": "Windows/window_frame_01.png",
+          "category": "ui_window",
+          "tags": ["dialog"]
+        },
+        {
+          "id": "button_blue",
+          "file": "Buttons/button_blue_01.png",
+          "category": "ui_button",
+          "tags": ["primary"]
+        }
+      ]
+    }
+  ]
+}
+

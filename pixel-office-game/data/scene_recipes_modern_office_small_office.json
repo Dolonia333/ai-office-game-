@@ -1,0 +1,58 @@
+{
+  "id": "modern_office_small_office_v1",
+  "theme": "modern_office",
+  "roomType": "small_office",
+  "tileSize": 16,
+  "size": { "w": 20, "h": 14 },
+  "palette": {
+    "floor": "office_floor_light",
+    "wall": "office_wall_plain"
+  },
+  "prefabs": [
+    { "id": "desk_cluster_2x2", "from": "interiors", "kind": "furniture" },
+    { "id": "office_chair", "from": "interiors", "kind": "seat", "action": "sit" },
+    { "id": "pc_monitor", "from": "interiors", "kind": "device", "action": "use_pc" },
+    { "id": "plant_pot", "from": "interiors", "kind": "decor" },
+    { "id": "bookshelf", "from": "interiors", "kind": "furniture" },
+    { "id": "printer", "from": "interiors", "kind": "furniture" }
+  ],
+  "layout": {
+    "deskArea": {
+      "desk": {
+        "prefab": "desk_cluster_2x2",
+        "pos": { "x": 10, "y": 7 }
+      },
+      "chair": {
+        "prefab": "office_chair",
+        "anchor": "chair_1"
+      },
+      "pc": {
+        "prefab": "pc_monitor",
+        "anchor": "pc_1"
+      }
+    },
+    "sideFurniture": [
+      {
+        "prefab": "bookshelf",
+        "pos": { "x": 15, "y": 4 }
+      },
+      {
+        "prefab": "printer",
+        "pos": { "x": 5, "y": 9 }
+      }
+    ],
+    "decor": [
+      {
+        "prefab": "plant_pot",
+        "pos": { "x": 4, "y": 5 }
+      }
+    ]
+  },
+  "spawnPoints": {
+    "player": { "x": 10, "y": 11 },
+    "npcs": [
+      { "role": "manager", "x": 12, "y": 7 }
+    ]
+  }
+}
+

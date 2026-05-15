@@ -1,0 +1,4 @@
+{
+  "//": "Marks src/city/* as ES modules so Node 22 stops re-parsing them as CommonJS.",
+  "type": "module"
+}

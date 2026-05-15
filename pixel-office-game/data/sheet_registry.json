@@ -1,0 +1,53 @@
+{
+  "info": {
+    "purpose": "Canonical list of LimeZu Modern Office Revamped sheet paths and grid sizes. Use for export, verify, and catalog scripts.",
+    "basePath": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2"
+  },
+  "sheets": [
+    {
+      "id": "room_builder_office_16",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\1_Room_Builder_Office\\Room_Builder_Office_16x16.png",
+      "grid": 16
+    },
+    {
+      "id": "room_builder_office_32",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\1_Room_Builder_Office\\Room_Builder_Office_32x32.png",
+      "grid": 32
+    },
+    {
+      "id": "room_builder_office_48",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\1_Room_Builder_Office\\Room_Builder_Office_48x48.png",
+      "grid": 48
+    },
+    {
+      "id": "modern_office_16",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\Modern_Office_16x16.png",
+      "grid": 16
+    },
+    {
+      "id": "modern_office_mv_a2_floors",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\5_Modern_Office_RPG_MAKER_MV\\Modern_Office_MV_Floors_TILESET_A2.png",
+      "grid": 48
+    },
+    {
+      "id": "modern_office_mv_a4_walls",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\5_Modern_Office_RPG_MAKER_MV\\Modern_Office_MV_Walls_TILESET_A4.png",
+      "grid": 48
+    },
+    {
+      "id": "modern_office_black_shadow",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\2_Modern_Office_Black_Shadow\\Modern_Office_Black_Shadow.png",
+      "grid": 32
+    },
+    {
+      "id": "modern_office_black_shadow_32",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\2_Modern_Office_Black_Shadow\\Modern_Office_Black_Shadow_32x32.png",
+      "grid": 32
+    },
+    {
+      "id": "modern_office_black_shadow_48",
+      "path": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\2_Modern_Office_Black_Shadow\\Modern_Office_Black_Shadow_48x48.png",
+      "grid": 48
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "playerAvatar": {
+    "id": "player_main",
+    "name": "You",
+    "sprite": {
+      "packId": "character_generator_2",
+      "assetId": "player_avatar_01"
+    },
+    "speed": 150
+  },
+  "models": [
+    {
+      "modelId": "openai_main",
+      "displayName": "OpenAI Main",
+      "npcId": "npc_openai_main",
+      "sprite": {
+        "packId": "character_generator_2",
+        "assetId": "npc_scientist_01"
+      },
+      "elements": ["search", "code"],
+      "moves": ["search_blast", "code_strike"]
+    }
+  ]
+}
+

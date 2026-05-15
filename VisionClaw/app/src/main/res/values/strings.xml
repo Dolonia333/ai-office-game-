@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">VisionClaw</string>
+    <string name="server_url_hint">ws://192.168.1.232:18791</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="frame_rate">Frame Rate: %.1f FPS</string>
+    <string name="state_disconnected">Disconnected</string>
+    <string name="state_connecting">Connecting...</string>
+    <string name="state_connected">Connected</string>
+    <string name="state_streaming">Streaming</string>
+    <string name="state_tool_executing">Tool Executing</string>
+    <string name="state_error">Error</string>
+    <string name="bt_connected">Glasses Connected</string>
+    <string name="bt_disconnected">Glasses Not Connected</string>
+</resources>

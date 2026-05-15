@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Singles Viewer – Modern Office 32×32 (IDs 1–339)</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --card-hover: #1c2128;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --input-bg: #21262d;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+    }
+    header { margin-bottom: 14px; }
+    h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: 13px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .toolbar input[type="search"],
+    .toolbar input[type="number"] {
+      padding: 6px 10px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .toolbar input[type="search"] { width: 200px; }
+    .toolbar input[type="number"] { width: 72px; text-align: center; }
+    .toolbar label { font-size: 13px; color: var(--muted); }
+    .btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--card-hover); }
+    .btn-green { background: #238636; border-color: #238636; color: #fff; }
+    .btn-green:hover { background: #2ea043; }
+    .btn-blue { background: #1158c7; border-color: #1158c7; color: #fff; }
+    .btn-blue:hover { background: #1a7fe0; }
+    .sep { flex: 1; }
+    .stats { font-size: 13px; color: var(--muted); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .card:hover { border-color: #444c56; }
+    .card.labeled { border-color: #1a7642; }
+    .card.skip { opacity: 0.45; }
+    .card-header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .id-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(88,166,255,0.1);
+      border: 1px solid rgba(88,166,255,0.25);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+    .size-badge {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .img-wrap {
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 140px;
+      height: 140px;
+      overflow: hidden;
+      cursor: zoom-in;
+      position: relative;
+    }
+    .img-wrap img {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      max-width: 128px;
+      max-height: 128px;
+    }
+    .img-wrap.err::after {
+      content: '✗ not found';
+      font-size: 11px;
+      color: var(--red);
+    }
+    .scale-hint {
+      position: absolute;
+      bottom: 3px;
+      right: 4px;
+      font-size: 9px;
+      color: var(--muted);
+      opacity: 0.7;
+    }
+    .label-input {
+      width: 100%;
+      padding: 5px 7px;
+      font-size: 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+    }
+    .label-input::placeholder { color: var(--muted); }
+    .label-input:focus { outline: none; border-color: var(--accent); }
+    .skip-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .skip-row input[type="checkbox"] { cursor: pointer; }
+
+    /* zoom dialog */
+    dialog {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0;
+      color: var(--text);
+      width: min(700px, calc(100vw - 32px));
+    }
+    dialog::backdrop { background: rgba(0,0,0,.7); }
+    .dlg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .dlg-title { font-weight: 700; font-size: 15px; }
+    .dlg-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #zoomImg {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border: 1px solid var(--border);
+      background: #000;
+      max-width: 100%;
+    }
+    .dlg-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      width: 100%;
+    }
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 9px;
+    }
+    .dlg-label-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      align-items: center;
+    }
+    .dlg-label-row input {
+      flex: 1;
+      padding: 7px 10px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .dlg-nav {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* export panel */
+    #exportPanel {
+      display: none;
+      margin-top: 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    #exportPanel h2 { font-size: 14px; margin-bottom: 8px; }
+    #exportOut {
+      width: 100%;
+      height: 300px;
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #adbac7;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px;
+      padding: 10px;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Singles Viewer — Modern Office 32×32 (IDs 1–339)</h1>
+  <p class="sub">Each sprite is a separate PNG from the singles folder. Add a label for each one, then click <strong>Export labels</strong> to copy back.</p>
+</header>
+
+<div class="toolbar">
+  <input type="search" id="searchInput" placeholder="Search label…" />
+  <label>ID range:</label>
+  <input type="number" id="rangeFrom" value="1" min="1" max="339" title="From ID" />
+  <span style="color:var(--muted); font-size:13px;">–</span>
+  <input type="number" id="rangeTo" value="339" min="1" max="339" title="To ID" />
+  <button class="btn" id="btnAll">All (1–339)</button>
+  <label style="display:flex;align-items:center;gap:6px;">
+    <input type="checkbox" id="onlyUnlabeled" />
+    Unlabeled only
+  </label>
+  <label style="display:flex;align-items:center;gap:6px;">
+    <input type="checkbox" id="onlyLabeled" />
+    Labeled only
+  </label>
+  <div class="sep"></div>
+  <span class="stats" id="stats"></span>
+  <button class="btn" id="btnClearAll" title="Clear all labels">Clear all</button>
+  <button class="btn" id="btnPrefillKnown" title="Fill labels from current openplan catalog singles">Prefill known</button>
+  <button class="btn btn-blue" id="btnImport">Import JSON</button>
+  <button class="btn btn-green" id="btnExport">Export labels</button>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<div id="exportPanel">
+  <h2>Labels JSON — paste into chat or copy to a file</h2>
+  <textarea id="exportOut" readonly></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px;">
+    <button class="btn btn-green" id="btnCopyExport">Copy to clipboard</button>
+    <button class="btn" id="btnCloseExport">Close</button>
+  </div>
+</div>
+
+<!-- Zoom dialog -->
+<dialog id="zoomDialog">
+  <div class="dlg-header">
+    <div class="dlg-title" id="zoomTitle"></div>
+    <button class="btn" id="zoomClose">✕ Close</button>
+  </div>
+  <div class="dlg-body">
+    <img id="zoomImg" src="" alt="sprite" />
+    <div class="dlg-meta" id="zoomMeta"></div>
+    <div class="dlg-label-row">
+      <input type="text" id="zoomLabelInput" placeholder="Add a label (e.g. chair_blue_forward)…" />
+      <button class="btn btn-green" id="zoomSaveLabel">Save</button>
+    </div>
+    <div class="dlg-nav">
+      <button class="btn" id="zoomPrev">← Prev</button>
+      <button class="btn" id="zoomNext">Next →</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Import dialog -->
+<dialog id="importDialog">
+  <div class="dlg-header">
+    <div class="dlg-title">Import labels JSON</div>
+    <button class="btn" id="importClose">✕</button>
+  </div>
+  <div class="dlg-body">
+    <p style="font-size:13px;color:var(--muted);width:100%;">Paste a JSON object like <code>{"1":"chair_blue","5":"desk_l_shaped"}</code> or a full labels export.</p>
+    <textarea id="importInput" style="width:100%;height:200px;background:#010409;border:1px solid var(--border);border-radius:6px;color:#adbac7;font-family:monospace;font-size:12px;padding:10px;resize:vertical;" placeholder='{"1": "chair_forward", "5": "desk_pod"}'></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-green" id="importConfirm">Import</button>
+      <button class="btn" id="importCancel">Cancel</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const SINGLES_BASE = '../pixel%20game%20stuff/pixel%20game%20assets%20and%20stuff/Modern_Office_Revamped_v1.2/4_Modern_Office_singles/32x32/Modern_Office_Singles_32x32_';
+const TOTAL = 339;
+const LS_KEY = 'singles32x32_labels';
+const KNOWN_FROM_CATALOG = {
+  98: 'plant_tall',
+  99: 'plant_prickly',
+  100: 'plant_pretty',
+  101: 'chair_forward',
+  103: 'chair_left',
+  107: 'chair_orange_forward',
+  110: 'chair_orange_right',
+  129: 'monitor_tilted',
+  130: 'monitor_front',
+  133: 'monitor_white',
+  136: 'laptop',
+  141: 'desk_lamp',
+  170: 'whiteboard_blank',
+  171: 'whiteboard_charts',
+  173: 'water_cooler',
+  175: 'vending_machine',
+  177: 'printer',
+  190: 'table',
+  200: 'couch',
+  231: 'desk_setup_alt',
+  306: 'chair_orange_left',
+  315: 'fax_machine',
+  317: 'coffee_machine'
+};
+
+// --- State ---
+let labels = {}; // id (number) -> string label
+let skipped = {}; // id (number) -> bool
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      labels = parsed.labels || {};
+      skipped = parsed.skipped || {};
+    }
+  } catch (e) {}
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({ labels, skipped }));
+  } catch (e) {}
+}
+
+function getLabel(id) { return labels[id] || ''; }
+function setLabel(id, val) {
+  if (val) labels[id] = val; else delete labels[id];
+  saveState();
+}
+function isSkipped(id) { return !!skipped[id]; }
+function setSkipped(id, val) {
+  if (val) skipped[id] = true; else delete skipped[id];
+  saveState();
+}
+
+function spriteUrl(id) {
+  return SINGLES_BASE + id + '.png';
+}
+
+function applyKnownPrefill(force) {
+  let count = 0;
+  for (const [k, v] of Object.entries(KNOWN_FROM_CATALOG)) {
+    const id = Number(k);
+    if (id < 1 || id > TOTAL) continue;
+    if (!force && getLabel(id)) continue;
+    setLabel(id, v);
+    count++;
+  }
+  return count;
+}
+
+// --- Render ---
+function getFilteredIds() {
+  const from = parseInt(document.getElementById('rangeFrom').value) || 1;
+  const to = parseInt(document.getElementById('rangeTo').value) || TOTAL;
+  const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const onlyUnlabeled = document.getElementById('onlyUnlabeled').checked;
+  const onlyLabeled = document.getElementById('onlyLabeled').checked;
+
+  const ids = [];
+  for (let id = Math.max(1, from); id <= Math.min(TOTAL, to); id++) {
+    if (onlyUnlabeled && getLabel(id)) continue;
+    if (onlyLabeled && !getLabel(id)) continue;
+    if (search) {
+      const lbl = getLabel(id).toLowerCase();
+      if (!lbl.includes(search) && !String(id).includes(search)) continue;
+    }
+    ids.push(id);
+  }
+  return ids;
+}
+
+function updateStats() {
+  const labeled = Object.keys(labels).filter(k => labels[k]).length;
+  const skippedCount = Object.keys(skipped).filter(k => skipped[k]).length;
+  document.getElementById('stats').textContent = `${labeled} labeled · ${skippedCount} skipped · ${TOTAL} total`;
+}
+
+let currentIds = [];
+
+function renderGrid() {
+  currentIds = getFilteredIds();
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  const frag = document.createDocumentFragment();
+  for (const id of currentIds) {
+    const card = makeCard(id);
+    frag.appendChild(card);
+  }
+  grid.appendChild(frag);
+  updateStats();
+}
+
+function makeCard(id) {
+  const lbl = getLabel(id);
+  const skip = isSkipped(id);
+  const card = document.createElement('div');
+  card.className = 'card' + (lbl ? ' labeled' : '') + (skip ? ' skip' : '');
+  card.dataset.id = id;
+
+  // header
+  const header = document.createElement('div');
+  header.className = 'card-header';
+  const badge = document.createElement('div');
+  badge.className = 'id-badge';
+  badge.textContent = '#' + id;
+  const sizeBadge = document.createElement('div');
+  sizeBadge.className = 'size-badge';
+  sizeBadge.textContent = '32×32';
+  header.appendChild(badge);
+  header.appendChild(sizeBadge);
+  card.appendChild(header);
+
+  // image
+  const wrap = document.createElement('div');
+  wrap.className = 'img-wrap';
+  const img = document.createElement('img');
+  img.alt = 'single_' + id;
+  // load and auto-scale
+  img.onload = () => {
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+    // scale so that image fills wrap (140px) nicely, using integer scale
+    const scale = Math.max(1, Math.floor(128 / Math.max(natW, natH)));
+    img.style.width = (natW * scale) + 'px';
+    img.style.height = (natH * scale) + 'px';
+    const s = document.createElement('div');
+    s.className = 'scale-hint';
+    s.textContent = natW + '×' + natH + (scale > 1 ? ' ×' + scale : '');
+    wrap.appendChild(s);
+    // update size badge
+    sizeBadge.textContent = natW + '×' + natH;
+  };
+  img.onerror = () => {
+    wrap.classList.add('err');
+    img.style.display = 'none';
+    card.classList.add('skip'); // treat missing as skipped
+  };
+  img.src = spriteUrl(id);
+  wrap.appendChild(img);
+  wrap.addEventListener('click', () => openZoom(id));
+  card.appendChild(wrap);
+
+  // label input
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'label-input';
+  input.placeholder = 'label…';
+  input.value = lbl;
+  input.addEventListener('input', () => {
+    setLabel(id, input.value.trim());
+    card.classList.toggle('labeled', !!input.value.trim());
+    updateStats();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      // focus next card's input
+      const idx = currentIds.indexOf(id);
+      if (idx >= 0 && idx + 1 < currentIds.length) {
+        const next = document.querySelector(`.card[data-id="${currentIds[idx + 1]}"] .label-input`);
+        if (next) { next.focus(); next.select(); }
+      }
+    }
+  });
+  card.appendChild(input);
+
+  // skip checkbox
+  const skipRow = document.createElement('div');
+  skipRow.className = 'skip-row';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = skip;
+  cb.addEventListener('change', () => {
+    setSkipped(id, cb.checked);
+    card.classList.toggle('skip', cb.checked);
+    updateStats();
+  });
+  const cbl = document.createElement('label');
+  cbl.textContent = 'Skip / partial';
+  cbl.style.cursor = 'pointer';
+  cbl.addEventListener('click', () => { cb.click(); });
+  skipRow.appendChild(cb);
+  skipRow.appendChild(cbl);
+  card.appendChild(skipRow);
+
+  return card;
+}
+
+// --- Zoom dialog ---
+let zoomId = null;
+
+function openZoom(id) {
+  zoomId = id;
+  const img = document.getElementById('zoomImg');
+  img.src = spriteUrl(id);
+  img.style.width = '';
+  img.style.height = '';
+  img.onload = () => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const scale = Math.max(4, Math.floor(Math.min(16, 512 / Math.max(w, h))));
+    img.style.width = (w * scale) + 'px';
+    img.style.height = (h * scale) + 'px';
+    document.getElementById('zoomMeta').innerHTML = `
+      <span class="pill">id: ${id}</span>
+      <span class="pill">size: ${w}×${h}</span>
+      <span class="pill">×${scale} zoom</span>
+    `;
+  };
+  document.getElementById('zoomTitle').textContent = '#' + id + (getLabel(id) ? ' — ' + getLabel(id) : '');
+  const labelInput = document.getElementById('zoomLabelInput');
+  labelInput.value = getLabel(id);
+  const dlg = document.getElementById('zoomDialog');
+  if (!dlg.open) dlg.showModal();
+}
+
+document.getElementById('zoomClose').addEventListener('click', () => {
+  document.getElementById('zoomDialog').close();
+});
+document.getElementById('zoomSaveLabel').addEventListener('click', () => {
+  const val = document.getElementById('zoomLabelInput').value.trim();
+  setLabel(zoomId, val);
+  document.getElementById('zoomTitle').textContent = '#' + zoomId + (val ? ' — ' + val : '');
+  // update card
+  const card = document.querySelector(`.card[data-id="${zoomId}"]`);
+  if (card) {
+    const inp = card.querySelector('.label-input');
+    if (inp) inp.value = val;
+    card.classList.toggle('labeled', !!val);
+  }
+  updateStats();
+});
+document.getElementById('zoomLabelInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('zoomSaveLabel').click();
+});
+document.getElementById('zoomPrev').addEventListener('click', () => {
+  const idx = currentIds.indexOf(zoomId);
+  if (idx > 0) openZoom(currentIds[idx - 1]);
+});
+document.getElementById('zoomNext').addEventListener('click', () => {
+  const idx = currentIds.indexOf(zoomId);
+  if (idx >= 0 && idx + 1 < currentIds.length) openZoom(currentIds[idx + 1]);
+});
+document.getElementById('zoomDialog').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') document.getElementById('zoomPrev').click();
+  if (e.key === 'ArrowRight') document.getElementById('zoomNext').click();
+  if (e.key === 'Escape') document.getElementById('zoomDialog').close();
+});
+
+// --- Export ---
+document.getElementById('btnExport').addEventListener('click', () => {
+  const out = {};
+  for (let id = 1; id <= TOTAL; id++) {
+    const lbl = getLabel(id);
+    if (lbl) out[id] = lbl;
+  }
+  const json = JSON.stringify(out, null, 2);
+  document.getElementById('exportOut').value = json;
+  const panel = document.getElementById('exportPanel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth' });
+});
+document.getElementById('btnCopyExport').addEventListener('click', () => {
+  const ta = document.getElementById('exportOut');
+  ta.select();
+  navigator.clipboard.writeText(ta.value).catch(() => document.execCommand('copy'));
+});
+document.getElementById('btnCloseExport').addEventListener('click', () => {
+  document.getElementById('exportPanel').style.display = 'none';
+});
+
+// --- Import ---
+document.getElementById('btnImport').addEventListener('click', () => {
+  document.getElementById('importInput').value = '';
+  const dlg = document.getElementById('importDialog');
+  if (!dlg.open) dlg.showModal();
+});
+document.getElementById('importClose').addEventListener('click', () => {
+  document.getElementById('importDialog').close();
+});
+document.getElementById('importCancel').addEventListener('click', () => {
+  document.getElementById('importDialog').close();
+});
+document.getElementById('importConfirm').addEventListener('click', () => {
+  try {
+    const raw = document.getElementById('importInput').value.trim();
+    let parsed = JSON.parse(raw);
+    // If it's the full export format with a "labels" key, unwrap it
+    if (parsed.labels) parsed = parsed.labels;
+    let count = 0;
+    for (const [k, v] of Object.entries(parsed)) {
+      const id = parseInt(k);
+      if (id >= 1 && id <= TOTAL && typeof v === 'string') {
+        setLabel(id, v);
+        count++;
+      }
+    }
+    document.getElementById('importDialog').close();
+    renderGrid();
+    alert(`Imported ${count} labels.`);
+  } catch (e) {
+    alert('Invalid JSON: ' + e.message);
+  }
+});
+
+// --- Controls ---
+document.getElementById('btnAll').addEventListener('click', () => {
+  document.getElementById('rangeFrom').value = 1;
+  document.getElementById('rangeTo').value = TOTAL;
+  renderGrid();
+});
+document.getElementById('btnClearAll').addEventListener('click', () => {
+  if (!confirm('Clear all labels and skip flags?')) return;
+  labels = {};
+  skipped = {};
+  saveState();
+  renderGrid();
+});
+document.getElementById('btnPrefillKnown').addEventListener('click', () => {
+  const count = applyKnownPrefill(false);
+  renderGrid();
+  alert(`Prefilled ${count} known labels from current catalog singles.`);
+});
+document.getElementById('searchInput').addEventListener('input', () => renderGrid());
+document.getElementById('rangeFrom').addEventListener('change', () => renderGrid());
+document.getElementById('rangeTo').addEventListener('change', () => renderGrid());
+document.getElementById('onlyUnlabeled').addEventListener('change', () => renderGrid());
+document.getElementById('onlyLabeled').addEventListener('change', () => renderGrid());
+
+// --- Init ---
+loadState();
+if (Object.keys(labels).length === 0) {
+  applyKnownPrefill(false);
+}
+renderGrid();
+</script>
+</body>
+</html>

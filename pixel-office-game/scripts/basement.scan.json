@@ -1,0 +1,161 @@
+{
+  "file": "C:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Interiors_RPG_Maker_Version\\Modern_Interiors_RPG_Maker_Version\\RPG_MAKER_XP\\14_Basement.png",
+  "width": 256,
+  "height": 1696,
+  "grid": 16,
+  "objects": [
+    {
+      "name": "obj_0",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 608
+      },
+      "grid": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 38
+      },
+      "origin": "bottom",
+      "pivot_y": 608
+    },
+    {
+      "name": "obj_1",
+      "rect": {
+        "x": 0,
+        "y": 208,
+        "w": 80,
+        "h": 80
+      },
+      "grid": {
+        "x": 0,
+        "y": 13,
+        "w": 5,
+        "h": 5
+      },
+      "origin": "bottom",
+      "pivot_y": 288
+    },
+    {
+      "name": "obj_2",
+      "rect": {
+        "x": 0,
+        "y": 304,
+        "w": 80,
+        "h": 80
+      },
+      "grid": {
+        "x": 0,
+        "y": 19,
+        "w": 5,
+        "h": 5
+      },
+      "origin": "bottom",
+      "pivot_y": 384
+    },
+    {
+      "name": "obj_3",
+      "rect": {
+        "x": 0,
+        "y": 624,
+        "w": 96,
+        "h": 176
+      },
+      "grid": {
+        "x": 0,
+        "y": 39,
+        "w": 6,
+        "h": 11
+      },
+      "origin": "bottom",
+      "pivot_y": 800
+    },
+    {
+      "name": "obj_4",
+      "rect": {
+        "x": 112,
+        "y": 624,
+        "w": 96,
+        "h": 80
+      },
+      "grid": {
+        "x": 7,
+        "y": 39,
+        "w": 6,
+        "h": 5
+      },
+      "origin": "bottom",
+      "pivot_y": 704
+    },
+    {
+      "name": "obj_5",
+      "rect": {
+        "x": 224,
+        "y": 624,
+        "w": 32,
+        "h": 48
+      },
+      "grid": {
+        "x": 14,
+        "y": 39,
+        "w": 2,
+        "h": 3
+      },
+      "origin": "bottom",
+      "pivot_y": 672
+    },
+    {
+      "name": "obj_6",
+      "rect": {
+        "x": 112,
+        "y": 720,
+        "w": 144,
+        "h": 176
+      },
+      "grid": {
+        "x": 7,
+        "y": 45,
+        "w": 9,
+        "h": 11
+      },
+      "origin": "bottom",
+      "pivot_y": 896
+    },
+    {
+      "name": "obj_7",
+      "rect": {
+        "x": 16,
+        "y": 816,
+        "w": 96,
+        "h": 80
+      },
+      "grid": {
+        "x": 1,
+        "y": 51,
+        "w": 6,
+        "h": 5
+      },
+      "origin": "bottom",
+      "pivot_y": 896
+    },
+    {
+      "name": "obj_8",
+      "rect": {
+        "x": 0,
+        "y": 912,
+        "w": 256,
+        "h": 784
+      },
+      "grid": {
+        "x": 0,
+        "y": 57,
+        "w": 16,
+        "h": 49
+      },
+      "origin": "bottom",
+      "pivot_y": 1696
+    }
+  ]
+}

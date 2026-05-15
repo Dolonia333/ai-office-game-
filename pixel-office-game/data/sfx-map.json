@@ -1,0 +1,27 @@
+{
+  "//": "Sound effects map. Each entry binds a worldState 'change' event kind (or a synthetic event name) to an audio file. Files are relative to assets/audio/ and must exist for playback to actually fire — missing files are silently skipped (no console spam) so you can ship the system before the audio assets land.",
+  "ambient": {
+    "loop": "office_ambient.ogg",
+    "volume": 0.18,
+    "fadeInMs": 2000
+  },
+  "events": {
+    "presence": {
+      "true":  { "file": "presence_on.ogg",  "volume": 0.6 },
+      "false": { "file": "presence_off.ogg", "volume": 0.6 }
+    },
+    "threat": {
+      "low":      { "file": "threat_low.ogg",      "volume": 0.55 },
+      "medium":   { "file": "threat_medium.ogg",   "volume": 0.65 },
+      "high":     { "file": "threat_high.ogg",     "volume": 0.75 },
+      "critical": { "file": "threat_critical.ogg", "volume": 0.85 }
+    },
+    "task":   { "file": "task_ping.ogg",   "volume": 0.45 },
+    "event":  { "file": "event_chime.ogg", "volume": 0.5  },
+    "meeting": {
+      "start": { "file": "meeting_start.ogg", "volume": 0.55 },
+      "end":   { "file": "meeting_end.ogg",   "volume": 0.45 }
+    },
+    "player_chat_response": { "file": "chat_ding.ogg", "volume": 0.5 }
+  }
+}

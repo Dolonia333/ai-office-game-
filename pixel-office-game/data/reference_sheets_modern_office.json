@@ -1,0 +1,51 @@
+[
+  {
+    "id": "modern_office_16",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\Modern_Office_16x16.png",
+    "tileSizes": [16],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_32",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\Modern_Office_32x32.png",
+    "tileSizes": [32],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_48",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\Modern_Office_48x48.png",
+    "tileSizes": [48],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_shadowless_16",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\3_Modern_Office_Shadowless\\Modern_Office_Shadowless_16x16.png",
+    "tileSizes": [16],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_shadowless_32",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\3_Modern_Office_Shadowless\\Modern_Office_Shadowless_32x32.png",
+    "tileSizes": [32],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_shadowless_48",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\3_Modern_Office_Shadowless\\Modern_Office_Shadowless_48x48.png",
+    "tileSizes": [48],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_black_shadow_32",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\2_Modern_Office_Black_Shadow\\Modern_Office_Black_Shadow_32x32.png",
+    "tileSizes": [32],
+    "bgTol": 2
+  },
+  {
+    "id": "modern_office_black_shadow_48",
+    "file": "c:\\Users\\zionv\\OneDrive\\Desktop\\multbot\\pixel game stuff\\pixel game assets and stuff\\Modern_Office_Revamped_v1.2\\2_Modern_Office_Black_Shadow\\Modern_Office_Black_Shadow_48x48.png",
+    "tileSizes": [48],
+    "bgTol": 2
+  }
+]
+

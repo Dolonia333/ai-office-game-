@@ -1,0 +1,19 @@
+{
+  "dialogs": [
+    {
+      "id": "npc_dialog_basic",
+      "frameAsset": {
+        "packId": "modern_ui",
+        "assetId": "window_frame_basic"
+      },
+      "buttonAssets": {
+        "primary": {
+          "packId": "modern_ui",
+          "assetId": "button_blue"
+        }
+      },
+      "padding": { "left": 16, "top": 16, "right": 16, "bottom": 16 }
+    }
+  ]
+}
+

@@ -1,0 +1,40 @@
+# Temp Claude agent working directories
+tmpclaude-*-cwd
+
+# Embedded git repos (tracked separately)
+openclaw/
+.github/
+
+# Large raw game asset dumps (binary files, not source code)
+pixel game stuff/
+pixel-game/
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# Node modules (restored via npm/pnpm install)
+node_modules/
+
+# OpenClaw compiled output
+openclaw/dist/
+openclaw/apps/*/node_modules/
+openclaw/extensions/*/node_modules/
+
+# Environment / secrets — never commit these
+.env
+.env.local
+.env.*.local
+openclaw/.env
+
+# Build artifacts
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Windows junk
+nul

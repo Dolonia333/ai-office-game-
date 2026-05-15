@@ -1,0 +1,28 @@
+{
+  "//": "Maps OpenClaw agent IDs to Denizen NPC display names. Loaded by src/openclaw-worldstate-bridge.js. Auto-assignment fills in any missing IDs at runtime; persisted to localStorage so the same OpenClaw agent reliably gets the same NPC across page reloads. Edit by hand to pin a specific agent → NPC, or wipe and let the auto-assigner pick.",
+  "default": {},
+  "examples": {
+    "agent-claude-haiku-1234": "Abby",
+    "agent-grok-4-7777": "Alex",
+    "session-research-001": "Bob"
+  },
+  "//npcRoleHints": "Used by the auto-assigner to pick the most coherent NPC for a tool kind. Database tools → Pier (data engineer), GitHub → Oscar (devops), browser/vision → Bob (researcher), etc. The role text comes from each NPC's SOUL.md `## Role` line.",
+  "npcRoles": {
+    "Abby": "CTO",
+    "Alex": "Senior Developer",
+    "Bob": "Researcher",
+    "Jenny": "Code Review",
+    "Dan": "IT Support",
+    "Lucy": "Receptionist",
+    "Bouncer": "Security Guard",
+    "Marcus": "Project Manager",
+    "Sarah": "Product Manager",
+    "Edward": "Backend Developer",
+    "Josh": "Frontend Developer",
+    "Molly": "QA Engineer",
+    "Oscar": "DevOps Engineer",
+    "Pier": "Data Engineer",
+    "Rob": "UI/UX Designer",
+    "Roki": "Intern"
+  }
+}
