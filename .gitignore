@@ -1,6 +1,9 @@
 # Temp Claude agent working directories
 tmpclaude-*-cwd
 
+# Claude settings with local secrets
+.claude/settings.local.json
+
 # Embedded git repos (tracked separately)
 openclaw/
 .github/

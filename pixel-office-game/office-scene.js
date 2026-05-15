@@ -2362,6 +2362,12 @@ const config = {
   parent: 'game-container',
   backgroundColor: '#020617',
   pixelArt: true,
+  // Snap every draw to whole pixels. Without this, NPCs at fractional
+  // coordinates (e.g. x=156.7) render their name labels at sub-pixel
+  // offsets, and nearest-neighbor sampling (from pixelArt:true) smears
+  // each tiny 6-7px glyph across two display pixels → blurry text that
+  // shifts as the NPC walks. roundPixels:true fixes it for free.
+  roundPixels: true,
   loader: {
     maxParallelDownloads: 6,   // prevent connection stalls with local serve
     maxRetries: 2
