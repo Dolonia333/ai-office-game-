@@ -322,12 +322,16 @@ class PlayerChat {
       },
     });
 
+    // Visible "thinking…" indicator so the user knows the request is
+    // in flight, not silently dropped. Replaced by the real response
+    // (or by '(no response)' if the 15s timeout fires).
+    this._addToLog('System', `💭 ${targetName} is thinking…`);
+
     // Timeout after 15s (only when we actually sent a request)
     this._responseTimeout = setTimeout(() => {
       if (this._waitingForResponse) {
         this._waitingForResponse = false;
-        this._addToLog(targetName, '(no response)');
-        // Resume NPC
+        this._addToLog(targetName, '(no response — check the ⋯ diag chip bottom-left)');
         this._resumeNpc(targetKey);
       }
     }, 15000);
@@ -353,7 +357,7 @@ class PlayerChat {
   /**
    * Handle NPC response from server
    */
-  handleNpcResponse(npcName, text, delegation) {
+  handleNpcResponse(npcName, text, delegation, error) {
     this._waitingForResponse = false;
     if (this._responseTimeout) {
       clearTimeout(this._responseTimeout);
@@ -363,6 +367,15 @@ class PlayerChat {
     const safeText = typeof text === 'string' && text.length > 0
       ? text
       : '(No reply right now.)';
+
+    // If the server tagged an explicit error on this response, surface
+    // it so the user knows WHY the reply is so terse / generic. This
+    // is the difference between "Got it, I'll look into that." (looks
+    // friendly, hides the failure) and a clear "👉 LM Studio not
+    // reachable — open the ⋯ diag chip" message.
+    if (error) {
+      this._addToLog('System', `⚠️ ${error}`);
+    }
 
     // Add to chat log
     this._addToLog(npcName, safeText);

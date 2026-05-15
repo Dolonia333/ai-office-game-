@@ -1111,7 +1111,7 @@ class AgentOfficeManager {
         const hasActions = Array.isArray(msg.actions) && msg.actions.length > 0;
         if (this.scene._playerChat) {
           this.scene._playerChat._hasActions = hasActions;
-          this.scene._playerChat.handleNpcResponse(msg.npcName, msg.text, msg.delegation);
+          this.scene._playerChat.handleNpcResponse(msg.npcName, msg.text, msg.delegation, msg.error);
         } else if (respondingKey) {
           this.actions.speak(respondingKey, msg.text);
         }

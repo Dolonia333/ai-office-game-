@@ -74,6 +74,17 @@ const npcBrains = new NpcBrainManager();
 const cofounderAgent = new CofounderAgent();
 cofounderAgent.npcBrains = npcBrains; // Give the director access to individual NPC brains
 
+// Recent NPC-brain errors, surfaced through GET /api/health so the client
+// diagnostic widget can show them without the user opening the terminal.
+global._npcRecentErrors = global._npcRecentErrors || [];
+function _recordNpcError(message) {
+  const entry = { ts: Date.now(), message: String(message).slice(0, 400) };
+  global._npcRecentErrors.push(entry);
+  if (global._npcRecentErrors.length > 20) {
+    global._npcRecentErrors = global._npcRecentErrors.slice(-20);
+  }
+}
+
 // --- External sinks (Supabase / n8n outbound webhooks) ---
 // Forwards filtered worldState change events to whatever HTTP endpoints
 // the operator has configured via env vars. No-op when no env vars are set.
@@ -333,6 +344,51 @@ const server = http.createServer((req, res) => {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }
+    });
+    return;
+  }
+
+  // --- Office health (one-shot diagnostic the client polls every few seconds) ---
+  // Reports: WS clients connected, LM Studio reachability, which providers
+  // are configured (names only — never keys), recent provider errors, and
+  // last successful think+chat timestamps. Designed to answer the question
+  // "why isn't the NPC responding when I talk to it?" without the user
+  // needing terminal access.
+  if (urlPath === '/api/health' && req.method === 'GET') {
+    (async () => {
+      const lmStudioUrl = process.env.LM_STUDIO_URL || 'http://localhost:1234';
+      let lmStudioStatus = { reachable: false, url: lmStudioUrl, error: null };
+      try {
+        const probe = await fetch(`${lmStudioUrl}/v1/models`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(2500),
+        });
+        lmStudioStatus.reachable = probe.ok;
+        if (!probe.ok) lmStudioStatus.error = `HTTP ${probe.status}`;
+      } catch (err) {
+        lmStudioStatus.error = err?.message || String(err);
+      }
+
+      const providers = Object.entries(npcBrains.providers || {})
+        .filter(([k]) => k !== 'demo')
+        .map(([name, cfg]) => ({ name, type: cfg.type, model: cfg.model || null }));
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        ok: true,
+        ts: Date.now(),
+        lmStudio: lmStudioStatus,
+        providers,
+        demoMode: !!npcBrains._demoMode,
+        wsClients: {
+          agent: cofounderAgent.wsClients.size,
+          security: securityMonitor.clients?.size || 0,
+        },
+        recentErrors: (global._npcRecentErrors || []).slice(-5),
+      }));
+    })().catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err?.message || String(err) }));
     });
     return;
   }
@@ -743,25 +799,41 @@ agentWss.on('connection', (ws) => {
         console.log(`[PlayerChat] CEO → ${npcName}: "${msg.text}"`);
         npcBrains.getPlayerResponse(npcName, msg.text)
           .then(result => {
+            // If the brain returned nothing usable, treat it as an
+            // error so the client sees WHY instead of an empty bubble.
+            const text = (result && typeof result.text === 'string') ? result.text.trim() : '';
+            if (!text) {
+              const errMsg = `${npcName}'s brain returned no text (provider may be down — check /api/health)`;
+              _recordNpcError(errMsg);
+              const reply = JSON.stringify({
+                type: 'player_chat_response',
+                npcName,
+                text: '(no reply — provider error, see diagnostics)',
+                error: errMsg,
+                delegation: null, actions: [],
+              });
+              if (ws.readyState === 1) ws.send(reply);
+              return;
+            }
             const reply = JSON.stringify({
               type: 'player_chat_response',
-              npcName: npcName,
-              text: result.text,
+              npcName, text,
               delegation: result.delegation || null,
               actions: result.actions || [],
             });
             if (ws.readyState === 1) ws.send(reply);
-            // Save to memory
-            npcBrains.saveMemory(npcName, `CEO said: "${msg.text}" — I replied: "${result.text}"${result.delegation ? ` [delegated to ${result.delegation.delegateTo}]` : ''}`);
+            npcBrains.saveMemory(npcName, `CEO said: "${msg.text}" — I replied: "${text}"${result.delegation ? ` [delegated to ${result.delegation.delegateTo}]` : ''}`);
           })
           .catch(err => {
-            console.warn('[PlayerChat] Response error:', String(err?.message ?? err));
+            const errMsg = String(err?.message ?? err);
+            console.warn('[PlayerChat] Response error:', errMsg);
+            _recordNpcError(`getPlayerResponse(${npcName}): ${errMsg}`);
             const fallback = JSON.stringify({
               type: 'player_chat_response',
-              npcName: npcName,
+              npcName,
               text: 'Got it, I\'ll look into that.',
-              delegation: null,
-              actions: [],
+              error: errMsg,
+              delegation: null, actions: [],
             });
             if (ws.readyState === 1) ws.send(fallback);
           });
