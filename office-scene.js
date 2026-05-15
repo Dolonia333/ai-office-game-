@@ -1450,6 +1450,11 @@ class OfficeScene extends Phaser.Scene {
     // --- OpenClaw Gateway Bridge ---
     if (window.GatewayBridge && window.NpcAgentController) {
       this._gatewayBridge = new window.GatewayBridge();
+      // Expose the bridge + the scene globally so the parallel
+      // worldstate-bridge module (src/openclaw-worldstate-bridge.js) can
+      // attach without us threading them through any constructor.
+      window.__DenizenGatewayBridge = this._gatewayBridge;
+      window.__DenizenScene = this;
       this._npcAgentCtrl = new window.NpcAgentController(this, this._gatewayBridge);
       this._npcAgentCtrl.init();
       this._gatewayBridge.connect();
