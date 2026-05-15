@@ -9,10 +9,15 @@
  * thin wrapper that just executes whatever intents this module returns.
  *
  * Module style: CommonJS so Node tests can `require()` it directly. The
- * browser also loads it as a classic script (it just defines globals
- * via the IIFE wrapper at the bottom — see openclaw-worldstate-bridge.js
- * for the consumer).
+ * browser loads it as a classic script — the whole body is wrapped in
+ * an IIFE so internal const declarations (TOOL_CLASSIFIER, TOOL_LABELS,
+ * classifyTool) don't collide with the same-named symbols in
+ * `src/npc-agent-controller.js`, which runs in the same global scope.
+ * Only the `_api` object escapes the IIFE, exposed via `module.exports`
+ * and `window.OpenClawTranslator`.
  */
+
+const _api = (function () {
 
 // =====================================================================
 // Tool classification — extended for the current OpenClaw skill set.
@@ -318,7 +323,7 @@ function translateEvent({ event, payload, mapping, availableNpcs, npcRoles, tool
   return intents;
 }
 
-const _api = {
+return {
   classifyTool,
   suggestRoleForTool,
   labelForTool,
@@ -327,6 +332,8 @@ const _api = {
   TOOL_LABELS,
   SKILL_KIND_HINTS,
 };
+
+})(); // end IIFE
 
 // Dual export — CJS for Node tests, global for the browser script tag.
 if (typeof module !== 'undefined' && module.exports) {
