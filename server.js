@@ -9,6 +9,15 @@ const NpcBrainManager = require('./src/npc-brains');
 const worldState = require('./src/world-state');
 const agentBus = require('./src/agent-bus');
 const ExternalSink = require('./src/external-sink');
+const elevenLabs = require('./src/elevenlabs-tts');
+
+// Voice map (per-NPC ElevenLabs voice IDs). Loaded once at startup;
+// edit data/voice-map.json + restart to change. Missing file → empty map
+// → every NPC uses the default voice.
+let _voiceMap = { default: {}, npcs: {} };
+try {
+  _voiceMap = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'voice-map.json'), 'utf8'));
+} catch (_) { /* optional */ }
 
 const PORT = process.env.PORT || 8080;
 
@@ -323,6 +332,61 @@ const server = http.createServer((req, res) => {
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // --- TTS health (cheap probe — does this server have ElevenLabs configured?) ---
+  // The client uses this to decide whether to wire the ElevenLabs voice
+  // provider. Returns the key SOURCE but never the value.
+  if (urlPath === '/api/tts/health' && req.method === 'GET') {
+    const status = elevenLabs.status();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      ...status,
+      voiceMapEntries: Object.keys(_voiceMap.npcs || {}).length,
+    }));
+    return;
+  }
+
+  // --- TTS: synthesize speech for an NPC and stream MP3 back ---
+  // POST body: { npcName?, text, voiceId?, modelId? }
+  // The voice gate (browser) calls this; we proxy to ElevenLabs server-side
+  // so the API key never touches the browser. NPC name maps via voice-map.json.
+  if (urlPath === '/api/tts' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', async () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const text = String(payload.text || '').slice(0, 4000);
+      if (!text.trim()) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'text is required' }));
+        return;
+      }
+      const npcEntry = (payload.npcName && _voiceMap.npcs?.[payload.npcName]) || {};
+      const voiceId = payload.voiceId || npcEntry.voiceId || _voiceMap.default?.voiceId;
+      const modelId = payload.modelId || npcEntry.modelId || _voiceMap.default?.modelId;
+
+      try {
+        await elevenLabs.synthesize({ text, voiceId, modelId }, res);
+        // Streaming complete; nothing else to send.
+      } catch (err) {
+        // Headers may or may not be sent depending on whether the failure
+        // happened before or after upstream returned 200. Guard both paths.
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        } else {
+          try { res.end(); } catch (_) {}
+        }
       }
     });
     return;
@@ -757,6 +821,12 @@ server.listen(PORT, () => {
   console.log(`World-state snapshot: GET http://localhost:${PORT}/api/world-state`);
   console.log(`Task webhook (n8n etc): POST http://localhost:${PORT}/api/task-update  body: {id,title,status?,assignee?}`);
   console.log(`Presence toggle (voice gate): POST http://localhost:${PORT}/api/presence  body: {present:true|false}`);
+  const ttsStatus = elevenLabs.status();
+  if (ttsStatus.configured) {
+    console.log(`ElevenLabs TTS: ✅ configured (key from ${ttsStatus.source}); POST http://localhost:${PORT}/api/tts  body: {npcName,text}`);
+  } else {
+    console.log(`ElevenLabs TTS: not configured. Set ELEVENLABS_API_KEY (or add to ~/.openclaw/.env) and restart to enable.`);
+  }
 
   // Start the cofounder agent's autonomous thinking loop
   cofounderAgent.start();

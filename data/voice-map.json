@@ -1,0 +1,25 @@
+{
+  "//": "Per-NPC ElevenLabs voice + model mapping. Override any entry by editing this file or by setting the per-NPC voice via window.DenizenVoiceProvider in the browser. Voice IDs below are from ElevenLabs' default public voice library (https://elevenlabs.io/app/voice-library). Use any custom cloned voice ID instead.",
+  "default": {
+    "voiceId": "EXAVITQu4vr4xnSDxMaL",
+    "modelId": "eleven_turbo_v2_5"
+  },
+  "npcs": {
+    "Abby":   { "voiceId": "EXAVITQu4vr4xnSDxMaL" },
+    "Alex":   { "voiceId": "29vD33N1CtxCmqQRPOHJ" },
+    "Bob":    { "voiceId": "5Q0t7uMcjvnagumLfvZi" },
+    "Jenny":  { "voiceId": "AZnzlk1XvdvUeBnXmlld" },
+    "Dan":    { "voiceId": "CYw3kZ02Hs0563khs1Fj" },
+    "Lucy":   { "voiceId": "LcfcDJNUP1GQjkzn1xUU" },
+    "Bouncer":{ "voiceId": "GBv7mTt0atIp3Br8iCZE" },
+    "Marcus": { "voiceId": "ErXwobaYiN019PkySvjV" },
+    "Sarah":  { "voiceId": "21m00Tcm4TlvDq8ikWAM" },
+    "Edward": { "voiceId": "IKne3meq5aSn9XLyUdCD" },
+    "Josh":   { "voiceId": "D38z5RcWu1voky8WS1ja" },
+    "Molly":  { "voiceId": "MF3mGyEYCl7XYWbV9V6O" },
+    "Oscar":  { "voiceId": "N2lVS1w4EtoT3dr4eOWO" },
+    "Pier":   { "voiceId": "ODq5zmih8GrVes37Dizd" },
+    "Rob":    { "voiceId": "SOYHLrjzK2X1ezoPC6cr" },
+    "Roki":   { "voiceId": "2EiwWnXFnvU5JabPnv8n" }
+  }
+}

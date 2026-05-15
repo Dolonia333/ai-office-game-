@@ -135,11 +135,16 @@ agentBus.subscribe('*', (msg) => /* mirror to UI */);
 
 ### Plugging in ElevenLabs (or any other TTS)
 
-Set a single global before `voice-gate.js` runs (or any time after):
+**ElevenLabs is built in.** Set `ELEVENLABS_API_KEY` in your env (or in
+`~/.openclaw/.env`) and `src/elevenlabs-provider.js` auto-installs on
+boot — no code changes. See **[VOICE.md](VOICE.md)** for the full setup,
+the per-NPC voice map, the smoke CLI, and the `/api/tts` endpoint shape.
+
+For any other TTS, override the global:
 
 ```js
 window.DenizenVoiceProvider = async (npcName, text) => {
-  const r = await fetch('/api/tts', {
+  const r = await fetch('/api/my-tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ npcName, text }),
@@ -149,8 +154,8 @@ window.DenizenVoiceProvider = async (npcName, text) => {
 };
 ```
 
-The gate then calls your provider whenever an NPC speaks — but only when
-`zionPresent` is true. Bubbles always render either way.
+The gate calls whichever provider is set whenever an NPC speaks — but
+only when `zionPresent` is true. Bubbles always render either way.
 
 ---
 

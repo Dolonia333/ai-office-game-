@@ -216,6 +216,9 @@ A **packet_anomaly** robber should appear in the IT/storage room.
 | `N8N_WEBHOOK_KEY` | unset | Bearer token for the n8n webhook |
 | `EXTERNAL_SINK_KINDS` | `task,threat,threat-cleared,event,environment,presence` | Comma-sep filter on which kinds get forwarded |
 | `EXTERNAL_SINK_TIMEOUT` | `4000` | Per-request timeout for outbound webhooks (ms) |
+| `ELEVENLABS_API_KEY` (or `XI_API_KEY`) | unset | Enables ElevenLabs TTS — see [VOICE.md](VOICE.md). Also read from `~/.openclaw/.env` if not in env |
+| `ELEVENLABS_VOICE_ID` | `EXAVITQu4vr4xnSDxMaL` | Default voice ID; per-NPC overrides live in `data/voice-map.json` |
+| `ELEVENLABS_MODEL_ID` | `eleven_turbo_v2_5` | Default model ID |
 
 ## 5. Troubleshooting
 
