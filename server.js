@@ -366,45 +366,75 @@ const server = http.createServer((req, res) => {
   // needing terminal access.
   if (urlPath === '/api/health' && req.method === 'GET') {
     (async () => {
-      // Use the SAME baseUrl + auth that npc-brains.js uses, not just the
-      // env var. Earlier the probe lied about LM Studio reachability
-      // because it took a different path than the actual chat call:
-      // chat completions worked fine while /v1/models 401'd or
-      // returned a non-200 status.
+      // LIVENESS, NOT JUST REACHABILITY.
+      //
+      // Earlier the health probe lied because LM Studio's single-threaded
+      // HTTP server queues incoming requests behind the chat completions
+      // that are already running. When 16 NPCs are autonomously thinking
+      // back-to-back at full GPU saturation, even a cheap GET /v1/models
+      // can wait 4-8 seconds before LM Studio gets to it. A 5s probe
+      // timeout fires first → probe reports "unreachable" → user thinks
+      // LM Studio is down even though it's actively processing requests.
+      //
+      // The truth source is whether the brain is actually completing
+      // requests, which we already track in _npcStats. If a brain call
+      // succeeded in the last 30 seconds, LM Studio is alive — period.
+      // Run the probe ONLY as a fallback when we have no recent brain
+      // activity to vouch for it.
       const lmCfg = npcBrains.providers?.lmstudio || {};
       const lmStudioUrl = lmCfg.baseUrl || process.env.LM_STUDIO_URL || 'http://localhost:1234';
       const lmHeaders = {};
       if (lmCfg.apiKey) lmHeaders.Authorization = `Bearer ${lmCfg.apiKey}`;
 
-      let lmStudioStatus = { reachable: false, url: lmStudioUrl, error: null, model: lmCfg.model || null };
+      const stats = global._npcStats || {};
+      const lastBrainOk = Math.max(
+        stats.lastNpcConvAt || 0,
+        stats.lastPlayerChatAt && stats.playerChatSucceeded > 0 ? stats.lastPlayerChatAt : 0,
+      );
+      const now = Date.now();
+      const recentBrainOk = lastBrainOk && (now - lastBrainOk) < 30000;
 
-      // Try /v1/models first (cheap), fall back to /api/v0/models (older
-      // LM Studio versions), fall back to a plain GET on /. If ANY of
-      // them returns a 2xx OR a 401 (meaning "service is up but auth
-      // fails"), we count the server as reachable — auth failure is a
-      // separate concern from "is it running at all."
-      const probes = ['/v1/models', '/api/v0/models', '/'];
-      const errors = [];
-      for (const path of probes) {
-        try {
-          const probe = await fetch(`${lmStudioUrl}${path}`, {
-            method: 'GET',
-            headers: lmHeaders,
-            signal: AbortSignal.timeout(5000),
-          });
-          if (probe.ok || probe.status === 401 || probe.status === 403) {
-            lmStudioStatus.reachable = true;
-            lmStudioStatus.probedPath = path;
-            if (!probe.ok) lmStudioStatus.warning = `${path} HTTP ${probe.status} (auth issue, but server is up)`;
-            break;
+      let lmStudioStatus = {
+        reachable: false,
+        url: lmStudioUrl,
+        error: null,
+        model: lmCfg.model || null,
+        livenessSource: null,
+      };
+
+      if (recentBrainOk) {
+        // Don't even bother probing — we have proof LM Studio is alive.
+        const ago = Math.round((now - lastBrainOk) / 1000);
+        lmStudioStatus.reachable = true;
+        lmStudioStatus.livenessSource = `brain call succeeded ${ago}s ago`;
+      } else {
+        // No recent activity — fall back to direct probe with a longer
+        // timeout that tolerates a saturated GPU. Try 3 paths; accept a
+        // 401/403 as "server is up, just auth-blocked."
+        const probes = ['/v1/models', '/api/v0/models', '/'];
+        const errors = [];
+        for (const path of probes) {
+          try {
+            const probe = await fetch(`${lmStudioUrl}${path}`, {
+              method: 'GET',
+              headers: lmHeaders,
+              signal: AbortSignal.timeout(15000),
+            });
+            if (probe.ok || probe.status === 401 || probe.status === 403) {
+              lmStudioStatus.reachable = true;
+              lmStudioStatus.probedPath = path;
+              lmStudioStatus.livenessSource = `probe ${path} ok`;
+              if (!probe.ok) lmStudioStatus.warning = `${path} HTTP ${probe.status} (auth issue, but server is up)`;
+              break;
+            }
+            errors.push(`${path}: HTTP ${probe.status}`);
+          } catch (err) {
+            errors.push(`${path}: ${err?.message || String(err)}`);
           }
-          errors.push(`${path}: HTTP ${probe.status}`);
-        } catch (err) {
-          errors.push(`${path}: ${err?.message || String(err)}`);
         }
-      }
-      if (!lmStudioStatus.reachable) {
-        lmStudioStatus.error = errors.join('; ');
+        if (!lmStudioStatus.reachable) {
+          lmStudioStatus.error = errors.join('; ');
+        }
       }
 
       const providers = Object.entries(npcBrains.providers || {})

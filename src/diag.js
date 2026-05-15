@@ -107,10 +107,10 @@
     const lines = [];
     lines.push('━━━ OFFICE DIAGNOSTICS ━━━');
     lines.push('');
-    lines.push(`LM Studio:  ${lm.reachable ? '🟢 reachable' : '🔴 unreachable'}`);
+    lines.push(`LM Studio:  ${lm.reachable ? '🟢 alive' : '🔴 unreachable'}`);
     lines.push(`   url:    ${lm.url || '(unset)'}`);
     if (lm.model) lines.push(`   model:  ${lm.model}`);
-    if (lm.probedPath) lines.push(`   probed: ${lm.probedPath}`);
+    if (lm.livenessSource) lines.push(`   via:    ${lm.livenessSource}`);
     if (lm.warning) lines.push(`   ⚠️ ${lm.warning}`);
     if (lm.error) lines.push(`   error:  ${lm.error}`);
     if (!lm.reachable) {
