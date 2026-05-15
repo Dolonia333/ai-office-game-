@@ -327,14 +327,18 @@ class PlayerChat {
     // (or by '(no response)' if the 15s timeout fires).
     this._addToLog('System', `💭 ${targetName} is thinking…`);
 
-    // Timeout after 15s (only when we actually sent a request)
+    // Timeout after 30s. The brain's request jumps the LM Studio queue
+    // (priority:'high'), but the in-flight job ahead can still take 4s,
+    // and player prompts use 300 max_tokens → ~6-10s generation. 15s was
+    // too tight; 30s gives plenty of margin without making real failures
+    // feel slow.
     this._responseTimeout = setTimeout(() => {
       if (this._waitingForResponse) {
         this._waitingForResponse = false;
         this._addToLog(targetName, '(no response — check the ⋯ diag chip bottom-left)');
         this._resumeNpc(targetKey);
       }
-    }, 15000);
+    }, 30000);
   }
 
   /**

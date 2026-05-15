@@ -993,11 +993,25 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
 
   /**
    * Call LM Studio local API (HTTP, OpenAI-compatible)
+   *
+   * Queue is sequential because the GPU can only run one inference at a
+   * time. With 16 NPCs autonomously thinking every 30-45s and each call
+   * taking ~4s, the queue is almost always backed up by 5-10 jobs. Player
+   * chat would queue behind all of them and routinely time out at 15s.
+   *
+   * Solution: opts.priority === 'high' jumps to the FRONT of the queue
+   * (right after the in-flight job). The current call still has to
+   * finish, but the user's message runs next instead of dead last.
+   * `getPlayerResponse` sets this; autonomous `think()` does not.
    */
   _callLocal(config, systemPrompt, messages, opts = {}) {
-    // Queue requests so only one hits LM Studio at a time — GPU can only run one inference
     return new Promise((resolve, reject) => {
-      this._requestQueue.push({ config, systemPrompt, messages, opts, resolve, reject });
+      const job = { config, systemPrompt, messages, opts, resolve, reject };
+      if (opts.priority === 'high') {
+        this._requestQueue.unshift(job); // jump the queue
+      } else {
+        this._requestQueue.push(job);
+      }
       this._processQueue();
     });
   }
@@ -1462,7 +1476,11 @@ ${roleActions}
     }));
 
     // Use higher token limits for CEO conversations — they deserve detailed responses
-    const playerOpts = { maxTokens: 300, sliceLen: 500 };
+    // Mark player-chat as high-priority so it jumps the LM Studio queue.
+    // With 16 NPCs autonomously thinking, the FIFO queue is almost always
+    // backed up; without this, player messages queue behind 5-10 jobs
+    // and reliably time out at the 15s client timeout.
+    const playerOpts = { maxTokens: 300, sliceLen: 500, priority: 'high' };
 
     let responseText;
     try {
