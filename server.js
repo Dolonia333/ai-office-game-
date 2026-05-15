@@ -386,8 +386,13 @@ const server = http.createServer((req, res) => {
       const lmHeaders = {};
       if (lmCfg.apiKey) lmHeaders.Authorization = `Bearer ${lmCfg.apiKey}`;
 
+      // Truth source for "is LM Studio alive": ANY successful provider
+      // call counts. Captured inside _callLocal so it covers autonomous
+      // think() loops too (which never go through the WS handlers and
+      // therefore weren't reflected by the WS-only counters).
       const stats = global._npcStats || {};
       const lastBrainOk = Math.max(
+        stats.lastProviderOkAt || 0,
         stats.lastNpcConvAt || 0,
         stats.lastPlayerChatAt && stats.playerChatSucceeded > 0 ? stats.lastPlayerChatAt : 0,
       );

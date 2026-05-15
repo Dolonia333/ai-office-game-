@@ -1057,9 +1057,23 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
 
     const markSuccess = () => {
       this._providerHealth.consecutiveFailures = 0;
+      // Liveness signal for /api/health. The diag panel relies on this
+      // to know LM Studio is alive even when the HTTP probe times out
+      // because the GPU is saturated. Captures EVERY successful provider
+      // call — autonomous think(), npc↔npc, player chat — at the source.
+      if (typeof globalThis !== 'undefined') {
+        if (!globalThis._npcStats) globalThis._npcStats = {};
+        globalThis._npcStats.lastProviderOkAt = Date.now();
+        globalThis._npcStats.providerOk = (globalThis._npcStats.providerOk || 0) + 1;
+      }
     };
     const markFailure = () => {
       this._providerHealth.consecutiveFailures += 1;
+      if (typeof globalThis !== 'undefined') {
+        if (!globalThis._npcStats) globalThis._npcStats = {};
+        globalThis._npcStats.lastProviderFailAt = Date.now();
+        globalThis._npcStats.providerFail = (globalThis._npcStats.providerFail || 0) + 1;
+      }
       if (this._providerHealth.consecutiveFailures >= 5) {
         // 30s cooldown — long enough for LM Studio to reload the model after
         // a crash/unload, short enough that we resume quickly when it recovers.
