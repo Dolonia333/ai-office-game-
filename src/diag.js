@@ -109,6 +109,9 @@
     lines.push('');
     lines.push(`LM Studio:  ${lm.reachable ? '🟢 reachable' : '🔴 unreachable'}`);
     lines.push(`   url:    ${lm.url || '(unset)'}`);
+    if (lm.model) lines.push(`   model:  ${lm.model}`);
+    if (lm.probedPath) lines.push(`   probed: ${lm.probedPath}`);
+    if (lm.warning) lines.push(`   ⚠️ ${lm.warning}`);
     if (lm.error) lines.push(`   error:  ${lm.error}`);
     if (!lm.reachable) {
       lines.push('   fix:    open LM Studio → load a model → Developer → Start Server');
@@ -120,6 +123,17 @@
     }
     lines.push('');
     lines.push(`WS clients: agent=${snap.wsClients?.agent ?? '?'}, security=${snap.wsClients?.security ?? '?'}`);
+    lines.push('');
+    const st = snap.stats || {};
+    lines.push('Brain calls (since server start):');
+    lines.push(`   player chat: ${st.playerChatReceived || 0} received, ${st.playerChatSucceeded || 0} ok, ${st.playerChatFailed || 0} failed`);
+    lines.push(`   npc ↔ npc:   ${st.npcConvReceived || 0} received, ${st.npcConvSucceeded || 0} ok, ${st.npcConvFailed || 0} failed`);
+    if (st.lastPlayerChatAt) {
+      const ago = Math.round((Date.now() - st.lastPlayerChatAt) / 1000);
+      lines.push(`   last player message: ${ago}s ago`);
+    } else {
+      lines.push(`   last player message: never (no /player_chat msg has reached the server)`);
+    }
     lines.push('');
     const errs = snap.recentErrors || [];
     if (errs.length === 0) {

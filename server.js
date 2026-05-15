@@ -85,6 +85,16 @@ function _recordNpcError(message) {
   }
 }
 
+// Counters so the diag panel can show "did this even arrive at the
+// server?" When the user reports 'no response' but the server saw zero
+// player_chat messages, that's a clear client-side issue — not a brain
+// failure. Without this we'd be guessing.
+global._npcStats = global._npcStats || {
+  playerChatReceived: 0, playerChatSucceeded: 0, playerChatFailed: 0,
+  npcConvReceived: 0,    npcConvSucceeded: 0,    npcConvFailed: 0,
+  lastPlayerChatAt: null, lastNpcConvAt: null,
+};
+
 // --- External sinks (Supabase / n8n outbound webhooks) ---
 // Forwards filtered worldState change events to whatever HTTP endpoints
 // the operator has configured via env vars. No-op when no env vars are set.
@@ -356,17 +366,45 @@ const server = http.createServer((req, res) => {
   // needing terminal access.
   if (urlPath === '/api/health' && req.method === 'GET') {
     (async () => {
-      const lmStudioUrl = process.env.LM_STUDIO_URL || 'http://localhost:1234';
-      let lmStudioStatus = { reachable: false, url: lmStudioUrl, error: null };
-      try {
-        const probe = await fetch(`${lmStudioUrl}/v1/models`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(2500),
-        });
-        lmStudioStatus.reachable = probe.ok;
-        if (!probe.ok) lmStudioStatus.error = `HTTP ${probe.status}`;
-      } catch (err) {
-        lmStudioStatus.error = err?.message || String(err);
+      // Use the SAME baseUrl + auth that npc-brains.js uses, not just the
+      // env var. Earlier the probe lied about LM Studio reachability
+      // because it took a different path than the actual chat call:
+      // chat completions worked fine while /v1/models 401'd or
+      // returned a non-200 status.
+      const lmCfg = npcBrains.providers?.lmstudio || {};
+      const lmStudioUrl = lmCfg.baseUrl || process.env.LM_STUDIO_URL || 'http://localhost:1234';
+      const lmHeaders = {};
+      if (lmCfg.apiKey) lmHeaders.Authorization = `Bearer ${lmCfg.apiKey}`;
+
+      let lmStudioStatus = { reachable: false, url: lmStudioUrl, error: null, model: lmCfg.model || null };
+
+      // Try /v1/models first (cheap), fall back to /api/v0/models (older
+      // LM Studio versions), fall back to a plain GET on /. If ANY of
+      // them returns a 2xx OR a 401 (meaning "service is up but auth
+      // fails"), we count the server as reachable — auth failure is a
+      // separate concern from "is it running at all."
+      const probes = ['/v1/models', '/api/v0/models', '/'];
+      const errors = [];
+      for (const path of probes) {
+        try {
+          const probe = await fetch(`${lmStudioUrl}${path}`, {
+            method: 'GET',
+            headers: lmHeaders,
+            signal: AbortSignal.timeout(5000),
+          });
+          if (probe.ok || probe.status === 401 || probe.status === 403) {
+            lmStudioStatus.reachable = true;
+            lmStudioStatus.probedPath = path;
+            if (!probe.ok) lmStudioStatus.warning = `${path} HTTP ${probe.status} (auth issue, but server is up)`;
+            break;
+          }
+          errors.push(`${path}: HTTP ${probe.status}`);
+        } catch (err) {
+          errors.push(`${path}: ${err?.message || String(err)}`);
+        }
+      }
+      if (!lmStudioStatus.reachable) {
+        lmStudioStatus.error = errors.join('; ');
       }
 
       const providers = Object.entries(npcBrains.providers || {})
@@ -384,6 +422,7 @@ const server = http.createServer((req, res) => {
           agent: cofounderAgent.wsClients.size,
           security: securityMonitor.clients?.size || 0,
         },
+        stats: global._npcStats,
         recentErrors: (global._npcRecentErrors || []).slice(-5),
       }));
     })().catch(err => {
@@ -713,8 +752,11 @@ agentWss.on('connection', (ws) => {
           return;
         }
         // Route to individual NPC brain for a personalized response
+        global._npcStats.npcConvReceived++;
+        global._npcStats.lastNpcConvAt = Date.now();
         npcBrains.getResponse(msg.npcName, msg.fromName, msg.text, msg.context || {})
           .then(response => {
+            global._npcStats.npcConvSucceeded++;
             const reply = JSON.stringify({
               type: 'npc_response',
               npcName: msg.npcName,
@@ -727,7 +769,10 @@ agentWss.on('connection', (ws) => {
             npcBrains.saveMemory(msg.npcName, `${msg.fromName} said: "${msg.text}" — I replied: "${response}"`);
           })
           .catch(err => {
-            console.warn('[NpcBrains] Response error:', String(err?.message ?? err));
+            global._npcStats.npcConvFailed++;
+            const errMsg = String(err?.message ?? err);
+            console.warn('[NpcBrains] Response error:', errMsg);
+            _recordNpcError(`getResponse(${msg.npcName} ← ${msg.fromName}): ${errMsg}`);
             if (ws.readyState === 1) {
               ws.send(JSON.stringify({
                 type: 'npc_response',
@@ -797,6 +842,8 @@ agentWss.on('connection', (ws) => {
           return;
         }
         console.log(`[PlayerChat] CEO → ${npcName}: "${msg.text}"`);
+        global._npcStats.playerChatReceived++;
+        global._npcStats.lastPlayerChatAt = Date.now();
         npcBrains.getPlayerResponse(npcName, msg.text)
           .then(result => {
             // If the brain returned nothing usable, treat it as an
@@ -805,6 +852,7 @@ agentWss.on('connection', (ws) => {
             if (!text) {
               const errMsg = `${npcName}'s brain returned no text (provider may be down — check /api/health)`;
               _recordNpcError(errMsg);
+              global._npcStats.playerChatFailed++;
               const reply = JSON.stringify({
                 type: 'player_chat_response',
                 npcName,
@@ -815,6 +863,7 @@ agentWss.on('connection', (ws) => {
               if (ws.readyState === 1) ws.send(reply);
               return;
             }
+            global._npcStats.playerChatSucceeded++;
             const reply = JSON.stringify({
               type: 'player_chat_response',
               npcName, text,
@@ -828,6 +877,7 @@ agentWss.on('connection', (ws) => {
             const errMsg = String(err?.message ?? err);
             console.warn('[PlayerChat] Response error:', errMsg);
             _recordNpcError(`getPlayerResponse(${npcName}): ${errMsg}`);
+            global._npcStats.playerChatFailed++;
             const fallback = JSON.stringify({
               type: 'player_chat_response',
               npcName,
