@@ -178,13 +178,18 @@ if (typeof window !== 'undefined') {
     if (!bridge || !bridge.connected) {
       return { ok: false, error: 'gateway not connected', via: 'gateway' };
     }
-    const method = window.DenizenOpenClawChatMethod || DEFAULT_GATEWAY_METHOD;
     try {
-      const res = await bridge.request(method, {
-        text,
-        urgent: !!opts.urgent,
-        source: 'denizen-player',
-      });
+      let res;
+      if (typeof bridge.sendChat === 'function') {
+        res = await bridge.sendChat(text, { urgent: !!opts.urgent });
+      } else {
+        const method = window.DenizenOpenClawChatMethod || DEFAULT_GATEWAY_METHOD;
+        res = await bridge.request(method, {
+          text,
+          urgent: !!opts.urgent,
+          source: 'denizen-player',
+        });
+      }
       return { ok: true, response: res, via: 'gateway' };
     } catch (err) {
       return { ok: false, error: err?.message || String(err), via: 'gateway' };

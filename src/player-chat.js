@@ -28,6 +28,10 @@ class PlayerChat {
     this._npcNames = roster ? [...roster.displayNames] : [];
     this._nameToKey = roster ? { ...roster.nameToKey } : {};
 
+    // Expose the active chat instance so voice-input and dispatcher paths
+    // can deliver transcripts without needing scene internals.
+    window.__DenizenPlayerChat = this;
+
     this._buildUI();
   }
 
