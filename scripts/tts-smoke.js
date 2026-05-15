@@ -9,11 +9,11 @@
  * the key, voice, or model id is the problem.
  *
  * Usage:
- *   node scripts/test-tts.js                 # uses default text + voice
- *   node scripts/test-tts.js "hello world"
- *   node scripts/test-tts.js "hi" --voice 21m00Tcm4TlvDq8ikWAM
- *   node scripts/test-tts.js "hi" --npc Abby     # use voice from voice-map.json
- *   node scripts/test-tts.js --help
+ *   node scripts/tts-smoke.js                 # uses default text + voice
+ *   node scripts/tts-smoke.js "hello world"
+ *   node scripts/tts-smoke.js "hi" --voice 21m00Tcm4TlvDq8ikWAM
+ *   node scripts/tts-smoke.js "hi" --npc Abby     # use voice from voice-map.json
+ *   node scripts/tts-smoke.js --help
  *
  * Exit code 0 on success, 1 on failure.
  */
@@ -41,11 +41,11 @@ function parseArgs(argv) {
 
 function help() {
   console.log(`Usage:
-  node scripts/test-tts.js                                  # default text + voice
-  node scripts/test-tts.js "your text here"
-  node scripts/test-tts.js "hi" --voice <voiceId>
-  node scripts/test-tts.js "hi" --model eleven_turbo_v2_5
-  node scripts/test-tts.js "hi" --npc Abby                  # uses voice-map.json
+  node scripts/tts-smoke.js                                  # default text + voice
+  node scripts/tts-smoke.js "your text here"
+  node scripts/tts-smoke.js "hi" --voice <voiceId>
+  node scripts/tts-smoke.js "hi" --model eleven_turbo_v2_5
+  node scripts/tts-smoke.js "hi" --npc Abby                  # uses voice-map.json
 
 Reads the API key from:
   1. process.env.ELEVENLABS_API_KEY (or XI_API_KEY)

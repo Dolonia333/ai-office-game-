@@ -96,14 +96,14 @@ You should see:
 
 ## Verifying without the browser
 
-`scripts/test-tts.js` is a standalone CLI smoke test:
+`scripts/tts-smoke.js` is a standalone CLI smoke test:
 
 ```bash
-node scripts/test-tts.js                              # default text + voice
-node scripts/test-tts.js "Welcome to the office"      # custom text
-node scripts/test-tts.js "Hi" --npc Abby              # use Abby's voice
-node scripts/test-tts.js "Hi" --voice <voiceId>       # override voice
-node scripts/test-tts.js --help
+node scripts/tts-smoke.js                              # default text + voice
+node scripts/tts-smoke.js "Welcome to the office"      # custom text
+node scripts/tts-smoke.js "Hi" --npc Abby              # use Abby's voice
+node scripts/tts-smoke.js "Hi" --voice <voiceId>       # override voice
+node scripts/tts-smoke.js --help
 ```
 
 Writes `out/test-tts.mp3` and prints the file size + elapsed ms. If it fails, the error message tells you exactly what's wrong — bad key, bad voice ID, no quota, network — so you don't have to guess.
