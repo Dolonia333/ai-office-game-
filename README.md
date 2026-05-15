@@ -97,7 +97,19 @@ npm start
 
 Open **http://localhost:8080** in your browser. You should see 16 NPCs moving around, talking to each other, and taking breaks.
 
-`npm start` runs `node server.js`. `npm test` runs the 38-test suite under Node's built-in test runner.
+For a guided 60-second tour with voice (auto-toggles presence, walks through agent-bus → security → n8n task → outro):
+
+```
+http://localhost:8080/?demo=tour
+```
+
+Original 20-second investor demo:
+
+```
+http://localhost:8080/?demo=investor
+```
+
+`npm start` runs `node server.js`. `npm test` runs the test suite under Node's built-in test runner.
 
 For the full stack install (including LM Studio and the optional Linux security feeders), see **[docs/SETUP.md](docs/SETUP.md)**.
 
@@ -693,7 +705,7 @@ Denizen uses **Node's built-in test runner** (`node:test`) — no Jest, no Mocha
 npm test
 ```
 
-The suite currently runs **66 tests across 18 suites** and finishes in ~1 second. It covers:
+The suite currently runs **117 tests across 32 suites** and finishes in ~1.3 seconds. CI runs on every push + PR (`.github/workflows/test.yml`) on Ubuntu + Windows × Node 20 + 22. It covers:
 
 | Suite | What it asserts |
 |-------|-----------------|
@@ -789,6 +801,11 @@ The `docs/` directory has the canonical deep-dives for the runtime systems:
 | [docs/AI-SYSTEM.md](docs/AI-SYSTEM.md) | NPC intelligence layer — goals, daily plans, theory of mind, chain-of-thought, memory tags, social graph |
 | [docs/WORLD-STATE.md](docs/WORLD-STATE.md) | **WorldState + Voice Gate + outbound webhooks** — single source of truth, presence-gated TTS, Supabase/n8n forwarding, throttled broadcasts |
 | [docs/VOICE.md](docs/VOICE.md) | **ElevenLabs TTS** — per-NPC voice map, `/api/tts` proxy (key never reaches the browser), smoke CLI, troubleshooting |
+| [docs/SFX.md](docs/SFX.md) | **Sound effects** — ambient loop + event-driven cues, presence-gated, missing-file-tolerant |
+| [docs/SCENE.md](docs/SCENE.md) | **`office-scene.js` navigation map** — what lives where in the 3079-line scene |
+| [docs/ACTIONS.md](docs/ACTIONS.md) | **NPC action vocabulary** — every `actions.X()` (walk, sit, speak, callMeeting, …), the per-NPC turn queue, how cofounder dispatch reaches an action |
+| [docs/PATHFINDING.md](docs/PATHFINDING.md) | **A\* + per-NPC route follower + stuck recovery** — grid building, soft costs, escalating stuck-recovery, tuning knobs |
+| [docs/ROOM_GENERATOR.md](docs/ROOM_GENERATOR.md) | **Procedural single-room layouts** — six built-in archetypes (workspace / conference / breakroom / manager / reception / storage), occupancy grid, palette grouping |
 | [docs/AGENT_BUS.md](docs/AGENT_BUS.md) | **Direct NPC↔NPC messaging** — pub/sub, default-deny addressing, buffered inboxes, when to use vs. CofounderAgent vs. WorldState |
 | [docs/CITY_GENERATOR.md](docs/CITY_GENERATOR.md) | **Procedural city pipeline** (`src/city/`) — planner → chunk → interior → Phaser adapter. Scaffolded, not yet wired to the main scene |
 | [docs/WORLD_ENGINE.md](docs/WORLD_ENGINE.md) | **World engine** (`src/world/`) — seeded RNG, room layout, L-corridors, recipe-driven furnisher, character anim registry |

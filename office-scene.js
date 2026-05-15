@@ -1509,13 +1509,21 @@ class OfficeScene extends Phaser.Scene {
     }
 
     // --- Demo Mode ---
+    // Two scenarios:
+    //   ?demo=investor  — original 20s research vignette
+    //   ?demo=tour      — 60s feature tour with voice + agent-bus + threats + n8n tasks
     const demoParams = new URLSearchParams(window.location.search);
-    if (demoParams.get('demo') === 'investor' && window.DemoScene) {
-      // Wait for desks to be assigned and NPCs to settle, then start demo
+    const demoKind = demoParams.get('demo');
+    if (demoKind && window.DemoScene) {
       this.time.delayedCall(3000, () => {
         const demo = new window.DemoScene(this, this._agentManager);
-        demo.start();
-        console.log('[OfficeScene] Investor demo triggered via ?demo=investor');
+        if (demoKind === 'tour' && typeof demo.startTour === 'function') {
+          demo.startTour();
+          console.log('[OfficeScene] 60s tour triggered via ?demo=tour');
+        } else {
+          demo.start();
+          console.log(`[OfficeScene] Investor demo triggered via ?demo=${demoKind}`);
+        }
       });
     }
 

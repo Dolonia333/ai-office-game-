@@ -265,6 +265,109 @@ class DemoScene {
   _findNpc(textureKey) {
     return this.scene.npcs?.find(n => n.texture?.key === textureKey);
   }
+
+  // ---------------------------------------------------------------------
+  // 60-second feature tour — `?demo=tour`.
+  //
+  // A longer, voice-narrated walkthrough that demonstrates EVERYTHING new
+  // since v1.0.0:
+  //   0–10s   intro + worldState + presence/voice activated
+  //   10–25s  agent bus — Abby DMs Alex without going through the CTO
+  //   25–40s  security feeders — robber spawn from a fake threat
+  //   40–55s  n8n task webhook → background job appears, Oscar walks to it
+  //   55–60s  outro
+  //
+  // Voice: every speech bubble also fires DenizenSpeak() which routes to
+  // ElevenLabs if configured (browser SpeechSynthesis otherwise). Presence
+  // is auto-toggled to true at start so the demo runs end-to-end with no
+  // prior setup beyond ?demo=tour.
+  // ---------------------------------------------------------------------
+  startTour() {
+    const scene = this.scene;
+    const actions = this.actions;
+    if (!actions || !scene.npcs) return;
+
+    console.log('[DemoScene] Starting 60s tour…');
+
+    // Auto-enable voice. The user can still override afterwards.
+    if (typeof window !== 'undefined' && typeof window.DenizenSetPresence === 'function') {
+      window.DenizenSetPresence(true);
+    }
+
+    this.manager._demoMode = true;
+    scene.npcs.forEach(npc => {
+      if (npc.body) npc.body.setVelocity(0, 0);
+      if (npc._pathFollower) npc._pathFollower.stop();
+    });
+    if (scene.cameras?.main) {
+      scene.cameras.main.stopFollow();
+      scene.cameras.main.setScroll(0, 0);
+      scene.cameras.main.setZoom(1);
+    }
+
+    const speak = (textureKey, text, ms = 4000) => {
+      actions.speak(textureKey, text, ms);
+      // Map texture key (e.g. 'xp_alex') to display name ('Alex')
+      const name = (textureKey || '').replace(/^xp_/, '').replace(/^./, c => c.toUpperCase());
+      if (typeof window !== 'undefined' && typeof window.DenizenSpeak === 'function') {
+        window.DenizenSpeak(name, text);
+      }
+    };
+
+    const at = (s, fn) => scene.time.delayedCall(s * 1000, fn);
+
+    // ---- Chapter 1 (0–10s): intro + presence ----
+    at(1, () => speak('xp_abby', 'Welcome to Denizen. Sixteen agents, one office.', 4500));
+    at(6, () => speak('xp_abby', 'You can hear us because presence is on. Alt+V toggles it.', 4500));
+
+    // ---- Chapter 2 (10–25s): agent bus, peer-to-peer message ----
+    at(11, () => speak('xp_abby', 'Alex — review the auth PR when you get a sec.', 3500));
+    at(15, () => {
+      // Use the agent bus the same way an NPC would
+      try {
+        fetch('/api/agent-bus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: 'Alex', from: 'Abby', text: 'Auth PR ready for review', kind: 'speak' }),
+        });
+      } catch (_) { /* offline tolerated */ }
+    });
+    at(16, () => speak('xp_alex', 'On it. Pulling the diff now.', 3500));
+    at(21, () => speak('xp_alex', 'Looks clean. Approving and merging.', 3500));
+
+    // ---- Chapter 3 (25–40s): security feeder spawns a robber ----
+    at(26, () => speak('xp_bouncer', 'Heads up — scan probe inbound from the firewall logs.', 4000));
+    at(28, () => {
+      try {
+        fetch('/security-test?type=scan_probe&severity=high&detail=demo+tour:+nmap+from+10.0.0.42');
+      } catch (_) {}
+    });
+    at(33, () => speak('xp_bouncer', 'I see the robber. Patrolling reception.', 3500));
+    at(37, () => speak('xp_abby', 'Good catch. Logged and contained.', 3500));
+
+    // ---- Chapter 4 (40–55s): n8n task webhook ----
+    at(41, () => speak('xp_oscar', 'CI just kicked off — incoming background job.', 3500));
+    at(43, () => {
+      try {
+        fetch('/api/task-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: 'demo-tour-' + Date.now(),
+            title: 'Deploy v1.0.1 to staging',
+            status: 'running',
+            assignee: 'Oscar',
+            source: 'n8n (demo)',
+          }),
+        });
+      } catch (_) {}
+    });
+    at(48, () => speak('xp_oscar', 'Deploying to staging.', 3000));
+    at(52, () => speak('xp_oscar', 'Build green. Smoke tests pass.', 3500));
+
+    // ---- Chapter 5 (55–60s): outro ----
+    at(56, () => speak('xp_abby', 'That is the tour. The whole loop is live and observable.', 5000));
+  }
 }
 
 // Expose globally

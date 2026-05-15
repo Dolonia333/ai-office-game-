@@ -1,0 +1,52 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 20 is the current LTS; 22 catches the issues we hit during
+        # the city-generator wiring (import-attribute + ESM-folder rules).
+        # Run on Linux + Windows so the Windows-only behaviours (taskkill
+        # in tests, %USERPROFILE% path resolution) don't regress.
+        os: [ubuntu-latest, windows-latest]
+        node: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          # Cache npm so reinstalls don't dominate runtime.
+          cache: npm
+          cache-dependency-path: pixel-office-game/package-lock.json
+
+      - name: install
+        working-directory: pixel-office-game
+        run: npm ci || npm install
+
+      - name: syntax check (JS)
+        working-directory: pixel-office-game
+        shell: bash
+        run: |
+          node --check server.js
+          node --check security-monitor-server.js
+          for f in src/*.js; do node --check "$f"; done
+
+      - name: tests
+        working-directory: pixel-office-game
+        run: npm test
+        env:
+          # Force LM Studio URL to a dead port so tests that boot the real
+          # server don't try to reach a live LLM and hang.
+          LM_STUDIO_URL: http://127.0.0.1:1

@@ -185,18 +185,46 @@ class RoomBuilder {
   }
 
   /**
-   * Get sprite data from assembly system
-   * (In practice, this would query sprite-assembly-system.json)
-   * @param {String} spriteId - Sprite identifier
-   * @returns {Object} Sheet key and frame info
+   * Get sprite data for a given sprite id by querying the assembly
+   * system. Looks up the catalog index that the assets pipeline emits
+   * (data/assets-catalog.json) — keyed by sprite id, value contains the
+   * sheet key + frame index. Falls back to a sensible placeholder when
+   * the catalog isn't available (e.g. unit tests, fresh checkout that
+   * hasn't run `npm run build:assets` yet) so callers never crash.
+   *
+   * @param {String} spriteId
+   * @returns {{sheet_key: string, frame: string|number}}
    */
   getSpriteData(spriteId) {
-    // TODO: Implement lookup in sprite-assembly-system.json
-    // For now, return placeholder
-    return {
-      sheet_key: 'modern_office_sprites',
-      frame: spriteId
-    };
+    if (!this._assetsCatalog) {
+      // Lazy load once. Browser fetch happens elsewhere; in Node this
+      // works directly. If the file isn't there we cache `false` so we
+      // don't keep retrying.
+      try {
+        if (typeof globalThis.__DenizenAssetsCatalog !== 'undefined') {
+          this._assetsCatalog = globalThis.__DenizenAssetsCatalog;
+        } else if (typeof require === 'function' && typeof process !== 'undefined') {
+          // eslint-disable-next-line global-require
+          this._assetsCatalog = require('../../data/assets-catalog.json');
+        } else {
+          this._assetsCatalog = false;
+        }
+      } catch (_) {
+        this._assetsCatalog = false;
+      }
+    }
+
+    const catalog = this._assetsCatalog;
+    if (catalog && catalog.sprites && catalog.sprites[spriteId]) {
+      const entry = catalog.sprites[spriteId];
+      return {
+        sheet_key: entry.sheet_key || entry.sheet || 'modern_office_sprites',
+        frame: typeof entry.frame !== 'undefined' ? entry.frame : spriteId,
+      };
+    }
+
+    // Placeholder for first-run / test contexts.
+    return { sheet_key: 'modern_office_sprites', frame: spriteId };
   }
 
   /**
