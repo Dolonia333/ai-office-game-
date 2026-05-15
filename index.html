@@ -92,6 +92,10 @@
     <!-- OpenClaw → WorldState bridge (translator must load BEFORE the bridge runner) -->
     <script src="./src/openclaw-translator.js" defer></script>
     <script src="./src/openclaw-worldstate-bridge.js" defer></script>
+    <!-- OpenClaw outbound dispatch (action classifier + gateway forward) -->
+    <script src="./src/openclaw-dispatch.js" defer></script>
+    <!-- Voice input (push-to-talk STT) — requires Chrome's webkitSpeechRecognition -->
+    <script src="./src/voice-input.js" defer></script>
     <!-- City Debug overlay (?debug=city, or window.DenizenCityDebug.show()) -->
     <script src="./src/city-debug.js" defer></script>
     <!-- Player Chat (CEO talks to NPCs) -->

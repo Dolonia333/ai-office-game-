@@ -73,10 +73,37 @@ class GatewayBridge extends EventTarget {
   /** Send a request frame and return a promise for the response */
   request(method, params) {
     return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('gateway not connected'));
+        return;
+      }
       const id = `bridge-${++this._reqId}`;
       const frame = { type: 'req', id, method, params };
       this._pendingRequests.set(id, { resolve, reject });
       this.ws.send(JSON.stringify(frame));
+    });
+  }
+
+  /**
+   * Send a chat message to the gateway. Convenience wrapper around
+   * request() with the configurable method name (default 'chat.send').
+   * The method name is overridable at runtime via
+   * `window.DenizenOpenClawChatMethod` so older or forked OpenClaw
+   * builds can use a different verb without editing this file.
+   *
+   * @param {string} text
+   * @param {Object} [opts]   { urgent?: boolean, sessionKey?: string }
+   * @returns {Promise<Object>}
+   */
+  sendChat(text, opts = {}) {
+    const method = (typeof window !== 'undefined' && window.DenizenOpenClawChatMethod)
+      ? window.DenizenOpenClawChatMethod
+      : 'chat.send';
+    return this.request(method, {
+      text: String(text || ''),
+      urgent: !!opts.urgent,
+      sessionKey: opts.sessionKey || null,
+      source: 'denizen-player',
     });
   }
 

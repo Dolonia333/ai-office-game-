@@ -1487,6 +1487,8 @@ class OfficeScene extends Phaser.Scene {
       // --- Player Chat System (talk to NPCs) ---
       if (window.PlayerChat) {
         this._playerChat = new window.PlayerChat(this, this._agentManager);
+        // Expose so voice-input.js can deliver transcripts straight to it.
+        window.__DenizenPlayerChat = this._playerChat;
 
         // Enter key: open/toggle player chat
         this.input.keyboard.on('keydown-ENTER', () => {

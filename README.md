@@ -705,7 +705,7 @@ Denizen uses **Node's built-in test runner** (`node:test`) — no Jest, no Mocha
 npm test
 ```
 
-The suite currently runs **142 tests across 42 suites** and finishes in ~1.3 seconds. CI runs on every push + PR (`.github/workflows/test.yml`) on Ubuntu + Windows × Node 20 + 22. It covers:
+The suite currently runs **169 tests across 52 suites** and finishes in ~1.5 seconds. CI runs on every push + PR (`.github/workflows/test.yml`) on Ubuntu + Windows × Node 20 + 22. It covers:
 
 | Suite | What it asserts |
 |-------|-----------------|
@@ -803,6 +803,7 @@ The `docs/` directory has the canonical deep-dives for the runtime systems:
 | [docs/VOICE.md](docs/VOICE.md) | **ElevenLabs TTS** — per-NPC voice map, `/api/tts` proxy (key never reaches the browser), smoke CLI, troubleshooting |
 | [docs/SFX.md](docs/SFX.md) | **Sound effects** — ambient loop + event-driven cues, presence-gated, missing-file-tolerant |
 | [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md) | **OpenClaw → WorldState bridge** — gateway events drive tasks + voice + agent-bus + per-NPC role-hinted assignment, in addition to the existing sprite/bubble layer |
+| [docs/VOICE_INPUT.md](docs/VOICE_INPUT.md) | **Voice loop** — push-to-talk STT (`\` or 🎤) + action classifier + outbound dispatch to OpenClaw. Closes the "voice in → real action out" loop. |
 | [docs/SCENE.md](docs/SCENE.md) | **`office-scene.js` navigation map** — what lives where in the 3079-line scene |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | **NPC action vocabulary** — every `actions.X()` (walk, sit, speak, callMeeting, …), the per-NPC turn queue, how cofounder dispatch reaches an action |
 | [docs/PATHFINDING.md](docs/PATHFINDING.md) | **A\* + per-NPC route follower + stuck recovery** — grid building, soft costs, escalating stuck-recovery, tuning knobs |

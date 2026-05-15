@@ -194,6 +194,41 @@ class PlayerChat {
     // Add to chat log
     this._addToLog('You', trimmed);
 
+    // OpenClaw dispatch: classify the utterance. Action-like requests
+    // ("deploy v2 to staging", "/run github_create_pr") get forwarded to
+    // OpenClaw via the gateway, in addition to (not instead of) the
+    // normal NPC chat flow. The NPC still responds locally — but
+    // OpenClaw also gets the request to actually do the work, and the
+    // resulting tool-call events come back in via the inbound bridge
+    // and animate as NPC behavior. If the dispatcher isn't loaded or
+    // the classification is 'chat', this is a no-op.
+    if (window.DenizenOpenClawDispatch?.classify) {
+      try {
+        const c = window.DenizenOpenClawDispatch.classify(trimmed);
+        if (c.kind === 'action') {
+          this._addToLog('System', `→ OpenClaw (${c.reason})`);
+          // Fire-and-forget; the inbound bridge will animate the result.
+          window.DenizenOpenClawDispatch
+            .sendToGateway(c.stripped, { urgent: c.urgent })
+            .then((r) => {
+              if (!r.ok) {
+                // Try the HTTP fallback before giving up.
+                return window.DenizenOpenClawDispatch.sendToHttpProxy(c.stripped, { urgent: c.urgent });
+              }
+              return r;
+            })
+            .then((r) => {
+              if (!r?.ok) {
+                this._addToLog('System', `OpenClaw dispatch failed: ${r?.error || 'unknown'}`);
+              }
+            })
+            .catch(err => this._addToLog('System', `OpenClaw error: ${err?.message || err}`));
+        }
+      } catch (err) {
+        console.warn('[PlayerChat] dispatch classify failed:', err?.message || err);
+      }
+    }
+
     // Determine target NPC
     let targetNpc = null;
     let targetKey = null;

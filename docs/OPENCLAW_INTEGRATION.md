@@ -221,9 +221,19 @@ browser with OpenClaw running.
 | Voice doesn't fire on tool start | Presence is off, or ElevenLabs not configured | `DenizenSetPresence(true)`; check `/api/tts/health` |
 | Two NPC sprites speak the same line | The legacy npc-agent-controller and this bridge BOTH spoke | Bug — they're supposed to cover different surfaces. File an issue. |
 
+## Outbound dispatch (Denizen → OpenClaw)
+
+The bridge described above is **inbound** — it visualizes what OpenClaw is doing. The reverse direction — letting the player *trigger* OpenClaw work from inside Denizen — lives in **[VOICE_INPUT.md](VOICE_INPUT.md)**:
+
+- `src/openclaw-dispatch.js` classifies player utterances (typed or via voice) into `chat` vs `action`.
+- Action-classified messages get forwarded to OpenClaw via `gateway-bridge.sendChat()` (WebSocket) with HTTP fallback.
+- Chat-classified messages stay in the local NPC brain.
+- This closes the loop: voice in → OpenClaw runs the tool → events come back through this bridge → NPC animates and speaks the result.
+
 ## See also
 
-- [VOICE.md](VOICE.md) — TTS proxy + voice gate
+- [VOICE.md](VOICE.md) — TTS proxy + voice gate (output side)
+- [VOICE_INPUT.md](VOICE_INPUT.md) — STT + outbound dispatch (input side)
 - [WORLD-STATE.md](WORLD-STATE.md) — singleton this bridge writes into
 - [AGENT_BUS.md](AGENT_BUS.md) — the bus inter-agent messages flow through
 - [SFX.md](SFX.md) — what plays when worldState changes
