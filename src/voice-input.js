@@ -123,9 +123,47 @@
     // push-to-talk if you prefer that.
     micButton.addEventListener('click', (e) => {
       e.preventDefault();
+      // If the user clicked the mic, they obviously want the voice loop
+      // active end-to-end. Auto-enable presence (the voice gate) the
+      // first time so they don't sit there wondering why NPCs answer
+      // silently. They can still Alt+V it off if they want.
+      if (typeof window.DenizenSetPresence === 'function' && !window.DenizenPresence?.zionPresent) {
+        try { window.DenizenSetPresence(true); } catch (_) {}
+      }
       if (listening) stop(); else start();
     });
     document.body.appendChild(micButton);
+
+    // Presence indicator — small chip above the mic showing 🔊 on / 🔇 off.
+    // Click to toggle. Mirrored from window.DenizenPresence by voice-gate.js.
+    const presenceChip = document.createElement('button');
+    presenceChip.id = 'denizen-presence-chip';
+    presenceChip.type = 'button';
+    Object.assign(presenceChip.style, {
+      position: 'fixed', bottom: '76px', right: '74px', zIndex: 9998,
+      background: '#0f172a', color: '#cfe7ff', border: '1px solid #355',
+      borderRadius: '14px', padding: '3px 9px', font: '11px monospace',
+      cursor: 'pointer', display: 'none',
+    });
+    presenceChip.title = 'Voice output on/off (also toggle with Alt+V)';
+    presenceChip.addEventListener('click', () => {
+      if (typeof window.DenizenTogglePresence === 'function') window.DenizenTogglePresence();
+    });
+    document.body.appendChild(presenceChip);
+
+    function refreshPresenceChip() {
+      const on = !!window.DenizenPresence?.zionPresent;
+      presenceChip.textContent = on ? '🔊 voice ON' : '🔇 voice OFF';
+      presenceChip.style.background = on ? '#064e3b' : '#0f172a';
+      presenceChip.style.borderColor = on ? '#34d399' : '#355';
+      presenceChip.style.display = 'block';
+    }
+    // Poll cheaply — presence flips rarely and from many places (Alt+V,
+    // /api/presence POST, voice-gate hotkey). One global isn't reliably
+    // visible via property descriptors, so a 500ms poll is the simplest
+    // correct approach.
+    setInterval(refreshPresenceChip, 500);
+    refreshPresenceChip();
 
     statusBadge = document.createElement('div');
     statusBadge.id = 'denizen-mic-status';
@@ -271,10 +309,23 @@
     if (!transcript || !transcript.trim()) return;
     const text = transcript.trim();
 
-    // PlayerChat exposes itself to globals once instantiated.
+    // PlayerChat exposes itself to globals once instantiated. Auto-open
+    // the panel so the user can SEE "[NPC] is coming over…" /
+    // "(no response)" / "No NPC found to talk to." system messages —
+    // otherwise the only feedback is the speech bubble above an NPC
+    // that might be off-screen, which the user reasonably interprets
+    // as "nothing happened."
     if (window.__DenizenPlayerChat && typeof window.__DenizenPlayerChat.sendMessage === 'function') {
-      try { window.__DenizenPlayerChat.sendMessage(text); }
-      catch (err) { console.warn('[VoiceInput] sendMessage failed:', err?.message || err); }
+      try {
+        // Auto-open the panel if it has an open() method and isn't already visible.
+        const pc = window.__DenizenPlayerChat;
+        if (!pc._visible && typeof pc.open === 'function') {
+          try { pc.open(); } catch (_) {}
+        }
+        pc.sendMessage(text);
+      } catch (err) {
+        console.warn('[VoiceInput] sendMessage failed:', err?.message || err);
+      }
       return;
     }
 
