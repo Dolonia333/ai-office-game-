@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide will help you get set up an
 
 ```bash
 git clone https://github.com/Dolonia333/DENIZEN.git
-cd DENIZEN/pixel-office-game
+cd DENIZEN
 npm install
 npm start
 ```

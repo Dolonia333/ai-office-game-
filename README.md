@@ -90,7 +90,7 @@ Denizen is a visual observability layer that renders AI agent workflows as a liv
 
 ```bash
 git clone https://github.com/Dolonia333/DENIZEN.git
-cd DENIZEN/pixel-office-game
+cd DENIZEN
 npm install
 npm start
 ```
@@ -739,7 +739,7 @@ Tests are not yet wired to a git hook. If you want one, add to `.git/hooks/pre-c
 
 ```bash
 #!/usr/bin/env bash
-cd pixel-office-game && npm test --silent || exit 1
+npm test --silent || exit 1
 ```
 
 ## Asset Pipeline

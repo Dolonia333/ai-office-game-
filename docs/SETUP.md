@@ -16,7 +16,7 @@ node --version
 
 ```bash
 git clone https://github.com/Dolonia333/DENIZEN.git
-cd DENIZEN/pixel-office-game
+cd DENIZEN
 npm install
 ```
 
@@ -62,7 +62,6 @@ Override the model name with `LM_STUDIO_MODEL=<name>` in your shell if you're us
 ### Run the game
 
 ```bash
-cd pixel-office-game
 npm start
 ```
 
@@ -167,7 +166,6 @@ If you're using `iptables` directly, make sure your DROP rules include `-j LOG`.
 ### 3e. Enable the feeders when starting the server
 
 ```bash
-cd pixel-office-game
 ENABLE_TSHARK=1 TSHARK_IFACE=any npm start
 ```
 

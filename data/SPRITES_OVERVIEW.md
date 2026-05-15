@@ -9,9 +9,7 @@ Use this to go over every sprite the game and catalogs refer to. **I have not op
 **Problem:** The openplan catalog has wrong rects/labels (e.g. bookshelf is a couch, water cooler wrong, printer tiling). You need to see every sprite and set the correct Catalog ID.
 
 1. **Extract** (already done): `out/sheet_extract/modern_office_black_shadow_32.objects.json` has 199 full-object rects from the Black Shadow 32 sheet.
-2. **Open the labeler:** Serve the project so the sheet and JSON load, then open **`sprite-labeler.html`** in the browser.
-   - From `multbot`: `npx serve .` then open `http://localhost:3000/pixel-office-game/sprite-labeler.html`
-   - Or from `pixel-office-game`: `npx serve .` then open `http://localhost:3000/sprite-labeler.html`
+2. **Open the labeler:** Serve the project so the sheet and JSON load, then open **`sprite-labeler.html`** in the browser. From the repo root: `npx serve .` then open `http://localhost:3000/sprite-labeler.html`.
 3. **Identify:** Each card shows one sprite. Set **Catalog ID** (e.g. `desk_pod`, `chair_office`, `water_cooler`, `printer`, `bookshelf`, `monitor`) and **Type** (surface, seat, decor, furniture). Leave ID blank to skip.
 4. **Save:** Click **Save catalog (download JSON)**. Replace `data/furniture_catalog_openplan.json` with the downloaded file (or merge `objects` and keep your `placements`).
 
@@ -148,9 +146,9 @@ Then open `out/verify_sprites/openplan/`, `out/verify_sprites/modern_office_32/`
 
 Serve the project from the **repo root** (e.g. `python -m http.server 8000` from `multbot`), then open:
 
-**http://127.0.0.1:8000/pixel-office-game/verify-sprites.html**
+**http://127.0.0.1:8000/verify-sprites.html** (served from the repo root)
 
-That page loads the openplan and interiors catalogs and the sheet images, then draws each sprite in a grid with its **ID** and **(x,y) w×h**. Use it to confirm that the rect we have is the sprite you expect. If the sheet images don’t load (404), the server root is wrong: it must be the folder that contains both `pixel-office-game` and `pixel game stuff`.
+That page loads the openplan and interiors catalogs and the sheet images, then draws each sprite in a grid with its **ID** and **(x,y) w×h**. Use it to confirm that the rect we have is the sprite you expect. If the sheet images don’t load (404), the server root is wrong — it must be the repo root.
 
 ---
 

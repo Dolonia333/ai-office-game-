@@ -27,16 +27,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          # Cache npm so reinstalls don't dominate runtime.
+          # Cache npm so reinstalls don't dominate runtime. The repo root
+          # IS the package — no nesting under pixel-office-game/.
           cache: npm
-          cache-dependency-path: pixel-office-game/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: install
-        working-directory: pixel-office-game
         run: npm ci || npm install
 
       - name: syntax check (JS)
-        working-directory: pixel-office-game
         shell: bash
         run: |
           node --check server.js
@@ -44,7 +43,6 @@ jobs:
           for f in src/*.js; do node --check "$f"; done
 
       - name: tests
-        working-directory: pixel-office-game
         run: npm test
         env:
           # Force LM Studio URL to a dead port so tests that boot the real

@@ -13,7 +13,7 @@ If a texture appears as **thin horizontal color bands** (smeared, no clear tiles
   1. Open the **PNG** that’s wrong (floor_tiles, wall_tiles, furniture_tiles, or living_room_tiles – see `office-scene.js` preload paths).
   2. Measure: image width ÷ number of tiles per row = tile width; image height ÷ number of rows = tile height. Many MV sheets are **48×48** (e.g. 768÷16 = 48).
   3. In `tilesheets-config.json`, set that sheet’s `tileWidth` and `tileHeight` to the real values (e.g. `48`).
-  4. Re-run: `python pixel-office-game/build_tiles_catalog.py` from the multbot root.
+  4. Re-run `python build_tiles_catalog.py` from the repo root.
   5. Reload the game. The scene now uses each catalog entry’s `tileWidth`/`tileHeight` when sampling, so 48×48 tiles are read correctly and scaled to 32×32 on screen.
 
 If you added **0_Everything.png** (XP) or another sheet, add it to `tilesheets-config.json` with the **correct** tile size and `tilesPerRow` for that image, then regenerate the catalog.

@@ -160,7 +160,7 @@ So:
 | xp_generic_01 | .../RPG_MAKER_XP/1_Generic.png | xp_generic_all |
 | xp_living_room_02 | .../RPG_MAKER_XP/2_LivingRoom.png | xp_living_room_all |
 
-After you run `python pixel-office-game/build_tiles_catalog.py`, **tiles-catalog.json** contains one entry per tile in these sheets, with coordinates and labels. To add more sheets (e.g. more XP themes or MV Theme_Sorter_MV files), add a block to `tilesheets-config.json` and run the script again.
+After you run `python build_tiles_catalog.py` from the repo root, **tiles-catalog.json** contains one entry per tile in these sheets, with coordinates and labels. To add more sheets (e.g. more XP themes or MV Theme_Sorter_MV files), add a block to `tilesheets-config.json` and run the script again.
 
 ---
 
