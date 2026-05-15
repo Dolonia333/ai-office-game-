@@ -58,40 +58,92 @@
     return;
   }
 
+  // Translate cryptic SpeechRecognition error codes into something a user
+  // can actually act on. Returns { short, hint } — short is the badge
+  // label, hint is the longer explanation shown below it.
+  function explainError(code) {
+    switch (code) {
+      case 'not-allowed':
+      case 'service-not-allowed':
+        return {
+          short: '🚫 mic blocked',
+          hint: 'Click the 🔒 icon in the address bar → Site settings → set Microphone to Allow → reload.',
+        };
+      case 'audio-capture':
+        return {
+          short: '🎙 no mic',
+          hint: 'No microphone detected. Check OS sound settings → input devices.',
+        };
+      case 'network':
+        return {
+          short: '🌐 network',
+          hint: 'Chrome\'s SpeechRecognition uses Google\'s cloud STT and needs internet.',
+        };
+      case 'no-speech':
+        return {
+          short: '🔇 no speech',
+          hint: 'I didn\'t hear anything. Click to talk and speak right away.',
+        };
+      case 'aborted':
+        return { short: 'cancelled', hint: null };
+      case 'language-not-supported':
+        return {
+          short: 'lang unsupported',
+          hint: `Locale "${lang}" not supported. Try window.DenizenVoiceInput.setLang("en-US").`,
+        };
+      case 'bad-grammar':
+        return { short: 'bad grammar', hint: null };
+      default:
+        return {
+          short: `error: ${code || 'unknown'}`,
+          hint: 'Open the browser console (F12) for the full stack.',
+        };
+    }
+  }
+
   // ---- Build the floating UI ----
   function buildUI() {
     if (micButton) return;
 
     micButton = document.createElement('button');
     micButton.id = 'denizen-mic-button';
-    micButton.title = `Push to talk (hold ${hotkey} or click)`;
+    micButton.title = `Click to start/stop. Or hold ${hotkey} on the keyboard.`;
     micButton.textContent = '🎤';
     Object.assign(micButton.style, {
       position: 'fixed', bottom: '14px', right: '14px', zIndex: 9998,
-      width: '46px', height: '46px', borderRadius: '50%',
+      width: '52px', height: '52px', borderRadius: '50%',
       background: '#0f172a', color: '#cfe7ff', border: '2px solid #355',
-      cursor: 'pointer', font: '20px monospace', boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-      transition: 'background 120ms, border-color 120ms',
+      cursor: 'pointer', font: '22px monospace', boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+      transition: 'background 120ms, border-color 120ms, transform 80ms',
     });
-    micButton.addEventListener('mousedown', (e) => { e.preventDefault(); start(); });
-    micButton.addEventListener('mouseup',   () => stop());
-    micButton.addEventListener('mouseleave',() => stop());
-    micButton.addEventListener('touchstart',(e) => { e.preventDefault(); start(); }, { passive: false });
-    micButton.addEventListener('touchend',  () => stop());
+    // CLICK-TO-TOGGLE (not push-to-hold from the button). Press-and-hold
+    // off the button was the worst UX bug — drift the cursor off the
+    // 46-pixel target while speaking and it stopped mid-sentence. Click
+    // once to start; click again to stop. Hold the keyboard hotkey for
+    // push-to-talk if you prefer that.
+    micButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (listening) stop(); else start();
+    });
     document.body.appendChild(micButton);
 
     statusBadge = document.createElement('div');
     statusBadge.id = 'denizen-mic-status';
     Object.assign(statusBadge.style, {
-      position: 'fixed', bottom: '70px', right: '14px', zIndex: 9998,
-      background: 'rgba(0,0,0,0.85)', color: '#cfe7ff',
-      font: '11px monospace', padding: '4px 8px', border: '1px solid #355',
-      borderRadius: '4px', display: 'none', maxWidth: '320px', textAlign: 'right',
+      position: 'fixed', bottom: '76px', right: '14px', zIndex: 9998,
+      background: 'rgba(0,0,0,0.92)', color: '#cfe7ff',
+      font: '11px monospace', padding: '6px 10px', border: '1px solid #355',
+      borderRadius: '6px', display: 'none', maxWidth: '340px',
+      textAlign: 'left', lineHeight: '1.4', whiteSpace: 'normal',
     });
     document.body.appendChild(statusBadge);
   }
 
-  function setMicState(state, text) {
+  // Tracks the current "error sticky" state so onend doesn't immediately
+  // wipe a useful error message a quarter-second later.
+  let _errorSticky = false;
+
+  function setMicState(state, text, opts = {}) {
     if (!micButton) return;
     if (state === 'listening') {
       micButton.style.background = '#7f1d1d';
@@ -99,15 +151,19 @@
     } else if (state === 'busy') {
       micButton.style.background = '#1e3a8a';
       micButton.style.borderColor = '#93c5fd';
+    } else if (state === 'error') {
+      micButton.style.background = '#7c2d12';
+      micButton.style.borderColor = '#fdba74';
     } else {
       micButton.style.background = '#0f172a';
       micButton.style.borderColor = '#355';
     }
+    _errorSticky = (state === 'error') && opts.sticky;
     if (statusBadge) {
       if (text) {
-        statusBadge.textContent = text;
+        statusBadge.innerHTML = text; // allow simple formatting from explainError
         statusBadge.style.display = 'block';
-      } else {
+      } else if (!_errorSticky) {
         statusBadge.style.display = 'none';
       }
     }
@@ -137,9 +193,21 @@
     };
 
     recognition.onerror = (ev) => {
-      console.warn('[VoiceInput] recognition error:', ev?.error);
-      setMicState('idle', `error: ${ev?.error || 'unknown'}`);
-      setTimeout(() => setMicState('idle', ''), 2500);
+      const code = ev?.error || 'unknown';
+      console.warn('[VoiceInput] recognition error:', code);
+      const { short, hint } = explainError(code);
+      const msg = hint
+        ? `<b>${short}</b><br><span style="opacity:0.85">${hint}</span>`
+        : `<b>${short}</b>`;
+      // Sticky for blocking errors so the user has time to read; transient
+      // for 'no-speech' / 'aborted' which are just "try again".
+      const sticky = code === 'not-allowed' || code === 'service-not-allowed'
+        || code === 'audio-capture' || code === 'network'
+        || code === 'language-not-supported';
+      setMicState('error', msg, { sticky });
+      if (!sticky) {
+        setTimeout(() => { if (!_errorSticky) setMicState('idle', ''); }, 3500);
+      }
       listening = false;
     };
 
@@ -148,8 +216,9 @@
       if (lastFinal && autosubmit) {
         deliver(lastFinal);
       }
-      // Keep the badge visible briefly so user sees what was sent
-      setTimeout(() => setMicState('idle', ''), 1500);
+      // Keep the badge visible briefly so user sees what was sent — but
+      // don't stomp a sticky error message if one is up.
+      setTimeout(() => { if (!_errorSticky) setMicState('idle', ''); }, 1500);
       lastFinal = '';
     };
 
@@ -167,10 +236,19 @@
     try {
       ensureRecognition().start();
       listening = true;
-      setMicState('listening', 'listening…');
+      setMicState('listening', 'listening… (click again or release the key to stop)');
     } catch (err) {
+      // Most common: InvalidStateError when the previous session hasn't
+      // fully ended yet (rapid click). Just swallow it — the next click
+      // will work fine.
       console.warn('[VoiceInput] start failed:', err?.message || err);
-      setMicState('idle', '');
+      if (/InvalidStateError|already started/i.test(err?.message || '')) {
+        setMicState('busy', 'cleaning up previous session… click again in a moment');
+        setTimeout(() => { if (!_errorSticky) setMicState('idle', ''); }, 1500);
+      } else {
+        const msg = `<b>start failed</b><br><span style="opacity:0.85">${err?.message || 'unknown'}</span>`;
+        setMicState('error', msg, { sticky: true });
+      }
     }
   }
 
