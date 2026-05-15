@@ -256,7 +256,7 @@ class DemoScene {
     });
 
     icon.on('pointerdown', () => {
-      window.open('/pixel-office-game/reports/competitor-report.html', '_blank');
+      window.open('/reports/competitor-report.html', '_blank');
     });
 
     this._reportIcon = icon;

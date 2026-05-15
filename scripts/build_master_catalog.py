@@ -84,7 +84,7 @@ def extract_semantics(name_str, path_str, w, h):
     return {k: v for k, v in semantics.items() if v is not None}
 
 def main():
-    root_dir = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game")
+    root_dir = Path(__file__).resolve().parents[1]
     assets_dir = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel game stuff\pixel game assets and stuff")
     
     out_file = root_dir / "data" / "master_furniture_catalog.json"

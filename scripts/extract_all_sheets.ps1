@@ -1,6 +1,12 @@
 param(
-  [string]$Root = "c:\Users\zionv\OneDrive\Desktop\multbot",
-  [string]$OutDir = "c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game\out\sheet_extract",
+  # $RepoRoot defaults to the repo root (parent of scripts/), but you can
+  # override on the command line.
+  [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+  # $SheetRoot is where the LimeZu sheet packs live. Defaults to a sibling
+  # folder "pixel game stuff" next to the repo (the historical layout on
+  # Zion's machine). Override if your sheets live elsewhere.
+  [string]$SheetRoot = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path "pixel game stuff\pixel game assets and stuff"),
+  [string]$OutDir = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")).Path "out\sheet_extract"),
   [int]$MinPixels = 30,
   [int]$Pad = 1,
   [int]$BgTol = 2,
@@ -9,26 +15,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$pythonScript = Join-Path $Root "pixel-office-game\scripts\extract_sheet_objects.py"
+$pythonScript = Join-Path $RepoRoot "scripts\extract_sheet_objects.py"
 if (-not (Test-Path $pythonScript)) {
   throw "Extractor not found: $pythonScript"
 }
 
-$sheetRoot = Join-Path $Root "pixel game stuff\pixel game assets and stuff"
-if (-not (Test-Path $sheetRoot)) {
-  throw "Sheet root not found: $sheetRoot"
+if (-not (Test-Path $SheetRoot)) {
+  throw "Sheet root not found: $SheetRoot  (override with -SheetRoot)"
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$pngs = Get-ChildItem -Path $sheetRoot -Recurse -Filter *.png |
+$pngs = Get-ChildItem -Path $SheetRoot -Recurse -Filter *.png |
   Where-Object {
     $_.FullName -notmatch "\\4_Modern_Office_singles\\" -and
     $_.Name -match "(16x16|32x32|48x48|TILESET|Tileset|Office|Modern|_32|_48|_16)"
   }
 
 if (-not $pngs) {
-  Write-Host "No matching sheets found under $sheetRoot"
+  Write-Host "No matching sheets found under $SheetRoot"
   exit 0
 }
 

@@ -126,7 +126,7 @@ From `REFERENCE_OFFICE_INVENTORY.md`. These are **named** in the reference; we m
 
 ### 1. Export every catalog sprite as PNGs (open in a folder)
 
-From `pixel-office-game` (with Node and `pngjs` installed in `scripts/`):
+From the repo root (with Node and `pngjs` installed in `scripts/`):
 
 ```bash
 node scripts/export_catalog_sprites.js --catalog openplan --out out/verify_sprites

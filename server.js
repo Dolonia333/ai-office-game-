@@ -549,7 +549,10 @@ const server = http.createServer((req, res) => {
   if (urlPath === '/' || urlPath === '/pixel-office-game/' || urlPath === '/pixel-office-game') {
     urlPath = '/index.html';
   }
-  // Strip /pixel-office-game/ prefix since ROOT is now the project directory
+  // Backwards-compat: this project was once served from a parent folder
+  // with index.html using <base href="/pixel-office-game/">. The base
+  // tag is gone, but stripping the legacy prefix keeps old bookmarks
+  // and external links working. Safe to remove eventually.
   if (urlPath.startsWith('/pixel-office-game/')) {
     urlPath = urlPath.replace('/pixel-office-game', '');
   }

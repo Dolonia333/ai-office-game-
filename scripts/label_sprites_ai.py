@@ -34,7 +34,7 @@ def main():
     # Using gemini-2.5-flash-8b as it is extremely fast and cheap for batch image processing
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-    root_dir = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game")
+    root_dir = Path(__file__).resolve().parents[1]
     catalog_path = root_dir / "data" / "master_furniture_catalog.json"
     
     if not catalog_path.exists():

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-catalog_path = Path("c:/Users/zionv/OneDrive/Desktop/multbot/pixel-office-game/data/master_furniture_catalog.json")
+catalog_path = Path(__file__).resolve().parents[1] / "data" / "master_furniture_catalog.json"
 with open(catalog_path, "r", encoding="utf-8") as f:
     catalog = json.load(f)
 

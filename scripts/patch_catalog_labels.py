@@ -6,7 +6,7 @@ injects ai_name entries into master_furniture_catalog.json.
 import json
 from pathlib import Path
 
-ROOT = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game")
+ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "data" / "master_furniture_catalog.json"
 LABELS_PATH  = ROOT / "out" / "mosaics" / "sprite_labels.json"
 INDEX_PATH   = ROOT / "out" / "mosaics" / "sprite_index.json"

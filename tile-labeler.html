@@ -337,11 +337,10 @@
     document.getElementById('tilesetSelect').value = tilesetKey;
     document.getElementById('tileSizeSelect').value = String(tileSize);
 
-    // Note: expects images to exist at pixel-office-game/assets/*.png
-    // We'll add copies there next.
+    // Note: expects images to exist at assets/*.png
     loadActiveTileset().catch(err => {
       const s = document.getElementById('stats');
-      s.textContent = 'Load error: ' + err.message + ' (Put the tileset PNG under pixel-office-game/assets/ and refresh.)';
+      s.textContent = 'Load error: ' + err.message + ' (Put the tileset PNG under assets/ and refresh.)';
     });
   </script>
 </body>

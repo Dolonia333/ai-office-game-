@@ -196,7 +196,6 @@ browser with OpenClaw running.
    ```
 2. Start Denizen and open the browser:
    ```powershell
-   cd pixel-office-game
    npm start
    # → open http://localhost:8080
    ```

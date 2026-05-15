@@ -33,7 +33,7 @@ def build_tiles_catalog(project_root: Path) -> List[TileEntry]:
   This does NOT cut images; it just describes each tile's position and metadata
   so the game (and OpenClaw) can refer to tiles by index and category.
   """
-  config_path = project_root / "pixel-office-game" / "tilesheets-config.json"
+  config_path = project_root / "tilesheets-config.json"
   tilesheets = load_tilesheets_config(config_path)
 
   entries: List[TileEntry] = []
@@ -77,10 +77,11 @@ def build_tiles_catalog(project_root: Path) -> List[TileEntry]:
 
 
 def main() -> None:
-  project_root = Path(__file__).resolve().parents[1]
+  # __file__ lives at the repo root, so parents[0] = repo root.
+  project_root = Path(__file__).resolve().parent
   entries = build_tiles_catalog(project_root)
 
-  out_path = project_root / "pixel-office-game" / "tiles-catalog.json"
+  out_path = project_root / "tiles-catalog.json"
   payload = {
     "info": {
       "generatedFrom": "tilesheets-config.json",

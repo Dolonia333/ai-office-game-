@@ -52,7 +52,11 @@ Use this when adding or editing sprite sheets (Gym, Living Room, Bedroom, etc.) 
 
 To avoid manual coordinate entry, run either scanner on a PNG:
 
-- **Node script (recommended):** `scripts/scan-sprites.js` (uses `pngjs`, already installed under `scripts/`)\n+  - Run from `pixel-office-game/scripts/`:\n+    - `node scan-sprites.js \"..\\..\\pixel game stuff\\...\\RPG_MAKER_XP\\8_Gym.png\" --grid 16 --minAlpha 10 --json`\n+  - Output: merged compound-object bounding boxes in 16px grid units + pixel rects.\n+- **Python script:** `scripts/slice_sheet_scanner.py`
+- **Node script (recommended):** `scripts/scan-sprites.js` (uses `pngjs`, already installed under `scripts/`)
+  - Run from `scripts/`:
+    - `node scan-sprites.js "../../pixel game stuff/.../RPG_MAKER_XP/8_Gym.png" --grid 16 --minAlpha 10 --json`
+  - Output: merged compound-object bounding boxes in 16px grid units + pixel rects.
+- **Python script:** `scripts/slice_sheet_scanner.py`
 - **Input:** Path to sprite sheet (e.g. `8_Gym.png`, `2_LivingRoom.png`).
 - **Output:** Suggested **compound objects** (non-transparent clusters in 16×16 grid), e.g. “punching bag = 16×48” (one tall object) instead of three separate 16×16 tiles.
 - Use the script output to fill `data/definitions.json` and then `data/object-defs.json` with correct **w** × **h** and pivot.

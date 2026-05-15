@@ -16,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-ROOT    = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game")
+ROOT    = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "data" / "master_furniture_catalog.json"
 
 # Prefixes/segments to strip from paths before making a label

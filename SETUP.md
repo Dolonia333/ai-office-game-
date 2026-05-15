@@ -11,7 +11,6 @@ Complete setup instructions for the AI Office Game, including all AI provider co
 ## Step 1: Install Dependencies
 
 ```bash
-cd pixel-office-game
 npm install
 ```
 
@@ -89,8 +88,7 @@ The game will automatically connect to LM Studio for Bob and Dan.
 ## Step 4: Start the Server
 
 ```bash
-cd pixel-office-game
-node server.js
+npm start
 ```
 
 You should see output like:

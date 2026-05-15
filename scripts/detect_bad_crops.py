@@ -9,7 +9,7 @@ except ImportError:
     exit(1)
 
 def main():
-    root_dir = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game")
+    root_dir = Path(__file__).resolve().parents[1]
     assets_dir = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel game stuff\pixel game assets and stuff\Modern_Office_Revamped_v1.2\4_Modern_Office_singles")
     out_file = root_dir / "data" / "bad_crops_report.html"
     
@@ -101,7 +101,7 @@ def main():
     ]
     
     for sprite in flagged_sprites:
-        # Resolve path so HTML can display it relative to pixel-office-game directory where it will be hosted
+        # Resolve path so HTML can display it relative to the repo root where it will be hosted
         html_content.append(f"<div class='card'>")
         html_content.append(f"<img src='{sprite['path']}' alt='{sprite['file']}'>")
         html_content.append(f"<div class='reason'>{sprite['reason']}</div>")

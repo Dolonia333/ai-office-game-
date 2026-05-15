@@ -1,8 +1,11 @@
 $ErrorActionPreference = "Stop"
 
 param(
-  [string]$DesignsDir = "C:\Users\zionv\OneDrive\Desktop\multbot\pixel game stuff\pixel game assets and stuff\Modern_Office_Revamped_v1.2\6_Office_Designs",
-  [string]$OutDir = "C:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game\data\world\prefabs",
+  # Designs live OUTSIDE the repo (LimeZu pack); historical layout puts it
+  # in a sibling folder. Override if your sheets live elsewhere.
+  [string]$DesignsDir = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path "pixel game stuff\pixel game assets and stuff\Modern_Office_Revamped_v1.2\6_Office_Designs"),
+  # Outputs go inside the repo.
+  [string]$OutDir = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")).Path "data\world\prefabs"),
   [string]$AsepriteExe = $env:ASEPRITE_EXE
 )
 

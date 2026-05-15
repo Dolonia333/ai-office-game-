@@ -16,7 +16,7 @@ The game runs at `http://localhost:8080`. No API keys needed — it falls back t
 ## Project Structure
 
 ```
-pixel-office-game/
+DENIZEN/
 ├── server.js              # HTTP + WebSocket server
 ├── office-scene.js        # Main Phaser 3 game scene (client)
 ├── index.html             # Entry point

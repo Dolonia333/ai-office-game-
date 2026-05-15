@@ -1,7 +1,7 @@
 /**
  * Export every sprite from a catalog as a PNG so you can open and confirm them.
  * Sheet paths: see data/sheet_registry.json (canonical list of LimeZu Modern Office sheet paths).
- * Usage (from repo root or pixel-office-game):
+ * Usage (from repo root):
  *   node scripts/export_catalog_sprites.js [--catalog openplan|modern_office_32|...|all] [--out dir]
  *   node scripts/export_catalog_sprites.js --list-sheets   # print sheets from registry
  */

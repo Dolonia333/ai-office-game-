@@ -200,7 +200,7 @@ class OfficeScene extends Phaser.Scene {
       // Continue anyway so you can still see floor/UI.
     }
 
-    // Seeded world generation: visit /pixel-office-game/index.html?seed=YOURSEED
+    // Seeded world generation: visit /?seed=YOURSEED
     const urlParams = new URLSearchParams(window.location.search);
     const seedParam = urlParams.get('seed');
     const layoutParam = urlParams.get('layout') || 'openplan'; // default to openplan

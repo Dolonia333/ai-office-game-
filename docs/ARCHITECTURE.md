@@ -78,8 +78,8 @@ A Phaser pixel-art office where 16 NPCs represent AI agents. Each NPC has its ow
 
 | Path | Purpose |
 |---|---|
-| `pixel-office-game/npcs/<name>/SOUL.md` | Per-NPC personality. Loaded once at server start. |
-| `pixel-office-game/npcs/<name>/MEMORY.md` | Runtime memory. Appended after each `think()` with the enriched save entry. Capped at 200 lines. Contains `[TOPIC:*]`, `[SKILL:*:+1]`, `[OUTCOME:*]` tags. |
+| `npcs/<name>/SOUL.md` | Per-NPC personality. Loaded once at server start. |
+| `npcs/<name>/MEMORY.md` | Runtime memory. Appended after each `think()` with the enriched save entry. Capped at 200 lines. Contains `[TOPIC:*]`, `[SKILL:*:+1]`, `[OUTCOME:*]` tags. |
 | `~/.openclaw/openclaw.json` | Optional remote API keys (Anthropic, Google, xAI, Moonshot). LM Studio is always available as fallback. |
 
 ## The two decision loops

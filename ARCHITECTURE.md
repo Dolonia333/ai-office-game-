@@ -264,7 +264,7 @@ office-scene.js
 ## File Structure
 
 ```
-pixel-office-game/
+DENIZEN/
 ├── server.js                    # Main server (HTTP + WebSocket)
 ├── security-monitor-server.js   # Threat detection engine
 ├── index.html                   # Game entry point

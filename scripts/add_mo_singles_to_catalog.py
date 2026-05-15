@@ -6,7 +6,7 @@ with ai_name labels produced by visual analysis.
 import json
 from pathlib import Path
 
-ROOT        = Path(r"c:\Users\zionv\OneDrive\Desktop\multbot\pixel-office-game")
+ROOT        = Path(__file__).resolve().parents[1]
 CATALOG     = ROOT / "data" / "master_furniture_catalog.json"
 LABELS      = ROOT / "out" / "mosaics" / "sprite_labels.json"
 INDEX       = ROOT / "out" / "mosaics" / "sprite_index.json"
