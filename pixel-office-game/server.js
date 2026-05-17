@@ -328,6 +328,82 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // --- NPC-facing "place a single piece of furniture" endpoint ---
+  // The NPC brain's placeFurniture action POSTs here. We append the
+  // item to office-layout.json (read-modify-write), broadcast a
+  // worldState event so everyone notices, and return the new item.
+  // Validation is strict: a small whitelist of prefab kinds and bounds.
+  //
+  // Body shape: { by: "Abby", prefabId: "desk_small", x: 320, y: 240, reason?: "..." }
+  if (urlPath === '/api/place-furniture' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let p;
+      try { p = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const by = String(p.by || 'system').slice(0, 40);
+      const prefabId = String(p.prefabId || '').slice(0, 80);
+      const x = parseInt(p.x, 10);
+      const y = parseInt(p.y, 10);
+      const reason = p.reason ? String(p.reason).slice(0, 200) : null;
+
+      // Whitelist + bounds. Keep this short — expanding it should be a
+      // deliberate change, not a wide-open "NPC can spawn anything" API.
+      const ALLOWED_PREFABS = new Set([
+        'desk_small', 'desk_2x2', 'office_chair', 'monitor',
+        'plant_small', 'plant_large', 'whiteboard', 'bookshelf',
+        'coffee_machine', 'water_cooler', 'couch', 'rug',
+        'standing_desk', 'phone_booth', 'meeting_table',
+      ]);
+      if (!ALLOWED_PREFABS.has(prefabId)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `prefabId not in whitelist: ${prefabId}`, allowed: [...ALLOWED_PREFABS] }));
+        return;
+      }
+      if (!Number.isFinite(x) || !Number.isFinite(y) || x < 16 || y < 16 || x > 1264 || y > 704) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'x/y out of bounds (must fit inside 1280×720 with 16px margin)' }));
+        return;
+      }
+
+      // Read-modify-write the layout file. The structure of office-layout.json
+      // is { items: [...] } — we just append.
+      let layout = { items: [] };
+      try {
+        const raw = fs.readFileSync(layoutFile, 'utf8');
+        layout = JSON.parse(raw);
+        if (!Array.isArray(layout.items)) layout.items = [];
+      } catch (_) {
+        fs.mkdirSync(layoutDir, { recursive: true });
+      }
+      const instanceId = `npc_${prefabId}_${Date.now()}`;
+      const item = { instanceId, prefabId, x, y, placedBy: by, placedAt: Date.now(), reason };
+      layout.items.push(item);
+      try {
+        fs.writeFileSync(layoutFile, JSON.stringify(layout, null, 2), 'utf8');
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist layout: ' + err.message }));
+        return;
+      }
+
+      // Surface as a worldState event so NPCs notice ("Abby placed a couch")
+      // and the diag panel logs it.
+      try {
+        worldState.pushEvent('shipped', `${by} placed ${prefabId} at (${x},${y})${reason ? ' — ' + reason : ''}`);
+      } catch (_) {}
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, item }));
+    });
+    return;
+  }
+
   // --- World-state snapshot (read-only) ---
   // Useful for debugging and for the n8n/Supabase integration to know what
   // the office "looks like" before posting an update.

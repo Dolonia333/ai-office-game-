@@ -93,13 +93,160 @@ class WorldState extends EventEmitter {
       time: Date.now(),
     };
 
+    /** Furniture snapshot from the client. Used for desk-neighbor lookup
+     *  in renderContextBlock. Updated periodically via setFurnitureSnapshot.
+     *  Each entry: { id, instanceId, type, position:{x,y}, assignedTo } */
+    this.furniture = [];
+
+    /** Room adjacency graph — hand-authored from the current office layout.
+     *  Used to surface "adjacent rooms" hints in the NPC prompt so they can
+     *  reason about routing (e.g. "I'll grab coffee on the way to conference").
+     *  Edit if the office layout changes. */
+    this.roomGraph = {
+      open_office:    ['conference', 'breakroom', 'manager_office', 'reception'],
+      conference:     ['open_office', 'manager_office'],
+      breakroom:      ['open_office', 'reception'],
+      manager_office: ['open_office', 'conference'],
+      reception:      ['open_office', 'breakroom', 'storage'],
+      storage:        ['reception'],
+    };
+
+    /** Per-pair last contact timestamps. Keyed as "Alex|Josh" (sorted).
+     *  Updated whenever an actions.speak/speakTo fires. Surfaced in the
+     *  prompt as "you haven't talked to Bob in 14m". Caps automatically
+     *  at 200 pairs to avoid unbounded growth on long sessions. */
+    this.lastContact = new Map();
+
+    /** Per-NPC recent self-messages (de-dup window). Keyed by NPC name,
+     *  value is a small ring of {text, ts}. Used by the self-repetition
+     *  detector so NPCs notice "you already asked the same question 90s ago"
+     *  instead of looping. */
+    this.recentSelfMessages = new Map();
+
     /** Caps so a chatty subsystem can't OOM us. */
     this._caps = {
       activeThreats: 8,
       recentEvents: 12,
       backgroundTasks: 25,
       foregroundTasks: 25,
+      lastContact: 200,
+      selfMessagesPerNpc: 5,
     };
+  }
+
+  // ---------------------------------------------------------------------
+  // Furniture (used for desk-neighbor lookup)
+  // ---------------------------------------------------------------------
+
+  /** Replace the furniture snapshot wholesale. Cheap; called ~10s by the
+   *  cofounder mirror. The full list is small (few dozen items). */
+  setFurnitureSnapshot(items) {
+    if (Array.isArray(items)) this.furniture = items.slice();
+  }
+
+  /** Resolve an NPC's desk position + their two nearest desk neighbors
+   *  (by other NPC names). Returns null if no desk is assigned or no
+   *  furniture is available. */
+  getDeskContext(npcName) {
+    const me = this.npcs[npcName];
+    if (!me?.assignedDesk || this.furniture.length === 0) return null;
+    const myDesk = this.furniture.find(f =>
+      (f.id === me.assignedDesk || f.instanceId === me.assignedDesk)
+      && f.type === 'desk');
+    if (!myDesk?.position) return null;
+
+    // Find other NPCs' desks sorted by distance from mine.
+    const others = [];
+    for (const [name, state] of Object.entries(this.npcs)) {
+      if (name === npcName || !state.assignedDesk) continue;
+      const theirDesk = this.furniture.find(f =>
+        (f.id === state.assignedDesk || f.instanceId === state.assignedDesk)
+        && f.type === 'desk');
+      if (!theirDesk?.position) continue;
+      const dx = theirDesk.position.x - myDesk.position.x;
+      const dy = theirDesk.position.y - myDesk.position.y;
+      others.push({ name, d: Math.sqrt(dx * dx + dy * dy) });
+    }
+    others.sort((a, b) => a.d - b.d);
+    return {
+      myDesk,
+      neighbors: others.slice(0, 2).map(o => o.name),
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // Per-peer last contact + self-repetition tracking
+  // ---------------------------------------------------------------------
+
+  _pairKey(a, b) {
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
+  /** Record that two NPCs interacted. Called from npc-brains when a
+   *  decision targets a peer. */
+  recordContact(from, to) {
+    if (!from || !to || from === to) return;
+    this.lastContact.set(this._pairKey(from, to), Date.now());
+    if (this.lastContact.size > this._caps.lastContact) {
+      // Drop oldest 20% to amortize cost.
+      const entries = [...this.lastContact.entries()].sort((a, b) => a[1] - b[1]);
+      for (let i = 0; i < Math.floor(this._caps.lastContact * 0.2); i++) {
+        this.lastContact.delete(entries[i][0]);
+      }
+    }
+  }
+
+  /** Minutes since `npcA` and `npcB` last interacted. Returns null if
+   *  they've never been recorded. */
+  minutesSinceContact(npcA, npcB) {
+    const ts = this.lastContact.get(this._pairKey(npcA, npcB));
+    if (!ts) return null;
+    return Math.round((Date.now() - ts) / 60000);
+  }
+
+  /** Record a message the NPC just generated. Used by the repetition
+   *  detector to flag "you already said this 90s ago." */
+  recordSelfMessage(npcName, text) {
+    if (!npcName || !text) return;
+    if (!this.recentSelfMessages.has(npcName)) this.recentSelfMessages.set(npcName, []);
+    const ring = this.recentSelfMessages.get(npcName);
+    ring.push({ text: String(text).slice(0, 200), ts: Date.now() });
+    if (ring.length > this._caps.selfMessagesPerNpc) ring.shift();
+  }
+
+  /** Return a near-duplicate of `text` from this NPC's last few messages,
+   *  if one exists within `windowMs`. Similarity is naive: lowercased,
+   *  punctuation-stripped, first 8 words overlap. Good enough to catch
+   *  the "ask the same question every 90s" loop without false positives
+   *  on different-but-related messages. */
+  recentSimilarMessage(npcName, text, windowMs = 5 * 60 * 1000) {
+    const ring = this.recentSelfMessages.get(npcName);
+    if (!ring || !ring.length) return null;
+    const now = Date.now();
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ')
+      .split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+    const target = norm(text);
+    if (!target) return null;
+    for (const entry of ring) {
+      if (now - entry.ts > windowMs) continue;
+      if (norm(entry.text) === target) {
+        return { text: entry.text, ageSeconds: Math.round((now - entry.ts) / 1000) };
+      }
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------
+  // Room occupancy (computed from current NPC positions, no storage)
+  // ---------------------------------------------------------------------
+
+  /** Returns { roomName: occupantCount } for every room with at least one NPC. */
+  roomOccupancy() {
+    const counts = {};
+    for (const s of Object.values(this.npcs)) {
+      if (s.room) counts[s.room] = (counts[s.room] || 0) + 1;
+    }
+    return counts;
   }
 
   // ---------------------------------------------------------------------
@@ -288,9 +435,24 @@ class WorldState extends EventEmitter {
       lines.push(`- You are: ${me.state || 'idle'}${where}`);
       if (me.lastAction) lines.push(`- Your last action: ${me.lastAction}`);
       if (me.currentTask) lines.push(`- Current task: ${me.currentTask}`);
+
+      // Adjacent rooms — so the NPC can think "I'll drop by reception on
+      // the way to storage" instead of treating rooms as a flat list.
+      if (me.room && this.roomGraph[me.room]) {
+        lines.push(`- Adjacent rooms: ${this.roomGraph[me.room].join(', ')}`);
+      }
+
+      // Desk geography — your desk + the two nearest desks' owners. So
+      // engineers know who's next to them physically, which matters for
+      // "tap on the shoulder" interactions.
+      const desk = this.getDeskContext(npcName);
+      if (desk?.neighbors?.length) {
+        lines.push(`- Your desk neighbors: ${desk.neighbors.join(', ')}`);
+      }
     }
 
-    // Who else is around? Top 3 by distance if we know our position.
+    // Who else is around? Top 3 by distance with rich tags: state,
+    // busy flag, convoy detection (are they moving WITH you?).
     if (me && me.position) {
       const near = this.npcsNear(me.position.x, me.position.y, 160)
         .filter(n => n !== npcName)
@@ -298,7 +460,29 @@ class WorldState extends EventEmitter {
       if (near.length) {
         const nearStrs = near.map(n => {
           const s = this.npcs[n];
-          return s && s.state ? `${n} (${s.state})` : n;
+          if (!s) return n;
+          const tags = [];
+          if (s.state) tags.push(s.state);
+          // "busy" tag — peers know NOT to interrupt mid-meeting / mid-walk.
+          if (s.busy) tags.push('busy');
+          // Convoy detection: angle between our velocity vectors. Both
+          // must be moving (|v| > 30 px/s) AND aimed within ~30° of each
+          // other → "walking with you". Otherwise no movement annotation.
+          if (me.velocity && s.velocity) {
+            const ourMag = Math.hypot(me.velocity.x, me.velocity.y);
+            const theirMag = Math.hypot(s.velocity.x, s.velocity.y);
+            if (ourMag > 30 && theirMag > 30) {
+              const dot = me.velocity.x * s.velocity.x + me.velocity.y * s.velocity.y;
+              const cos = dot / (ourMag * theirMag);
+              if (cos > 0.85) tags.push('walking with you');
+              else if (cos < -0.85) tags.push('walking opposite');
+            }
+          }
+          // Time since last interaction — only show if it's been a
+          // while, to flag "you haven't checked in with them today".
+          const mins = this.minutesSinceContact(npcName, n);
+          if (mins != null && mins > 15) tags.push(`last spoke ${mins}m ago`);
+          return tags.length ? `${n} (${tags.join(', ')})` : n;
         });
         lines.push(`- Nearby: ${nearStrs.join(', ')}`);
       }
@@ -310,6 +494,18 @@ class WorldState extends EventEmitter {
       .slice(0, 4)
       .map(([n, s]) => `${n}: ${s.currentTask}`);
     if (otherActive.length) lines.push(`- Room activity: ${otherActive.join('; ')}`);
+
+    // Room occupancy — so NPCs can sense "everyone's in conference, I'm
+    // alone at my desk" or "breakroom is full, maybe later." Surfaced as a
+    // compact one-liner to keep prompt cost down.
+    const occ = this.roomOccupancy();
+    const occEntries = Object.entries(occ).filter(([, c]) => c > 0);
+    if (occEntries.length) {
+      const parts = occEntries
+        .sort((a, b) => b[1] - a[1])
+        .map(([room, c]) => `${room}:${c}`);
+      lines.push(`- Office occupancy: ${parts.join(' ')}`);
+    }
 
     if (this.activeThreats.length) {
       const t = this.activeThreats[0];

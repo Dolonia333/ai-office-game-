@@ -782,12 +782,48 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     // bullet list to keep token cost down.
     const liveContextBlock = worldState ? worldState.renderContextBlock(npcName) : '';
 
+    // Time of day awareness — NPCs should pace themselves differently in
+    // the morning vs late afternoon vs evening. Built from the world
+    // clock if the cofounder pushed one, otherwise wall-clock.
+    const officeTime = (officeContext && officeContext.time) || null;
+    let timeOfDayBlock = '';
+    if (officeTime) {
+      const [h] = officeTime.split(':').map(n => parseInt(n, 10));
+      let phase;
+      if (h >= 5 && h < 11) phase = 'morning';
+      else if (h >= 11 && h < 14) phase = 'midday';
+      else if (h >= 14 && h < 17) phase = 'afternoon';
+      else if (h >= 17 && h < 20) phase = 'evening';
+      else phase = 'after hours';
+      timeOfDayBlock = `- Office time: ${officeTime} (${phase})`;
+    }
+
+    // Self-repetition guard — if the NPC's about to say something they
+    // already said in the last 5 minutes, surface that and tell them to
+    // do something else. This breaks the "check in / check in / check
+    // in" loops that show up when goals are vague.
+    let selfRepetitionHint = '';
+    if (worldState && typeof worldState.recentSimilarMessage === 'function') {
+      // We don't know the NEXT message yet, so we just remind them what
+      // their recent messages were. The model self-policies.
+      const recent = worldState.recentSelfMessages?.get(npcName) || [];
+      if (recent.length >= 2) {
+        const lastTwo = recent.slice(-2).map(m => `"${m.text.slice(0, 60)}"`).join(' then ');
+        selfRepetitionHint = `- Your recent messages: ${lastTwo}. Avoid asking the same thing again — do something new or wait.`;
+      }
+    }
+
     // Buffered direct messages from peers via agent-bus. These are "you have
     // mail" — the NPC should react to them on this think cycle if relevant.
     const inbox = this._drainInbox(npcName);
     const inboxText = inbox.length
       ? inbox.map(m => `- from ${m.from}: ${m.text}`).join('\n')
       : '';
+
+    // Combine time + self-repetition into a small "Situational" block. Both
+    // are optional; the section is omitted if neither applies.
+    const situationalLines = [timeOfDayBlock, selfRepetitionHint].filter(Boolean);
+    const situationalBlock = situationalLines.length ? situationalLines.join('\n') : '';
 
     const systemPrompt = brain.personality + '\n\n' +
       '## Hierarchy Rules\n' + hierarchyRules + '\n\n' +
@@ -797,6 +833,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       (skillContext ? '## Skills & Growth\n' + skillContext + '\n\n' : '') +
       '## Your Coworkers\n' + coworkerContext + '\n\n' +
       (liveContextBlock ? '## Current State (live)\n' + liveContextBlock + '\n\n' : '') +
+      (situationalBlock ? '## Situational\n' + situationalBlock + '\n\n' : '') +
       (assistantProfileBlock ? assistantProfileBlock + '\n\n' : '') +
       (inboxText ? '## Direct Messages To You (since last think)\n' + inboxText + '\n\n' : '') +
       (theoryOfMind ? '## What Others Are Doing\n' + theoryOfMind + '\n\n' : '') +
@@ -973,6 +1010,16 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
             lastAction: summary,
             currentTask: decision.taskPhase === 'finished' ? null : summary,
           });
+          // Record this message so the self-repetition detector can flag
+          // "you already asked the same thing 90s ago" on the next think.
+          if (decision.message && typeof worldState.recordSelfMessage === 'function') {
+            worldState.recordSelfMessage(npcName, decision.message);
+          }
+          // Record peer contact so the per-pair "last spoke" timer ticks
+          // for both directions of the relationship.
+          if (decision.target && typeof worldState.recordContact === 'function') {
+            worldState.recordContact(npcName, decision.target);
+          }
         }
 
         // If the NPC chose to talk to a specific peer, also publish on the
@@ -1620,6 +1667,13 @@ ${roleActions}
 - Call a meeting with people: [ACTION:callMeeting:Name1,Name2,Name3]
 - Check a bookshelf/do research: [ACTION:checkBookshelf]
 - Stand up from desk: [ACTION:standUp]
+- Place new furniture in the office: [ACTION:placeFurniture:prefabId:x:y:reason]
+  Allowed prefabs: desk_small, desk_2x2, office_chair, monitor, plant_small, plant_large,
+  whiteboard, bookshelf, coffee_machine, water_cooler, couch, rug, standing_desk,
+  phone_booth, meeting_table.
+  x/y are absolute pixel coordinates in the 1280×720 office.
+  Use sparingly — only if you genuinely need something that doesn't exist yet. Tell the team WHY in the reason.
+  Example: "We need a second whiteboard near my desk. [ACTION:placeFurniture:whiteboard:480:180:For sprint planning]"
 
 ### Delegation (for tasks outside your scope):
 - Delegate to the right person: [DELEGATE:PersonName:reason]

@@ -579,14 +579,26 @@ YOUR JOB — create a LIVING office:
         };
         // Mirror per-agent positions/status into the live world-state so any
         // subsystem can ask "who is near (x,y)?" without poking the client.
+        // Now also includes velocity (for convoy detection), assignedDesk
+        // (for desk geography awareness), and busy state (so peers know
+        // whether to interrupt or wait).
         if (worldState && Array.isArray(msg.agents)) {
           for (const a of msg.agents) {
             if (!a || !a.name) continue;
             worldState.updateNpc(a.name, {
               position: a.position || null,
+              velocity: a.velocity || { x: 0, y: 0 },
               state: a.status || a.state || 'idle',
               room: a.room || null,
+              assignedDesk: a.assignedDesk || null,
+              busy: !!a.busy,
+              currentTask: a.currentTask || null,
             });
+          }
+          // Also mirror furniture once, so worldState can compute desk
+          // neighbors without needing to round-trip the client every time.
+          if (Array.isArray(msg.furniture) && typeof worldState.setFurnitureSnapshot === 'function') {
+            worldState.setFurnitureSnapshot(msg.furniture);
           }
         }
         break;

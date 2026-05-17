@@ -186,6 +186,25 @@ class OfficeScene extends Phaser.Scene {
     // Also remove the DOLONIA title text objects created in preload
     this.children.list.filter(c => c.type === 'Text' && (c.text === 'DOLONIA' || c.text === 'AI Office Simulator')).forEach(t => t.destroy());
 
+    // Make EVERY Text object render at 2x internal resolution. pixelArt:true
+    // forces NEAREST sampling on text textures too, so tiny 6-7px task
+    // labels / speech bubbles / status indicators look blurry: Phaser
+    // rasterises them at native 1x with antialiasing, then nearest-neighbor
+    // downsamples → smeared glyphs. Bumping resolution to 2 makes the
+    // internal raster 2x larger; the GPU downsample then preserves the
+    // glyph edges cleanly. Wrap the factory so we don't have to add
+    // .setResolution(2) to every single .add.text() call in the codebase.
+    if (!this._textFactoryPatched) {
+      const factory = this.add;
+      const origText = factory.text.bind(factory);
+      factory.text = function (x, y, content, style) {
+        const t = origText(x, y, content, style);
+        if (t && typeof t.setResolution === 'function') t.setResolution(2);
+        return t;
+      };
+      this._textFactoryPatched = true;
+    }
+
     // If anything failed to load, show it on-screen immediately.
     if (Array.isArray(this._loadErrors) && this._loadErrors.length > 0) {
       const msg = this._loadErrors

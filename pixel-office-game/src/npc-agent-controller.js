@@ -224,8 +224,18 @@ class NpcAgentController {
     }
   }
 
-  /** Show a speech/status bubble above an NPC */
+  /** Show a speech/status bubble above an NPC.
+   *
+   * When the AgentOfficeManager is running (which is the default in
+   * Denizen), it renders its own nicer/larger speech bubbles via
+   * actions.speak() with the actual NPC dialogue. Showing this smaller
+   * gray bubble on top is just visual noise — the same info is also in
+   * the colored status chip from _setCustomIndicator(). So in that mode
+   * we skip it entirely. Only used as the fallback when running the
+   * OpenClaw bridge in isolation (no AgentOfficeManager). */
   _showBubble(npc, text, style) {
+    if (this.scene._agentManager) return; // suppress; nicer bubble path is active
+
     const existing = this._bubbles.get(npc);
     if (existing) {
       existing.destroy();

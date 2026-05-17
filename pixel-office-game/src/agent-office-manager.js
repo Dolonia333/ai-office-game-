@@ -1536,6 +1536,31 @@ class AgentOfficeManager {
             });
             break;
           }
+          case 'placeFurniture': {
+            // Params: [prefabId, x, y, reason]. POST to the server endpoint;
+            // the server validates the whitelist + bounds, persists, and
+            // emits an event. We don't directly spawn the sprite client-side
+            // here — on next page reload the saved layout brings it in.
+            // (A future enhancement: also spawn the sprite live without
+            // requiring reload.)
+            const prefabId = act.params[0] || '';
+            const x = parseInt(act.params[1], 10);
+            const y = parseInt(act.params[2], 10);
+            const reason = act.params.slice(3).join(':') || null;
+            fetch('/api/place-furniture', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ by: npcName, prefabId, x, y, reason }),
+            }).then(r => r.json()).then(res => {
+              if (res?.ok) {
+                console.log(`[AgentManager] ${npcName} placed ${prefabId} at (${x},${y})`);
+                if (this.actions?.emote) this.actions.emote(npcKey, 'idea');
+              } else {
+                console.warn(`[AgentManager] placeFurniture rejected:`, res?.error);
+              }
+            }).catch(err => console.warn('[AgentManager] placeFurniture error:', err?.message || err));
+            break;
+          }
           default:
             console.log(`[AgentManager] Unknown NPC action: ${act.action}`);
         }
@@ -1564,6 +1589,13 @@ class AgentOfficeManager {
     const agentList = [];
     this.agents.forEach((agent, npcKey) => {
       const npc = this.actions._getNpc(npcKey);
+      // Velocity for group/convoy awareness — needs to be in the state
+      // snapshot so worldState can compute "walking with you" downstream.
+      // Phaser arcade bodies expose velocity directly; round to 1 px/s
+      // to keep the JSON small.
+      const v = npc && npc.body && npc.body.velocity
+        ? { x: Math.round(npc.body.velocity.x), y: Math.round(npc.body.velocity.y) }
+        : { x: 0, y: 0 };
       agentList.push({
         id: npcKey,
         name: agent.name,
@@ -1572,6 +1604,12 @@ class AgentOfficeManager {
         currentTask: agent.currentTask,
         assignedDesk: agent.assignedDesk,
         position: npc ? { x: Math.round(npc.x), y: Math.round(npc.y) } : null,
+        velocity: v,
+        // "Busy state" hint that's more meaningful than `status`: tells
+        // peers whether this NPC is interruptible. Computed cheaply here
+        // because we have access to npc.ai / agent state in one place.
+        busy: agent.status === 'meeting' || agent.status === 'walking'
+              || npc?.ai?.taskState === 'walking' || npc?.ai?.taskState === 'sitting',
       });
     });
 
