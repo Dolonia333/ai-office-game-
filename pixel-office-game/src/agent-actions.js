@@ -1023,6 +1023,26 @@ class AgentActions {
     const truncated = text.length > 60 ? text.slice(0, 57) + '...' : text;
     const isThought = style === 'thought';
 
+    // Voice — route speech (not thought) through DenizenSpeak. The voice
+    // gate handles the presence check and the provider override
+    // (ElevenLabs when configured, browser SpeechSynthesis otherwise).
+    // Without this, every autonomous NPC line was silent because the
+    // bubble path bypassed the voice layer entirely. Thoughts are
+    // intentionally silent — they're internal monologue.
+    if (!isThought && typeof window !== 'undefined' && typeof window.DenizenSpeak === 'function') {
+      try {
+        // Resolve display name from the agent manager. Fall back to npcKey
+        // if the manager isn't around (e.g. demo scene).
+        const displayName = this.scene?._agentManager?.agents?.get?.(npcKey)?.name
+          || (window.DenizenNpcRoster?.keyToDisplay?.[npcKey])
+          || npcKey;
+        window.DenizenSpeak(displayName, text);
+      } catch (err) {
+        // Don't let TTS failure block the bubble render.
+        console.warn('[AgentActions] DenizenSpeak failed:', err?.message || err);
+      }
+    }
+
     const bgColor = isThought ? '#1a1a2e' : '#1e293b';
     const textColor = isThought ? '#c4b5fd' : '#ffffff';
     const prefix = isThought ? '( ' : '';
