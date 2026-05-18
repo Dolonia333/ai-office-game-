@@ -7,10 +7,10 @@ tmpclaude-*-cwd
 
 # Denizen runtime data (lazy-created by the server; committing causes
 # constant CRLF/content drift on Windows)
-pixel-office-game/data/animation-proposals.json
-pixel-office-game/data/soul-proposals.json
-pixel-office-game/data/capability-proposals.json
-pixel-office-game/data/assistant-profile.json
+denizen/data/animation-proposals.json
+denizen/data/soul-proposals.json
+denizen/data/capability-proposals.json
+denizen/data/assistant-profile.json
 
 # Embedded git repos (tracked separately)
 openclaw/
@@ -19,6 +19,7 @@ openclaw/
 # Large raw game asset dumps (binary files, not source code)
 pixel game stuff/
 pixel-game/
+pixel-office-game/
 
 # Python virtual environment
 .venv/

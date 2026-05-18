@@ -1882,15 +1882,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Default to the game's index.html
-  if (urlPath === '/' || urlPath === '/pixel-office-game/' || urlPath === '/pixel-office-game') {
+  // Default to the game's index.html — also accept legacy /denizen/ and
+  // /pixel-office-game/ prefixes so old bookmarks keep working.
+  if (urlPath === '/' || urlPath === '/denizen/' || urlPath === '/denizen'
+      || urlPath === '/pixel-office-game/' || urlPath === '/pixel-office-game') {
     urlPath = '/index.html';
   }
   // Backwards-compat: this project was once served from a parent folder
-  // with index.html using <base href="/pixel-office-game/">. The base
-  // tag is gone, but stripping the legacy prefix keeps old bookmarks
-  // and external links working. Safe to remove eventually.
-  if (urlPath.startsWith('/pixel-office-game/')) {
+  // with index.html using `<base href="/pixel-office-game/">`, and later
+  // briefly under `/denizen/`. The base tag is gone, but stripping the
+  // legacy prefixes keeps old bookmarks and external links working.
+  if (urlPath.startsWith('/denizen/')) {
+    urlPath = urlPath.replace('/denizen', '');
+  } else if (urlPath.startsWith('/pixel-office-game/')) {
     urlPath = urlPath.replace('/pixel-office-game', '');
   }
   const filePath = path.resolve(ROOT, `.${urlPath}`);
