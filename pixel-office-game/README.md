@@ -844,7 +844,14 @@ Two deployment shortcuts live at the repo root:
 
 ## License
 
-Code: MIT
+Code: **MIT with Commons Clause v1.0**. The MIT license applies as
+usual — you can use, copy, modify, merge, publish, distribute,
+sublicense — with one added restriction: you cannot **Sell** the
+Software, where "Sell" includes selling hosted/managed versions of it
+or services whose value derives substantially from this code. Internal
+use, modification, redistribution, and integration into your own
+non-commercial-of-Denizen products are all fine. Full terms in
+[`LICENSE`](LICENSE).
 
 Art assets: [LimeZu Modern Office](https://limezu.itch.io/) — see their license terms.
 Character sprites: Generated with [Character Generator 2.0](https://www.graymatterstudios.net/).
