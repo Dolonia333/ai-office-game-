@@ -808,6 +808,7 @@ The `docs/` directory has the canonical deep-dives for the runtime systems:
 | [docs/SOCIAL_BEHAVIOR.md](docs/SOCIAL_BEHAVIOR.md) | **Social layer** — conversation focus (NPCs stop walking when spoken to), Lucy's receptionist tour for idle players, office manners, think-aloud bubbles. |
 | [docs/ANIMATION_FORGE.md](docs/ANIMATION_FORGE.md) | **Animation proposal queue** — NPCs request new sprite animations via `[ACTION:requestAnimation:...]`; proposals land in `data/animation-proposals.json` for operator review (no auto-spawn). |
 | [docs/SOUL_REFLECTION.md](docs/SOUL_REFLECTION.md) | **SOUL.md self-revision proposal queue** — daily reflection prompt, `/api/soul-proposal{,s,/approve}`, approval-gated (no auto-apply). |
+| [docs/PROPOSAL_REVIEW.md](docs/PROPOSAL_REVIEW.md) | **Operator proposal review UI** — bottom-right chip that aggregates animation + SOUL + capability proposals via `GET /api/proposals`, with approve / reject buttons. |
 | [docs/ROADMAP_SELF_ADVANCEMENT.md](docs/ROADMAP_SELF_ADVANCEMENT.md) | **Where it's going** — staged plan from live office mutation → custom sprite generation → SOUL.md self-revision → cross-NPC negotiation. |
 | [docs/SCENE.md](docs/SCENE.md) | **`office-scene.js` navigation map** — what lives where in the 3079-line scene |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | **NPC action vocabulary** — every `actions.X()` (walk, sit, speak, callMeeting, …), the per-NPC turn queue, how cofounder dispatch reaches an action |
