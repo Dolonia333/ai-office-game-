@@ -1702,6 +1702,14 @@ ${roleActions}
   Use this when you're processing something or talking to yourself — not addressing anyone.
   Renders as a thought bubble (cloud) over your head instead of a speech bubble.
   Example: "[ACTION:thinkAloud:I wonder if Marcus already shipped the auth fix...]"
+- Request a new animation for yourself: [ACTION:requestAnimation:animName:description]
+  Use when you want to do something the existing sprite sheet can't show
+  (meditating, sketching, gardening). Goes to a proposal queue for the
+  operator to review — the animation does NOT appear instantly. Do not
+  spam: daily limit is 2 requests per NPC.
+  Naming: lowercase snake_case, e.g. "meditate", "sketch_idea". Description
+  ≤ 200 chars: what should the NPC look like during this action?
+  Example: "[ACTION:requestAnimation:meditate:Sitting cross-legged with eyes closed, slight pulse]"
 
 ### Delegation (for tasks outside your scope):
 - Delegate to the right person: [DELEGATE:PersonName:reason]
