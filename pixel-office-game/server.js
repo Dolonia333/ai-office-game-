@@ -12,6 +12,7 @@ const agentBus = require('./src/agent-bus');
 const ExternalSink = require('./src/external-sink');
 const elevenLabs = require('./src/elevenlabs-tts');
 const animationForge = require('./src/animation-forge');
+const soulReflection = require('./src/soul-reflection');
 
 // Voice map (per-NPC ElevenLabs voice IDs). Loaded once at startup;
 // edit data/voice-map.json + restart to change. Missing file → empty map
@@ -197,6 +198,46 @@ function _consumeAnimationBudget(by) {
   if (by === 'system' || by === 'operator') return;
   const k = _budgetKey(by);
   _animationBudget.set(k, (_animationBudget.get(k) || 0) + 1);
+}
+
+// --- SOUL.md self-revision proposal queue (Roadmap Stage 3, steps 1-2) ---
+// NPCs propose edits to their own SOUL.md once per in-game day. Proposals
+// are persisted to data/soul-proposals.json and reviewed manually. We
+// deliberately do NOT auto-apply edits — the identity-drift risk in
+// docs/ROADMAP_SELF_ADVANCEMENT.md is real, and the approval gate is
+// non-negotiable for this stage.
+const SOUL_PROPOSALS_PATH = path.join(__dirname, 'data', 'soul-proposals.json');
+const SOUL_PROPOSALS_CAP = 50; // total stored proposals; oldest dropped when over
+const SOUL_PROPOSAL_DAILY_CAP = 1; // per NPC per calendar day
+
+function _ymdToday() {
+  // Use UTC to match the ISO createdAt timestamp stamped by
+  // soul-reflection.serializeProposal — otherwise NPCs near a midnight
+  // boundary can submit twice in one local day if the UTC date crosses
+  // between the two POSTs.
+  return new Date().toISOString().slice(0, 10);
+}
+
+function _readSoulProposalsFile() {
+  try {
+    const raw = fs.readFileSync(SOUL_PROPOSALS_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return { proposals: [] };
+    if (!Array.isArray(parsed.proposals)) parsed.proposals = [];
+    return parsed;
+  } catch (_) {
+    // Lazy-create: file doesn't exist yet or is unreadable. Start clean.
+    return { proposals: [] };
+  }
+}
+
+function _writeSoulProposalsFile(obj) {
+  try { fs.mkdirSync(path.dirname(SOUL_PROPOSALS_PATH), { recursive: true }); } catch (_) {}
+  fs.writeFileSync(SOUL_PROPOSALS_PATH, JSON.stringify(obj, null, 2), 'utf8');
+}
+
+function _countProposalsToday(proposals, npcName, ymd) {
+  return proposals.filter(p => p && p.npcName === npcName && typeof p.createdAt === 'string' && p.createdAt.startsWith(ymd)).length;
 }
 
 // Recent NPC-brain errors, surfaced through GET /api/health so the client
@@ -638,6 +679,143 @@ const server = http.createServer((req, res) => {
     } catch (_) { /* file may not exist yet */ }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(store));
+    return;
+  }
+
+  // --- SOUL.md self-revision proposal queue (Stage 3 steps 1-2) ---
+  // Body: { npcName, proposal: { addToSoul, dropFromSoul, summary, confidence }, reflectionInput? }
+  // Validates via src/soul-reflection.validateProposal, persists to
+  // data/soul-proposals.json (lazy-create), enforces a 1/NPC/day cap +
+  // a 50-proposal total cap (drops oldest), and emits a worldState event.
+  // Does NOT apply the edit to SOUL.md — that's deferred (operator UI).
+  if (urlPath === '/api/soul-proposal' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const npcName = String(payload.npcName || '').trim().slice(0, 40);
+      if (!npcName) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'npcName is required' }));
+        return;
+      }
+      const v = soulReflection.validateProposal(payload.proposal);
+      if (!v.ok) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: v.error }));
+        return;
+      }
+
+      const file = _readSoulProposalsFile();
+      const ymd = _ymdToday();
+      const todayCount = _countProposalsToday(file.proposals, npcName, ymd);
+      if (todayCount >= SOUL_PROPOSAL_DAILY_CAP) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `${npcName} already has ${todayCount} proposal(s) for ${ymd} (cap: ${SOUL_PROPOSAL_DAILY_CAP}/day). Try again tomorrow.`,
+          cap: SOUL_PROPOSAL_DAILY_CAP,
+        }));
+        return;
+      }
+
+      const record = soulReflection.serializeProposal({
+        npcName,
+        proposal: payload.proposal,
+        reflectionInput: payload.reflectionInput,
+      });
+
+      file.proposals.push(record);
+      // Drop oldest if we exceed the total cap.
+      if (file.proposals.length > SOUL_PROPOSALS_CAP) {
+        file.proposals.splice(0, file.proposals.length - SOUL_PROPOSALS_CAP);
+      }
+      try {
+        _writeSoulProposalsFile(file);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist proposal: ' + err.message }));
+        return;
+      }
+      try {
+        worldState.pushEvent('proposed-soul-edit', `${npcName} proposed a SOUL.md edit: ${record.proposal.summary}`);
+      } catch (_) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, id: record.id }));
+    });
+    return;
+  }
+
+  // GET /api/soul-proposals?npc=Name — returns persisted proposals.
+  // Lazy-creates the file (returns { proposals: [] } if absent).
+  if (urlPath === '/api/soul-proposals' && req.method === 'GET') {
+    const file = _readSoulProposalsFile();
+    const url = new URL(req.url, 'http://x');
+    const npcFilter = url.searchParams.get('npc');
+    let proposals = file.proposals;
+    if (npcFilter) {
+      proposals = proposals.filter(p => p && p.npcName === npcFilter);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ proposals }));
+    return;
+  }
+
+  // POST /api/soul-proposal/approve — body { id, decision: 'approved'|'rejected', note? }
+  // Updates the proposal status in place. Does NOT touch SOUL.md (deferred).
+  if (urlPath === '/api/soul-proposal/approve' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const id = String(payload.id || '').trim();
+      const decision = String(payload.decision || '').trim();
+      const note = payload.note ? String(payload.note).slice(0, 400) : null;
+      if (!id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'id is required' }));
+        return;
+      }
+      if (decision !== 'approved' && decision !== 'rejected') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: "decision must be 'approved' or 'rejected'" }));
+        return;
+      }
+
+      const file = _readSoulProposalsFile();
+      const idx = file.proposals.findIndex(p => p && p.id === id);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `proposal not found: ${id}` }));
+        return;
+      }
+      file.proposals[idx].status = decision;
+      file.proposals[idx].review = {
+        decision,
+        note,
+        reviewedAt: new Date().toISOString(),
+      };
+      try {
+        _writeSoulProposalsFile(file);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist decision: ' + err.message }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, proposal: file.proposals[idx] }));
+    });
     return;
   }
 
