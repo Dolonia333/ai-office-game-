@@ -52,24 +52,28 @@ Called by the server when it receives an `npc_think` message. Returns a decision
 
 Assembled in order, each section only shown if it has content:
 
-1. `personality` — full SOUL.md. Sets character voice and role.
+1. `personality` — full SOUL.md. Sets character voice and role. Reloaded via `npcBrains.reloadSoul(name)` after an approved SOUL proposal is applied.
 2. `## Hierarchy Rules` — who the NPC reports to / manages, tied to the `_hierarchy` org chart.
 3. `## Your Teams` — team memberships derived from hierarchy.
 4. `## Your Long-Term Goal` — role-seeded goal from `_getGoalContext()`. Persists across think cycles.
 5. `## Today's Priorities` — 3 role-driven priorities from `getDailyPlan()`, regenerated once per calendar day.
 6. `## Skills & Growth` — aggregated `[SKILL:*:+1]` tags from memory (top 8).
 7. `## Your Coworkers` — coworker awareness list.
-8. `## What Others Are Doing` — theory of mind: 4 other NPCs' most recent action + current task.
-9. `## Recent Office Events` — last 4 broadcast events (meetings called, work shipped, people stuck).
-10. `## Open Tasks (anyone can claim)` — unclaimed items from the shared task board.
-11. `## Your Memories` — last 1200 chars of MEMORY.md, sanitized.
-12. `## Recent Conversations` — last 10 `{from, text}` messages.
-13. `## Task Continuity` — last decision + current task.
-14. `## Current Office State` — description passed in from the client (who's where, what just happened).
-15. `## Nearby` — 5 closest furniture items with distance.
-16. `## Your Natural Hangout` — role-based room affinity (Abby→manager office, Lucy→reception, etc.).
-17. `## Energy Level` — fatigue hint after 2+ consecutive work cycles.
-18. Hierarchy enforcement reminders, think-about prompts, action-balance weighting.
+8. `## Office Manners` — 6 social rules: acknowledge greetings, don't interrupt busy peers, vary check-ins, brevity, greet the CEO if nearby. See [SOCIAL_BEHAVIOR.md](SOCIAL_BEHAVIOR.md).
+9. `## Current State (live)` — `worldState.renderContextBlock(name)`: self state + room + adjacent rooms + desk neighbors + nearby NPCs with social tags (state, busy, convoy, mood, last-spoke gap, peer-fatigue), office occupancy, active threats, background jobs, meeting in progress, player presence, plus three social-focus lines that conditionally surface — `lastAddressed` (peer or player just spoke to you), self-fatigue (≥45 min at desk), stuck-loop (3+ repeats of the same topic with a peer), thread-continuity (3+ raises of the same topic today). See [AWARENESS.md](AWARENESS.md) + [SOCIAL_BEHAVIOR.md](SOCIAL_BEHAVIOR.md).
+10. `## Situational` — office time-of-day + self-repetition hint (your last 2 messages so you don't repeat them).
+11. `## Direct Messages To You (since last think)` — drained from `agentBus` inbox.
+12. `## What Others Are Doing` — theory of mind: 4 other NPCs' most recent action + current task.
+13. `## Recent Office Events` — last 4 broadcast events (meetings called, work shipped, people stuck, furniture placed, proposals filed).
+14. `## Open Tasks (anyone can claim)` — unclaimed items from the shared task board.
+15. `## Your Memories` — last 1200 chars of MEMORY.md, sanitized.
+16. `## Recent Conversations` — last 10 `{from, text}` messages.
+17. `## Task Continuity` — last decision + current task.
+18. `## Current Office State` — description passed in from the client (who's where, what just happened).
+19. `## Nearby` — 5 closest furniture items with distance.
+20. `## Your Natural Hangout` — role-based room affinity (Abby→manager office, Lucy→reception, etc.).
+21. `## Energy Level` — fatigue hint after 2+ consecutive work cycles (complementary to the wall-clock fatigue line in §9).
+22. Hierarchy enforcement reminders, think-about prompts, action-balance weighting, plus the brain-driven action vocabulary including `placeFurniture` / `removeFurniture` / `requestAnimation` / `requestCapability` / `thinkAloud` (see [ACTIONS.md](ACTIONS.md)).
 
 ### The user prompt
 

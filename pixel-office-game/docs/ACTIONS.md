@@ -39,6 +39,29 @@ no-op rather than crash.
 | `checkBookshelf` | `(npcKey, shelfId)` | Walk to a bookshelf, play "searching" animation. |
 | `reportToCEO` | `(npcKey)` | Walk to the player. Used after delegation chains finish ("here's what Bob found"). |
 | `emote` | `(npcKey, type)` | Display a small emoji bubble (`!`, `?`, `💡`, `❗`, …). Lighter than `speak`. |
+| `think` | `(npcKey, text)` | Show a **thought-cloud** bubble (not a speech bubble). Backs the `thinkAloud` brain action — internal monologue that does NOT pin nearby NPCs and does NOT trigger TTS. See [SOCIAL_BEHAVIOR.md](SOCIAL_BEHAVIOR.md). |
+
+### Brain-driven action tags
+
+Actions above are the JS API the manager calls. Below are the `[ACTION:*]` tags
+the NPC's LLM brain emits in its response — the manager parses them and routes
+to the right JS call (or proposal queue endpoint).
+
+| Tag | Routes to | Notes |
+|---|---|---|
+| `[ACTION:useComputer]` | `useComputer` | Sit at assigned desk. |
+| `[ACTION:goToBreakroom]` | `goToBreakroom` | — |
+| `[ACTION:goToRoom:<key>]` | `goToRoom` | `open_office` / `conference` / `breakroom` / `manager_office` / `storage` / `reception` |
+| `[ACTION:speakTo:<name>:<msg>]` | `speakTo` + reply pipeline | Triggers **conversation focus** on the recipient — they get pinned ~8s and their next think prompt sees `lastAddressed`. See [SOCIAL_BEHAVIOR.md](SOCIAL_BEHAVIOR.md). |
+| `[ACTION:callMeeting:<n1,n2,n3>]` | `callMeeting` | — |
+| `[ACTION:checkBookshelf]` | `checkBookshelf` | — |
+| `[ACTION:standUp]` | `standUp` | — |
+| `[ACTION:thinkAloud:<text>]` | `think` (thought bubble) | Silent internal monologue. No pin, no TTS, no peer-side wakeup. |
+| `[ACTION:placeFurniture:<prefab>:<x>:<y>:<reason>]` | `POST /api/place-furniture` → `furniture_placed` WS broadcast → live sprite spawn | 15-prefab whitelist + bounds check. 3/NPC/day budget. See roadmap Stage 1. |
+| `[ACTION:removeFurniture:<instanceId>]` | `POST /api/remove-furniture` → `furniture_removed` broadcast | Only `npc_*` instanceIds; scene furniture is read-only. |
+| `[ACTION:requestAnimation:<animName>:<description>]` | `POST /api/request-animation` (proposal queue, no live spawn) | Operator-gated; 2/NPC/day. See [ANIMATION_FORGE.md](ANIMATION_FORGE.md). |
+| `[ACTION:requestCapability:<verbName>:<description>]` | `POST /api/request-capability` (proposal queue) | Operator-gated; 1/NPC/day. See [CAPABILITY_PROPOSALS.md](CAPABILITY_PROPOSALS.md). |
+| `[DELEGATE:<name>:<reason>]` | Inter-NPC delegation routing | — |
 
 ### Side effects every action shares
 

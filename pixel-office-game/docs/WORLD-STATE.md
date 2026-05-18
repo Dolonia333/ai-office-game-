@@ -11,7 +11,33 @@
 | [`src/world-state.js`](../src/world-state.js) | Single in-memory object every subsystem reads from / writes to |
 | [`src/agent-bus.js`](../src/agent-bus.js) | Pub/sub for direct NPC↔NPC messages — no CTO brokering |
 | [`src/voice-gate.js`](../src/voice-gate.js) | Browser-side presence flag + pluggable TTS (default: SpeechSynthesis) |
-| `/api/world-state`, `/api/presence`, `/api/task-update`, `/api/agent-bus` | HTTP entry points |
+| [`src/sentiment.js`](../src/sentiment.js) | Cheap keyword-regex mood classifier; `worldState.recordSelfMessage` calls it and stamps `lastMood` on the NPC |
+| [`src/animation-forge.js`](../src/animation-forge.js) | Validates animation proposals; future home of the composition / AI-gen / local-SD renderers |
+| [`src/soul-reflection.js`](../src/soul-reflection.js) | Builds the SOUL-revision reflection prompt + applies approved proposals to disk |
+| [`src/capability-proposal.js`](../src/capability-proposal.js) | Validates capability proposals (new action verbs NPCs want) |
+| [`src/proposals-panel.js`](../src/proposals-panel.js) | Browser-side operator review UI (bottom-right chip + cards) |
+| Core HTTP — `/api/world-state`, `/api/presence`, `/api/task-update`, `/api/agent-bus` | Existing entry points |
+| Furniture (Stage 1) — `/api/place-furniture`, `/api/remove-furniture` | NPC live mutation; broadcasts `furniture_placed` / `furniture_removed` on `/agent-ws` |
+| Animation (Stage 2 p1) — `/api/request-animation`, `/api/animation-proposals`, `/api/animation-proposal/approve` | Operator-gated proposal queue |
+| SOUL (Stage 3) — `/api/soul-proposal{,s,/approve,/apply}` | Reflection → approval → write-to-SOUL.md + SOUL.history.md |
+| Capability (Stage 4 p1) — `/api/request-capability`, `/api/capability-proposals`, `/api/capability-proposal/approve` | Operator-gated; manual implementation step deferred |
+| Aggregator — `/api/proposals` | Unified feed of all three queues for the operator UI; supports `?status=…&kind=…` |
+
+**WorldState helpers added this round** (see `src/world-state.js`):
+
+| Helper | What it does |
+|---|---|
+| `getDeskContext(name)` | Returns my desk + 2 nearest peer desks (for "tap on the shoulder" reasoning) |
+| `roomOccupancy()` | `{ roomName: count }` density map |
+| `recordContact(a, b)` + `minutesSinceContact(a, b)` | Per-pair last-spoke timer; surfaces "last spoke 22m ago" |
+| `recordSelfMessage(name, text)` + `recentSimilarMessage(...)` | Per-NPC self-repetition guard, also stamps `lastMood` via `sentiment.classify` |
+| `recordExchange(from, to, text)` + `stuckLoop(a, b)` | Cross-NPC stuck-loop detection (3+ near-duplicates between a pair) |
+| `topicCount(from, to, text)` | "This is the 3rd time today" — directional same-topic count |
+| `recordDeskStart(name)` + `recordBreak(name)` + `minutesAtDesk(name)` + `minutesSinceBreak(name)` | Fatigue tracking; driven off office-state status transitions |
+
+The on-NPC `lastAddressed: { by, text, at }` field is the conversation-focus
+hook — `agent-actions.speakTo` writes it via WS, peer brains pick it up on
+their next think. Independent of `zionPresent` (which gates voice only).
 
 The architecture in one diagram:
 

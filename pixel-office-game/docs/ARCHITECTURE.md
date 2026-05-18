@@ -63,6 +63,7 @@ A Phaser pixel-art office where 16 NPCs represent AI agents. Each NPC has its ow
 | [src/cofounder-agent.js](../src/cofounder-agent.js) (client side receiver) | Receives global `agent_commands` broadcasts from the CTO director. |
 | [src/security-monitor.js](../src/security-monitor.js) | Client-side WebSocket hub for `/security-ws`. Translates server threat events into DOM events consumed by `RobberController`. |
 | [src/robber-controller.js](../src/robber-controller.js) | Spawns, animates, and despawns robber NPCs based on threat category. Max 5 simultaneous. |
+| [src/proposals-panel.js](../src/proposals-panel.js) | Bottom-right operator chip + card panel. Hits `/api/proposals`, shows pending animation / SOUL / capability proposals, sends approve/reject/apply POSTs. |
 
 ### Server (Node.js)
 
@@ -70,17 +71,27 @@ A Phaser pixel-art office where 16 NPCs represent AI agents. Each NPC has its ow
 |---|---|
 | [server.js](../server.js) | HTTP + WebSocket server. Serves the static game, routes `npc_*` messages to `NpcBrainManager`, exposes `/security-ws`, `/security-test`. |
 | [src/npc-brains.js](../src/npc-brains.js) | The brain manager. Loads each NPC's `SOUL.md`/`MEMORY.md`, queues LM Studio requests sequentially, runs `think()` and `getResponse()`. Implements the intelligence layer: goals, daily plans, theory of mind, outcome tagging, event feed, shared task board. |
-| [src/cofounder-agent.js](../src/cofounder-agent.js) (server side) | "Director" agent. Every 15-30s observes office state, picks the most interesting thing to make happen, and broadcasts commands to the game client. State-reactive: flags stuck agents as priority, pulls from the event feed. |
+| [src/cofounder-agent.js](../src/cofounder-agent.js) (server side) | "Director" agent. Every 15-30s observes office state, picks the most interesting thing to make happen, and broadcasts commands to the game client. State-reactive: flags stuck agents as priority, pulls from the event feed. Mirrors office-state into `worldState` and feeds fatigue tracking off status transitions. |
 | [security-monitor-server.js](../security-monitor-server.js) | Security monitor. Polls system/network/files for threats, and on Linux, runs tshark + scan-detector feeders. Broadcasts threat events to all connected `/security-ws` clients. |
 | [src/gateway-bridge.js](../src/gateway-bridge.js) | Optional bridge to an external OpenClaw gateway on port 18789. |
+| [src/world-state.js](../src/world-state.js) | Single in-memory source of truth — NPC positions/state, velocities, fatigue timers, last-addressed, exchange history, sentiment, stuck-loops, threats, tasks, environment. Pub/sub for broadcasts. |
+| [src/sentiment.js](../src/sentiment.js) | Cheap keyword-regex mood classifier (`happy`/`frustrated`/`tired`/`excited`/`anxious`). Called from `recordSelfMessage`; surfaces as peer tags in `Nearby:`. |
+| [src/animation-forge.js](../src/animation-forge.js) | Validates `requestAnimation` proposals; future home of the composition / AI-gen / local-SD renderers (currently API-surface-only stubs). |
+| [src/soul-reflection.js](../src/soul-reflection.js) | Builds the SOUL-revision prompt + applies approved proposals to `npcs/<n>/SOUL.md` and appends an audit entry to `SOUL.history.md`. |
+| [src/capability-proposal.js](../src/capability-proposal.js) | Validates `requestCapability` proposals (new action verbs); operator must still implement them by hand in `src/agent-actions.js`. |
 
 ### Data on disk
 
 | Path | Purpose |
 |---|---|
-| `npcs/<name>/SOUL.md` | Per-NPC personality. Loaded once at server start. |
+| `npcs/<name>/SOUL.md` | Per-NPC personality. Loaded once at server start; `reloadSoul(name)` refreshes after an approved SOUL proposal is applied. |
+| `npcs/<name>/SOUL.history.md` | Audit log of every applied SOUL proposal — `## <ISO> — proposal:<id>` entries with diffs, approval/apply timestamps. Lazy-created on first apply. |
 | `npcs/<name>/MEMORY.md` | Runtime memory. Appended after each `think()` with the enriched save entry. Capped at 200 lines. Contains `[TOPIC:*]`, `[SKILL:*:+1]`, `[OUTCOME:*]` tags. |
 | `~/.openclaw/openclaw.json` | Optional remote API keys (Anthropic, Google, xAI, Moonshot). LM Studio is always available as fallback. |
+| `layouts/office-layout.json` | Persistent furniture layout. NPC `placeFurniture` calls append; client reads on boot AND live-spawns from the `furniture_placed` WS broadcast. |
+| `data/animation-proposals.json` | NPC-requested animation queue (lazy-created, gitignored). |
+| `data/soul-proposals.json` | NPC self-reflection queue (lazy-created, gitignored). |
+| `data/capability-proposals.json` | NPC capability-request queue (lazy-created, gitignored). |
 
 ## The two decision loops
 
