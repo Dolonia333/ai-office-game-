@@ -12,6 +12,8 @@ const {
   buildReflectionPrompt,
   validateProposal,
   serializeProposal,
+  applyProposalToSoul,
+  serializeHistoryEntry,
   SUMMARY_MAX_LEN,
   FIELD_MAX_LEN,
 } = require('../src/soul-reflection');
@@ -187,5 +189,147 @@ describe('soul-reflection.serializeProposal', () => {
     assert.equal(rec.proposal.dropFromSoul, null);
     assert.equal(rec.proposal.summary, 'something');
     assert.equal(rec.reflectionPreview, null);
+  });
+});
+
+describe('soul-reflection.applyProposalToSoul', () => {
+  const baseSoul = [
+    '# Abby — CTO',
+    '',
+    '## Personality',
+    'Calm, decisive, anxious in standups.',
+    '',
+    '## Values',
+    '- Ship every Friday.',
+    '- Trust the team.',
+    '',
+  ].join('\n');
+
+  function mkRecord(proposalOver = {}, id = 'proposal_test_1') {
+    return {
+      id,
+      npcName: 'Abby',
+      status: 'approved',
+      proposal: Object.assign({
+        addToSoul: 'I review PRs more than I plan sprints.',
+        dropFromSoul: null,
+        summary: 'review > planning',
+        confidence: 0.7,
+      }, proposalOver),
+    };
+  }
+
+  it('appends addToSoul as a new paragraph with a dated marker comment', () => {
+    const { next, warnings } = applyProposalToSoul({
+      soulText: baseSoul,
+      proposal: mkRecord(),
+    });
+    assert.equal(warnings.length, 0);
+    assert.match(next, /I review PRs more than I plan sprints\./);
+    assert.match(next, /<!-- applied \d{4}-\d{2}-\d{2} from proposal:proposal_test_1 -->/);
+    // Old content preserved.
+    assert.match(next, /Ship every Friday\./);
+    // Ends with a single trailing newline (no extra whitespace).
+    assert.ok(next.endsWith('\n'));
+    assert.ok(!next.endsWith('\n\n'));
+  });
+
+  it('removes the matching dropFromSoul line', () => {
+    const { next, warnings } = applyProposalToSoul({
+      soulText: baseSoul,
+      proposal: mkRecord({
+        addToSoul: null,
+        dropFromSoul: 'Ship every Friday',
+      }),
+    });
+    assert.equal(warnings.length, 0);
+    assert.ok(!/Ship every Friday/.test(next), 'drop line should be gone');
+    // Other content preserved.
+    assert.match(next, /Calm, decisive/);
+    assert.match(next, /Trust the team/);
+  });
+
+  it('returns a warning when dropFromSoul text is not found', () => {
+    const { next, warnings } = applyProposalToSoul({
+      soulText: baseSoul,
+      proposal: mkRecord({
+        addToSoul: 'something new',
+        dropFromSoul: 'this line does not exist anywhere',
+      }),
+    });
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /dropFromSoul/);
+    // Add still happens even if drop fails.
+    assert.match(next, /something new/);
+  });
+
+  it('only removes the FIRST matching line', () => {
+    const soul = 'A\nrepeating line\nB\nrepeating line\nC\n';
+    const { next } = applyProposalToSoul({
+      soulText: soul,
+      proposal: mkRecord({
+        addToSoul: null,
+        dropFromSoul: 'repeating line',
+      }),
+    });
+    const matches = next.match(/repeating line/g) || [];
+    assert.equal(matches.length, 1);
+  });
+
+  it('handles both add and drop in one apply', () => {
+    const { next, warnings } = applyProposalToSoul({
+      soulText: baseSoul,
+      proposal: mkRecord({
+        addToSoul: 'I delegate sprint planning to Alex.',
+        dropFromSoul: 'Ship every Friday',
+      }),
+    });
+    assert.equal(warnings.length, 0);
+    assert.ok(!/Ship every Friday/.test(next));
+    assert.match(next, /I delegate sprint planning to Alex\./);
+  });
+});
+
+describe('soul-reflection.serializeHistoryEntry', () => {
+  it('produces a markdown entry with all expected fields', () => {
+    const entry = serializeHistoryEntry({
+      proposal: {
+        id: 'proposal_history_1',
+        npcName: 'Abby',
+        proposal: {
+          addToSoul: 'I delegate planning.',
+          dropFromSoul: 'anxious in standups',
+          summary: 'shifted role.',
+          confidence: 0.8,
+        },
+        review: { reviewedAt: '2026-05-18T01:00:00.000Z' },
+      },
+      applied: { at: '2026-05-18T02:00:00.000Z' },
+    });
+    assert.match(entry, /## 2026-05-18T02:00:00\.000Z — proposal:proposal_history_1/);
+    assert.match(entry, /- by: Abby/);
+    assert.match(entry, /- summary: shifted role\./);
+    assert.match(entry, /- confidence: 0\.8/);
+    assert.match(entry, /- addToSoul: "I delegate planning\."/);
+    assert.match(entry, /- dropFromSoul: "anxious in standups"/);
+    assert.match(entry, /- approvedAt: 2026-05-18T01:00:00\.000Z/);
+    assert.match(entry, /- appliedAt: 2026-05-18T02:00:00\.000Z/);
+  });
+
+  it('renders null fields as literal "null"', () => {
+    const entry = serializeHistoryEntry({
+      proposal: {
+        id: 'p_null',
+        npcName: 'Bob',
+        proposal: {
+          addToSoul: 'something',
+          dropFromSoul: null,
+          summary: 's',
+          confidence: 0.5,
+        },
+      },
+      applied: { at: '2026-05-18T00:00:00.000Z' },
+    });
+    assert.match(entry, /- dropFromSoul: null/);
   });
 });

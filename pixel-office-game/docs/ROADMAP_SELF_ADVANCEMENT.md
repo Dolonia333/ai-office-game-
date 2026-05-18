@@ -8,7 +8,7 @@
 Not a build target for any single sprint. Each stage is meaningful on
 its own and can ship independently.
 
-## What just shipped (stages 0 + 1 + 3 steps 1-2)
+## What just shipped (stages 0 + 1 + 3 steps 1-4)
 
 - **Awareness layer expanded** — room topology, convoy detection, desk
   geography, busy state, room occupancy, per-peer last-contact,
@@ -49,8 +49,19 @@ its own and can ship independently.
   dropFromSoul, summary, confidence }` to `/api/soul-proposal`. Cap:
   1 proposal/NPC/UTC-day, 50 total. `/api/soul-proposals[?npc=Name]`
   reads the queue. `/api/soul-proposal/approve` flips `status` —
-  **never** writes to SOUL.md (application is deferred, see Stage 3
-  step 3). Full details in [SOUL_REFLECTION.md](SOUL_REFLECTION.md).
+  **never** writes to SOUL.md. Full details in
+  [SOUL_REFLECTION.md](SOUL_REFLECTION.md).
+- **SOUL.md application + version history (Stage 3 steps 3-4)** —
+  `/api/soul-proposal/apply` consumes an *approved* proposal id, writes
+  the edit into `npcs/<name>/SOUL.md` (with a dated `<!-- applied ...
+  from proposal:<id> -->` marker on the appended paragraph), appends a
+  structured entry to `npcs/<name>/SOUL.history.md` (lazy-created), and
+  flips the proposal to `status: 'applied'`. Re-applying the same id is
+  idempotent. The endpoint refuses anything that isn't already approved
+  — the operator gate stays in front. `npcBrains.reloadSoul(name)` is
+  called right after the write so the next `think()` sees the new
+  personality without a restart. Emits `applied-soul-edit` on the
+  worldState event feed.
 
 ## Stage 2 — Custom sprite animations (1 week)
 
@@ -108,15 +119,20 @@ Concrete steps:
    50 total (oldest dropped). `proposed-soul-edit` is pushed onto the
    worldState event feed. Approve / reject sets `status` in place;
    neither writes to SOUL.md.
-3. **Application — DEFERRED.** Accepted edits should get appended to
-   `npcs/<name>/SOUL.md` with a date stamp + the reflection that
-   produced them. Deliberately held until an operator review UI exists
-   to look at the diff before approving — the approval gate matters
-   more than throughput here, and a CLI-only flow invites a "rubber
-   stamp" pattern that defeats the gate.
-4. **Versioning — DEFERRED.** `npcs/<name>/SOUL.history.md` recording
-   the diff over time. Pairs with step 3 — useless without an
-   application path to record.
+3. **Application — SHIPPED.** `POST /api/soul-proposal/apply { id }`
+   takes an *approved* proposal and writes `proposal.addToSoul` to the
+   target `npcs/<name>/SOUL.md` (prefixed with a dated
+   `<!-- applied YYYY-MM-DD from proposal:<id> -->` marker), removes
+   the first line matching `proposal.dropFromSoul` (warning, not error,
+   if not found), flips the proposal to `status: 'applied'`, emits
+   `applied-soul-edit`, and refreshes the in-memory soul cache via
+   `npcBrains.reloadSoul`. Pending or rejected proposals are refused
+   (400); the operator approval gate stays in front of every write.
+4. **Versioning — SHIPPED.** `npcs/<name>/SOUL.history.md` is appended
+   (lazy-created) with a structured entry per application:
+   `## <ISO> — proposal:<id>` followed by `by`, `summary`, `confidence`,
+   `addToSoul`, `dropFromSoul`, `approvedAt`, `appliedAt`. Provides the
+   immutable audit trail.
 
 ### Risk: identity drift
 
