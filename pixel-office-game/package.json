@@ -4,7 +4,7 @@
   "description": "Real-time visual observability layer for AI agents — a pixel-art office where every NPC is an LLM-backed agent.",
   "main": "server.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "start": "node server.js",
     "build:assets": "node scripts/run-pipeline.js",
     "build:assets:dry": "node scripts/run-pipeline.js --dry-run"

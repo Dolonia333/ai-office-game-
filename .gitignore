@@ -3,6 +3,14 @@ tmpclaude-*-cwd
 
 # Claude settings with local secrets
 .claude/settings.local.json
+.claude/worktrees/
+
+# Denizen runtime data (lazy-created by the server; committing causes
+# constant CRLF/content drift on Windows)
+pixel-office-game/data/animation-proposals.json
+pixel-office-game/data/soul-proposals.json
+pixel-office-game/data/capability-proposals.json
+pixel-office-game/data/assistant-profile.json
 
 # Embedded git repos (tracked separately)
 openclaw/
