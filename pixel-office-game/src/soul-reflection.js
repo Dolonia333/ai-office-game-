@@ -165,10 +165,114 @@ function serializeProposal({ npcName, proposal, reflectionInput, idOverride } = 
   };
 }
 
+/**
+ * Apply an approved proposal to a SOUL.md text blob. Pure: no file IO.
+ *
+ * Behavior:
+ *   - If proposal.dropFromSoul is a non-empty string, the FIRST line in
+ *     soulText whose trimmed content contains the (trimmed) drop text is
+ *     removed. We compare with `includes` so the LLM doesn't have to
+ *     reproduce surrounding whitespace, list bullets, or punctuation byte
+ *     for byte. If no line matches, we record a warning instead of
+ *     throwing — the operator already approved the proposal and a missing
+ *     drop is usually because the wording shifted, not because the
+ *     proposal is invalid.
+ *   - If proposal.addToSoul is a non-empty string, it is appended as a
+ *     new paragraph at the end of soulText, prefixed with an HTML comment
+ *     marker `<!-- applied YYYY-MM-DD from proposal:<id> -->` so the
+ *     provenance is auditable inline.
+ *   - Returns { next, warnings }. `next` always ends with exactly one
+ *     trailing newline.
+ *
+ * Caller (server.js endpoint) is responsible for: reading the file, writing
+ * the result back, appending to SOUL.history.md, mutating the proposal
+ * record, broadcasting the event.
+ */
+function applyProposalToSoul({ soulText, proposal } = {}) {
+  const warnings = [];
+  const id = (proposal && proposal.id) ? String(proposal.id) : 'unknown';
+  const body = (proposal && proposal.proposal) || {};
+  const addText = typeof body.addToSoul === 'string' ? body.addToSoul.trim() : '';
+  const dropText = typeof body.dropFromSoul === 'string' ? body.dropFromSoul.trim() : '';
+
+  let text = typeof soulText === 'string' ? soulText : '';
+  // Normalize trailing whitespace once so our append/strip math is consistent.
+  text = text.replace(/\s+$/g, '');
+
+  if (dropText) {
+    const lines = text.split('\n');
+    let removedAt = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().includes(dropText)) {
+        removedAt = i;
+        break;
+      }
+    }
+    if (removedAt === -1) {
+      warnings.push(`dropFromSoul text not found: ${JSON.stringify(dropText.slice(0, 80))}`);
+    } else {
+      lines.splice(removedAt, 1);
+      text = lines.join('\n').replace(/\s+$/g, '');
+    }
+  }
+
+  if (addText) {
+    const ymd = new Date().toISOString().slice(0, 10);
+    const marker = `<!-- applied ${ymd} from proposal:${id} -->`;
+    // Blank line, marker, newline, the appended paragraph.
+    text = `${text}\n\n${marker}\n${addText}`;
+  }
+
+  // Always end with exactly one trailing newline so concatenation downstream stays clean.
+  return { next: text + '\n', warnings };
+}
+
+/**
+ * Build the SOUL.history.md entry for an applied proposal. Pure: no file IO.
+ *
+ * Shape (markdown, designed to be both human-readable and re-parseable):
+ *
+ *   ## <ISO timestamp> — proposal:<id>
+ *   - by: <npcName>
+ *   - summary: <proposal.summary>
+ *   - confidence: <proposal.confidence>
+ *   - addToSoul: "<text or null>"
+ *   - dropFromSoul: "<text or null>"
+ *   - approvedAt: <review.reviewedAt or now>
+ *   - appliedAt: <now>
+ */
+function serializeHistoryEntry({ proposal, applied } = {}) {
+  const p = proposal || {};
+  const body = p.proposal || {};
+  const review = p.review || {};
+  const appliedAt = (applied && applied.at) || new Date().toISOString();
+  const approvedAt = review.reviewedAt || appliedAt;
+  const id = p.id || 'unknown';
+  const npcName = p.npcName || 'unknown';
+  const summary = typeof body.summary === 'string' ? body.summary : '';
+  const confidence = typeof body.confidence === 'number' ? body.confidence : 0;
+  const addStr = typeof body.addToSoul === 'string' ? JSON.stringify(body.addToSoul) : 'null';
+  const dropStr = typeof body.dropFromSoul === 'string' ? JSON.stringify(body.dropFromSoul) : 'null';
+
+  return [
+    `## ${appliedAt} — proposal:${id}`,
+    `- by: ${npcName}`,
+    `- summary: ${summary}`,
+    `- confidence: ${confidence}`,
+    `- addToSoul: ${addStr}`,
+    `- dropFromSoul: ${dropStr}`,
+    `- approvedAt: ${approvedAt}`,
+    `- appliedAt: ${appliedAt}`,
+    '',
+  ].join('\n');
+}
+
 module.exports = {
   buildReflectionPrompt,
   validateProposal,
   serializeProposal,
+  applyProposalToSoul,
+  serializeHistoryEntry,
   SUMMARY_MAX_LEN,
   FIELD_MAX_LEN,
 };

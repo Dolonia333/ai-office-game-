@@ -13,6 +13,7 @@ const ExternalSink = require('./src/external-sink');
 const elevenLabs = require('./src/elevenlabs-tts');
 const animationForge = require('./src/animation-forge');
 const soulReflection = require('./src/soul-reflection');
+const npcRoster = require('./src/npc-roster');
 
 // Voice map (per-NPC ElevenLabs voice IDs). Loaded once at startup;
 // edit data/voice-map.json + restart to change. Missing file → empty map
@@ -206,7 +207,10 @@ function _consumeAnimationBudget(by) {
 // deliberately do NOT auto-apply edits — the identity-drift risk in
 // docs/ROADMAP_SELF_ADVANCEMENT.md is real, and the approval gate is
 // non-negotiable for this stage.
-const SOUL_PROPOSALS_PATH = path.join(__dirname, 'data', 'soul-proposals.json');
+// Tests override SOUL_PROPOSALS_PATH so parallel test processes don't
+// stomp on each other through a shared file (the read-modify-write isn't
+// atomic across processes). Defaults to the on-disk dev location.
+const SOUL_PROPOSALS_PATH = process.env.SOUL_PROPOSALS_PATH || path.join(__dirname, 'data', 'soul-proposals.json');
 const SOUL_PROPOSALS_CAP = 50; // total stored proposals; oldest dropped when over
 const SOUL_PROPOSAL_DAILY_CAP = 1; // per NPC per calendar day
 
@@ -238,6 +242,16 @@ function _writeSoulProposalsFile(obj) {
 
 function _countProposalsToday(proposals, npcName, ymd) {
   return proposals.filter(p => p && p.npcName === npcName && typeof p.createdAt === 'string' && p.createdAt.startsWith(ymd)).length;
+}
+
+// Resolve an NPC display name (e.g. "Abby", "Marcus") to its on-disk folder
+// (e.g. "abby", "conference_man"). Falls back to the lowercased name if no
+// roster entry matches — keeps test-only or future NPCs working.
+function _resolveNpcFolder(npcName) {
+  if (!npcName) return null;
+  const entry = npcRoster.entries.find(e => e.display === npcName);
+  if (entry) return entry.folder;
+  return String(npcName).toLowerCase().replace(/[^a-z0-9_]/g, '_');
 }
 
 // Recent NPC-brain errors, surfaced through GET /api/health so the client
@@ -815,6 +829,141 @@ const server = http.createServer((req, res) => {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, proposal: file.proposals[idx] }));
+    });
+    return;
+  }
+
+  // POST /api/soul-proposal/apply — body { id }
+  // Roadmap Stage 3 steps 3 + 4. Writes the approved proposal to the
+  // target NPC's SOUL.md and appends a structured entry to SOUL.history.md.
+  // Idempotent: re-applying the same id returns the existing receipt.
+  // Operator gate: only proposals with status === 'approved' may be applied.
+  if (urlPath === '/api/soul-proposal/apply' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const id = String(payload.id || '').trim();
+      if (!id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'id is required' }));
+        return;
+      }
+
+      const file = _readSoulProposalsFile();
+      const idx = file.proposals.findIndex(p => p && p.id === id);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `proposal not found: ${id}` }));
+        return;
+      }
+      const record = file.proposals[idx];
+
+      // Already applied — return the existing receipt with 200 so callers
+      // can treat apply as idempotent. The 400 in the spec is for "tried to
+      // apply an already-applied proposal expecting a fresh write"; in
+      // practice returning the receipt with a clear status code is friendlier.
+      // We pick 200 + `alreadyApplied: true` so the front-end can branch
+      // without parsing error strings.
+      if (record.status === 'applied') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, alreadyApplied: true, proposal: record }));
+        return;
+      }
+
+      if (record.status !== 'approved') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `proposal must be approved before it can be applied (current status: ${record.status})`,
+        }));
+        return;
+      }
+
+      const folder = _resolveNpcFolder(record.npcName);
+      const soulPath = path.join(__dirname, 'npcs', folder, 'SOUL.md');
+      const historyPath = path.join(__dirname, 'npcs', folder, 'SOUL.history.md');
+
+      let soulText;
+      try {
+        soulText = fs.readFileSync(soulPath, 'utf8');
+      } catch (err) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `SOUL.md not found for ${record.npcName} at npcs/${folder}/SOUL.md` }));
+        return;
+      }
+
+      const { next, warnings } = soulReflection.applyProposalToSoul({
+        soulText,
+        proposal: record,
+      });
+      if (warnings && warnings.length) {
+        for (const w of warnings) {
+          console.warn(`[soul-apply] ${record.npcName} ${id}: ${w}`);
+        }
+      }
+
+      const appliedAt = new Date().toISOString();
+      const historyEntry = soulReflection.serializeHistoryEntry({
+        proposal: record,
+        applied: { at: appliedAt },
+      });
+
+      try {
+        fs.writeFileSync(soulPath, next, 'utf8');
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to write SOUL.md: ' + err.message }));
+        return;
+      }
+
+      try {
+        // Append (create with header if missing) so multiple applications stack.
+        let historyHeader = '';
+        if (!fs.existsSync(historyPath)) {
+          historyHeader = `# ${record.npcName} — SOUL.md Revision History\n\n`;
+        }
+        fs.appendFileSync(historyPath, historyHeader + historyEntry, 'utf8');
+      } catch (err) {
+        // Don't roll the SOUL.md back — the apply already happened. Just
+        // surface the history-write failure so the operator knows.
+        console.warn(`[soul-apply] failed to write SOUL.history.md for ${record.npcName}: ${err.message}`);
+      }
+
+      record.status = 'applied';
+      record.applied = {
+        at: appliedAt,
+        soulPath: path.relative(__dirname, soulPath).replace(/\\/g, '/'),
+        historyPath: path.relative(__dirname, historyPath).replace(/\\/g, '/'),
+        warnings: warnings || [],
+      };
+
+      try {
+        _writeSoulProposalsFile(file);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist proposal record: ' + err.message }));
+        return;
+      }
+
+      try {
+        worldState.pushEvent(
+          'applied-soul-edit',
+          `${record.npcName} SOUL.md updated from proposal ${id}`,
+        );
+      } catch (_) {}
+
+      // Refresh the in-memory SOUL cache so the NPC's next think() picks
+      // up the new personality without a restart.
+      try { npcBrains.reloadSoul(record.npcName); } catch (_) {}
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, proposal: record }));
     });
     return;
   }

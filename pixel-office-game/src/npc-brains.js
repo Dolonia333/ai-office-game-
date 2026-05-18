@@ -2137,6 +2137,34 @@ ${roleActions}
   }
 
   /**
+   * Roadmap Stage 3 step 3 — re-read a single NPC's SOUL.md from disk and
+   * refresh the cached personality. Called by the /api/soul-proposal/apply
+   * endpoint right after the file has been mutated so the next `think()`
+   * cycle sees the new soul text without a server restart.
+   *
+   * SOUL.md is otherwise loaded once at boot (see `_initBrains`) and held
+   * on `brain.personality`, so this is the only way to pick up an on-disk
+   * change mid-run.
+   *
+   * Returns true on success, false if the NPC isn't known or the file
+   * cannot be read.
+   */
+  reloadSoul(npcName) {
+    const brain = this.brains[npcName];
+    if (!brain) return false;
+    const folder = this._nameToFolder[npcName];
+    if (!folder) return false;
+    const soulPath = path.join(__dirname, '..', 'npcs', folder, 'SOUL.md');
+    try {
+      brain.personality = fs.readFileSync(soulPath, 'utf-8');
+      return true;
+    } catch (err) {
+      console.warn(`[NpcBrains] reloadSoul(${npcName}) failed: ${err.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Roadmap Stage 3 — daily reflection.
    *
    * Builds a reflection prompt using the NPC's SOUL.md + last ~50 memory

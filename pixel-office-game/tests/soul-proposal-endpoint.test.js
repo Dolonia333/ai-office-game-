@@ -21,7 +21,6 @@ const os = require('node:os');
 let serverProc;
 let baseUrl;
 const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'denizen-soul-test-'));
-const SOUL_PROPOSALS_PATH = path.join(__dirname, '..', 'data', 'soul-proposals.json');
 
 function waitForServer(url, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
@@ -78,6 +77,9 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   const env = { ...process.env, PORT: String(port), HOME: tmpHome, USERPROFILE: tmpHome };
   env.LM_STUDIO_URL = 'http://127.0.0.1:1'; // unreachable on purpose
+  // Per-process proposals file so parallel test files can't lose-update
+  // each other's writes (the read-modify-write isn't atomic).
+  env.SOUL_PROPOSALS_PATH = path.join(tmpHome, 'soul-proposals.json');
 
   serverProc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env, stdio: ['ignore', 'pipe', 'pipe'], cwd: path.join(__dirname, '..'),
@@ -91,16 +93,9 @@ before(async () => {
 after(() => {
   if (serverProc && !serverProc.killed) killProcessTree(serverProc.pid);
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch (_) {}
-
-  // Strip TEST_-prefixed proposals so dev state isn't polluted.
-  try {
-    const raw = fs.readFileSync(SOUL_PROPOSALS_PATH, 'utf8');
-    const file = JSON.parse(raw);
-    if (file && Array.isArray(file.proposals)) {
-      file.proposals = file.proposals.filter(p => !(p && typeof p.npcName === 'string' && p.npcName.startsWith('TEST_')));
-      fs.writeFileSync(SOUL_PROPOSALS_PATH, JSON.stringify(file, null, 2), 'utf8');
-    }
-  } catch (_) { /* file may not exist, that's fine */ }
+  // The test process wrote proposals to a per-process file inside tmpHome
+  // (env.SOUL_PROPOSALS_PATH). The real data/soul-proposals.json was
+  // never touched, so no global cleanup is needed.
 });
 
 describe('POST /api/soul-proposal — happy path + validation', () => {
