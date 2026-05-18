@@ -8,7 +8,7 @@
 Not a build target for any single sprint. Each stage is meaningful on
 its own and can ship independently.
 
-## What just shipped (stages 0 + 1)
+## What just shipped (stages 0 + 1 + 3 steps 1-2)
 
 - **Awareness layer expanded** — room topology, convoy detection, desk
   geography, busy state, room occupancy, per-peer last-contact,
@@ -34,6 +34,15 @@ its own and can ship independently.
 - **Per-NPC daily placement budget (Stage 1)** — capped at 3
   placements per NPC per day. `system` and `operator` callers are
   exempt. Returns HTTP 429 with `placedToday` when exceeded.
+- **SOUL.md reflection + proposal queue (Stage 3 steps 1-2)** —
+  `src/soul-reflection.js` builds the reflection prompt and validates
+  proposals. `npcBrains.reflectOnDay(name)` runs the prompt through the
+  NPC's existing LLM and POSTs the validated `{ addToSoul,
+  dropFromSoul, summary, confidence }` to `/api/soul-proposal`. Cap:
+  1 proposal/NPC/UTC-day, 50 total. `/api/soul-proposals[?npc=Name]`
+  reads the queue. `/api/soul-proposal/approve` flips `status` —
+  **never** writes to SOUL.md (application is deferred, see Stage 3
+  step 3). Full details in [SOUL_REFLECTION.md](SOUL_REFLECTION.md).
 
 ## Stage 2 — Custom sprite animations (1 week)
 
@@ -73,21 +82,27 @@ doing well or struggling with.
 
 Concrete steps:
 
-1. **Daily reflection pass** — once per in-game day, each NPC runs a
-   *reflection* prompt with their last 24h of memory entries. Output:
-   a structured `proposedSoulEdit` with:
-   - `addToSoul: "I'm more comfortable with code review than I am with planning."`
-   - `dropFromSoul: "I get anxious in meetings."` (if behavior contradicts it)
-   - `summary: "..."`
-   - `confidence: 0.7`
-2. **`/api/soul-proposals` endpoint** — collects pending edits. They do
-   NOT auto-apply; the operator reviews in a UI similar to a code-review
-   diff.
-3. **Application** — accepted edits get appended to `npcs/<name>/SOUL.md`
-   with a date stamp and the reflection that produced them. The NPC's
-   next think cycle reads the updated personality.
-4. **Versioning** — `npcs/<name>/SOUL.history.md` records the diff so
-   you can see how each NPC's identity drifted over time.
+1. **Daily reflection pass — SHIPPED** — `src/soul-reflection.js`
+   builds the reflection prompt, `npcBrains.reflectOnDay(npcName)` runs
+   it through the NPC's existing LLM provider, parses + validates the
+   `{ addToSoul, dropFromSoul, summary, confidence }` JSON. Not on a
+   timer — operator calls it manually (diag panel / cron once an
+   approval UI exists). See [SOUL_REFLECTION.md](SOUL_REFLECTION.md).
+2. **`/api/soul-proposal{,s,/approve}` endpoints — SHIPPED** — three
+   endpoints persist pending edits to `data/soul-proposals.json`
+   (lazy-created). Caps: 1 proposal/NPC/UTC-day (429 when exceeded),
+   50 total (oldest dropped). `proposed-soul-edit` is pushed onto the
+   worldState event feed. Approve / reject sets `status` in place;
+   neither writes to SOUL.md.
+3. **Application — DEFERRED.** Accepted edits should get appended to
+   `npcs/<name>/SOUL.md` with a date stamp + the reflection that
+   produced them. Deliberately held until an operator review UI exists
+   to look at the diff before approving — the approval gate matters
+   more than throughput here, and a CLI-only flow invites a "rubber
+   stamp" pattern that defeats the gate.
+4. **Versioning — DEFERRED.** `npcs/<name>/SOUL.history.md` recording
+   the diff over time. Pairs with step 3 — useless without an
+   application path to record.
 
 ### Risk: identity drift
 

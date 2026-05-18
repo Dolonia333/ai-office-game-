@@ -2127,6 +2127,88 @@ ${roleActions}
     // --- Generic: just go work on it ---
     return `On it, heading to my desk. [ACTION:useComputer]`;
   }
+
+  /**
+   * Roadmap Stage 3 — daily reflection.
+   *
+   * Builds a reflection prompt using the NPC's SOUL.md + last ~50 memory
+   * entries, submits it through the NPC's existing LLM provider, parses
+   * the proposal JSON, validates it, and POSTs to /api/soul-proposal.
+   *
+   * NOT auto-fired anywhere on a timer. Call this from a diag panel,
+   * an admin endpoint, or a future cron. See docs/SOUL_REFLECTION.md.
+   *
+   * Options:
+   *   - submitUrl: where to POST the proposal (default '/api/soul-proposal'
+   *     on the local server). Set to null to skip the HTTP call and just
+   *     return the proposal — useful for tests and for surfacing the
+   *     suggestion in the diag panel before sending it.
+   *   - port: which port the local server listens on (default reads PORT
+   *     env then 8080).
+   *
+   * Returns { ok, proposal, error?, submitted? }.
+   */
+  async reflectOnDay(npcName, opts = {}) {
+    const soulReflection = require('./soul-reflection');
+    const brain = this.brains[npcName];
+    if (!brain) {
+      return { ok: false, error: `unknown NPC: ${npcName}` };
+    }
+
+    // Pull last ~50 memory lines (ignore blanks).
+    const rawMemory = brain.longTermMemory || '';
+    const memoryLines = rawMemory.split('\n').map(l => l.trim()).filter(Boolean).slice(-50);
+
+    const prompt = soulReflection.buildReflectionPrompt({
+      npcName,
+      soul: brain.personality,
+      recentMemories: memoryLines,
+    });
+
+    let response;
+    try {
+      response = await this._callProvider(brain.providerConfig, prompt, [
+        { role: 'user', content: 'Reflect now and respond with the JSON object only.' },
+      ], { maxTokens: 400, sliceLen: 600, temperature: 0.5 });
+    } catch (err) {
+      return { ok: false, error: `provider call failed: ${err?.message || err}` };
+    }
+
+    let parsed;
+    try {
+      const m = String(response || '').match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('no JSON object in response');
+      parsed = JSON.parse(m[0]);
+    } catch (err) {
+      return { ok: false, error: `failed to parse JSON: ${err.message}`, raw: String(response || '').slice(0, 400) };
+    }
+
+    const v = soulReflection.validateProposal(parsed);
+    if (!v.ok) {
+      return { ok: false, error: `invalid proposal: ${v.error}`, parsed };
+    }
+
+    const submitUrl = opts.submitUrl === undefined
+      ? `http://127.0.0.1:${opts.port || process.env.PORT || 8080}/api/soul-proposal`
+      : opts.submitUrl;
+
+    if (!submitUrl) {
+      return { ok: true, proposal: parsed, submitted: false };
+    }
+
+    try {
+      const fetchFn = (typeof fetch === 'function') ? fetch : require('node:undici').fetch;
+      const res = await fetchFn(submitUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ npcName, proposal: parsed, reflectionInput: memoryLines.join('\n').slice(0, 800) }),
+      });
+      const body = await res.json().catch(() => ({}));
+      return { ok: res.ok, proposal: parsed, submitted: true, status: res.status, body };
+    } catch (err) {
+      return { ok: false, error: `POST failed: ${err?.message || err}`, proposal: parsed };
+    }
+  }
 }
 
 module.exports = NpcBrainManager;
