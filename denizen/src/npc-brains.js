@@ -1057,7 +1057,12 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
 
         return decision;
       }
-      return { action: 'work', thought: 'Focusing on my tasks', message: 'Working...', target: null };
+      // Fallback when the LLM returned nothing parseable. Pick a varied
+      // role-flavored thought so 16 NPCs don't all say "Focusing on my
+      // tasks" — that monoculture was visually identical to a stuck loop
+      // and made the office feel scripted. Combines: role label, current
+      // task (if any), a small jitter pool.
+      return this._fallbackDecision(npcName, brain);
     } catch (err) {
       // Throttle: one log per NPC per 60s. Otherwise a provider outage spams
       // 16 NPCs * multiple retries/min = 200+ identical lines per minute.
@@ -1469,6 +1474,47 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
     return teams.map(function(t) {
       return 'Team "' + t.name + '": [' + t.members.join(', ') + '] - you collaborate on ' + t.domain + '. Lead: ' + t.lead + '.';
     }).join('\n');
+  }
+
+  /**
+   * Pick a varied fallback decision when the LLM returns nothing
+   * parseable. Replaces the old uniform "Focusing on my tasks" string
+   * — that boilerplate made every silent failure look identical
+   * across all 16 NPCs at once, like a stuck loop. We now combine:
+   *   - role label or current task
+   *   - a small jitter pool keyed off NPC name + cycle counter
+   *   - a couple of varied alternative actions (not just 'work')
+   * so consecutive fallbacks still look like the office is alive
+   * even when the provider is briefly flaky.
+   */
+  _fallbackDecision(npcName, brain) {
+    const cycles = (this._thinkCycles[npcName] || 0);
+    const role = (brain && brain.role) || 'team';
+    const task = this._taskProgress?.[npcName]?.task || null;
+
+    // Tiny jitter pool — pick varies by NPC + cycle, deterministic so
+    // it's testable but visually varied.
+    const seed = (npcName.length * 7 + cycles * 13) % 100;
+    const pool = task
+      ? [
+          { action: 'work',   thought: `Continuing: ${task.slice(0, 60)}` },
+          { action: 'work',   thought: `Heads-down on ${task.slice(0, 50)}` },
+          { action: 'wander', thought: 'Stretching while I think this through' },
+        ]
+      : [
+          { action: 'work',   thought: `Getting into the ${role} flow` },
+          { action: 'wander', thought: 'Quick lap to clear my head' },
+          { action: 'check',  thought: 'Skimming what others are working on' },
+          { action: 'work',   thought: 'Picking up where I left off' },
+        ];
+    const pick = pool[seed % pool.length];
+    return {
+      action: pick.action,
+      thought: pick.thought,
+      message: '',
+      target: null,
+      _fallback: true,
+    };
   }
 
   /**

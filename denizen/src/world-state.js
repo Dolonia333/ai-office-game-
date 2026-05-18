@@ -676,6 +676,22 @@ class WorldState extends EventEmitter {
     if (this.activeThreats.length) {
       const t = this.activeThreats[0];
       lines.push(`- Active threats: ${this.activeThreats.length} (latest: ${t.category} ${t.severity})`);
+
+      // Per-intruder detail — surface each robber's position so security
+      // NPCs (Bouncer, anyone with role/title matching /security|guard/)
+      // can actually go after them. Other NPCs see "stay clear" framing.
+      const isSecurity = /security|guard|sec/i.test(me?.role || me?.title || '') || npcName === 'Bouncer';
+      const intrudersWithPos = this.activeThreats.filter(x => x && x.position).slice(0, 3);
+      if (intrudersWithPos.length) {
+        for (const intr of intrudersWithPos) {
+          const p = intr.position;
+          if (isSecurity) {
+            lines.push(`- Intruder spotted: ${intr.category} (${intr.severity}) at (${p.x}, ${p.y})${intr.detail ? ' — ' + intr.detail : ''}. Confront them or escort them out.`);
+          } else {
+            lines.push(`- Intruder nearby: ${intr.category} (${intr.severity}) at (${p.x}, ${p.y}). Stay clear, alert Bouncer if you see one.`);
+          }
+        }
+      }
     }
 
     if (this.backgroundTasks.length) {

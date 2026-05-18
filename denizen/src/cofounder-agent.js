@@ -616,6 +616,20 @@ YOUR JOB — create a LIVING office:
           if (Array.isArray(msg.furniture) && typeof worldState.setFurnitureSnapshot === 'function') {
             worldState.setFurnitureSnapshot(msg.furniture);
           }
+          // Robber position mirror — match each shipped robber to its
+          // entry in worldState.activeThreats by threatId, and stamp a
+          // `position` + `state` field. Lets renderContextBlock surface
+          // "Intruder at (x,y)" instead of just an unattributed count.
+          if (Array.isArray(msg.robbers) && Array.isArray(worldState.activeThreats)) {
+            const byId = new Map(msg.robbers.map(r => [r.threatId, r]));
+            for (const threat of worldState.activeThreats) {
+              const r = byId.get(threat.id);
+              if (r) {
+                threat.position = r.position;
+                threat.robberState = r.state;
+              }
+            }
+          }
         }
         break;
       case 'ceo_speak':

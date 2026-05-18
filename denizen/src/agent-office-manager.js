@@ -407,22 +407,44 @@ class AgentOfficeManager {
           }
         });
       } else if (isSec) {
-        // Security patrol loop: reception → open_office → reception → desk.
-        this.actions.standUp(npcKey);
-        agent.status = 'patrolling';
-        this.actions.goToRoom(npcKey, 'reception');
-        this.scene.time.delayedCall(6000, () => {
-          this.actions.goToRoom(npcKey, 'open_office');
-        });
-        this.scene.time.delayedCall(14000, () => {
+        // SECURITY behaviour. Priority order:
+        //   1. Active robber → confront it (top priority).
+        //   2. Player loitering in a restricted room (manager_office /
+        //      storage) for >30s → walk over with a polite challenge.
+        //   3. Otherwise run the ambient patrol so the office still
+        //      sees a guard moving around.
+        const robbers = this.scene._robberCtrl?.getActiveRobbers?.() || [];
+        const RESTRICTED = ['manager_office', 'storage'];
+        const playerInRestricted = this._lastPlayerRoom && RESTRICTED.indexOf(this._lastPlayerRoom) !== -1;
+        const loiterMs = playerInRestricted
+          ? (Date.now() - (this._playerRoomEnteredAt || Date.now()))
+          : 0;
+        const loiterTooLong = loiterMs > 30000
+          && (!this._lastLoiterCheckAt || (Date.now() - this._lastLoiterCheckAt) > 5 * 60 * 1000);
+
+        if (robbers.length > 0) {
+          this._confrontNearestRobber(npcKey, agent, robbers);
+        } else if (loiterTooLong) {
+          this._lastLoiterCheckAt = Date.now();
+          this._challengePlayerLoiter(npcKey, agent, this._lastPlayerRoom);
+        } else {
+          // Ambient patrol loop: reception → open_office → reception → desk.
+          this.actions.standUp(npcKey);
+          agent.status = 'patrolling';
           this.actions.goToRoom(npcKey, 'reception');
-        });
-        this.scene.time.delayedCall(22000, () => {
-          if (agent.assignedDesk) {
-            this.actions.useComputer(npcKey, agent.assignedDesk);
-            agent.status = 'working';
-          }
-        });
+          this.scene.time.delayedCall(6000, () => {
+            this.actions.goToRoom(npcKey, 'open_office');
+          });
+          this.scene.time.delayedCall(14000, () => {
+            this.actions.goToRoom(npcKey, 'reception');
+          });
+          this.scene.time.delayedCall(22000, () => {
+            if (agent.assignedDesk) {
+              this.actions.useComputer(npcKey, agent.assignedDesk);
+              agent.status = 'working';
+            }
+          });
+        }
       }
     });
   }
@@ -432,6 +454,118 @@ class AgentOfficeManager {
    * (conference_man or conference_woman if free) to walk into reception
    * and stand, giving receptionist NPCs something real to react to.
    */
+  /**
+   * Walk a security NPC at the nearest active robber, deliver a
+   * character-line challenge, then ask the robber-controller to resolve
+   * the confrontation (flee, sass, or stand defiant). Combined with the
+   * Bouncer's SOUL.md voice ("stoic, dry humor, intimidating") this
+   * makes the security role actually exist for the player instead of
+   * looping a hard-coded patrol regardless of what's happening.
+   */
+  _confrontNearestRobber(secKey, agent, robbers) {
+    const secSprite = this.actions._getNpc(secKey);
+    if (!secSprite) return;
+
+    // Pick the nearest visible robber.
+    let nearest = null;
+    let nearestD2 = Infinity;
+    for (const r of robbers) {
+      if (!r?.position) continue;
+      const dx = r.position.x - secSprite.x;
+      const dy = r.position.y - secSprite.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < nearestD2) { nearestD2 = d2; nearest = r; }
+    }
+    if (!nearest) return;
+
+    agent.status = 'engaging';
+    this.actions.standUp(secKey);
+    this.actions.emote(secKey, '!');
+
+    // Move to within ~50px of the robber, then deliver the challenge.
+    this.actions.walkTo(secKey, nearest.position.x - 32, nearest.position.y);
+
+    // Stoic-Bouncer voice. Severity-driven phrasing — high severity
+    // gets a sharper line; routine threats get the dry-humor variant.
+    const sev = String(nearest.severity || 'medium').toLowerCase();
+    const CHALLENGE = {
+      high:     ['Hands where I can see them.', 'Don’t make this hard.', 'Step away from that.'],
+      critical: ['You picked the wrong building.', 'On the ground. Now.', 'You’re done.'],
+      low:      ['Help you find something?', 'This area’s staff-only.', 'You lost?'],
+      medium:   ['Need to see some ID.', 'You don’t look like staff.', 'Far enough.'],
+    };
+    const pool = CHALLENGE[sev] || CHALLENGE.medium;
+    const line = pool[Math.floor(Math.random() * pool.length)];
+
+    // Speak after arrival. Robber controller then runs the response
+    // animation + maybe-flee logic — it's the source of truth for
+    // robber state machines.
+    this.scene.time.delayedCall(2500, () => {
+      this.actions.speak(secKey, line);
+      this.scene.time.delayedCall(800, () => {
+        const r = this.scene._robberCtrl?.confront?.(nearest.threatId, agent.name || 'Bouncer');
+        if (r && r.ok) {
+          // Brief recovery hold before resuming patrol so the player
+          // sees the resolution.
+          this.scene.time.delayedCall(4000, () => {
+            agent.status = 'patrolling';
+          });
+        }
+      });
+    });
+  }
+
+  /**
+   * Bouncer politely challenges the player when they've been hanging
+   * around a restricted room (manager_office / storage) for >30s.
+   * Cooldown is 5 minutes so the Bouncer doesn't pester. Matches the
+   * SOUL.md voice: firm-but-warm, dry humor, never rude.
+   */
+  _challengePlayerLoiter(secKey, agent, room) {
+    const player = this.scene.player;
+    if (!player) return;
+    const secSprite = this.actions._getNpc(secKey);
+    if (!secSprite) return;
+
+    console.log(`[Security] Bouncer challenging player loitering in ${room}`);
+    agent.status = 'engaging';
+    this.actions.standUp(secKey);
+
+    // Walk to player with a small offset so they don't overlap.
+    const offsetX = player.x > 640 ? -48 : 48;
+    this.actions.walkTo(secKey, player.x + offsetX, player.y);
+
+    // Severity scales with room: storage is more sensitive than the
+    // CTO's office (which everyone visits sometimes anyway).
+    const ROOM_LINES = {
+      manager_office: [
+        'Can I help you find something?',
+        'Looking for Abby? She’s usually in around now.',
+        'This is the CTO’s office — anything you need?',
+      ],
+      storage: [
+        'Storage is staff-only, my friend.',
+        'Anything I can grab for you from here?',
+        'You’re a bit deep in the supply room.',
+      ],
+    };
+    const pool = ROOM_LINES[room] || ROOM_LINES.manager_office;
+    const line = pool[Math.floor(Math.random() * pool.length)];
+
+    this.scene.time.delayedCall(2500, () => {
+      this.actions.emote(secKey, '?');
+      this.scene.time.delayedCall(300, () => {
+        this.actions.speak(secKey, line);
+      });
+      // Return to patrol after a moment so the Bouncer doesn't shadow
+      // the player around the office.
+      this.scene.time.delayedCall(8000, () => {
+        agent.status = 'patrolling';
+        this.actions.goToRoom(secKey, 'reception');
+      });
+    });
+  }
+
   _spawnReceptionVisitor() {
     if (!this.agents) return;
     const candidates = ['xp_conference_man', 'xp_conference_woman'];
@@ -1126,7 +1260,11 @@ class AgentOfficeManager {
   _handleServerMessage(msg) {
     // In demo mode, only handle player_chat_response — block all other server commands
     if (this._demoMode && msg.type !== 'player_chat_response') return;
-    console.log('[AgentManager] Server message:', msg.type, msg);
+    // Per-message console.log was firing ~5/sec across the batched
+    // world_state_batch + the per-NPC npc_decision traffic — fine for
+    // the first day but unreadable now. Decision logs already happen
+    // inside _executeNpcDecision; world-state mirror is silent on
+    // purpose. We only surface unknown types now (see `default:`).
 
     switch (msg.type) {
       case 'agent_command':
@@ -1311,6 +1449,46 @@ class AgentOfficeManager {
         if (instanceId && window.DenizenLiveFurniture?.remove) {
           const ok = window.DenizenLiveFurniture.remove(instanceId);
           console.log(`[AgentManager] Live-removed ${instanceId} (${ok ? 'success' : 'not found'})`);
+        }
+        break;
+      }
+      case 'world_state_batch': {
+        // Batched worldState mutations from the server (~200ms cadence).
+        // Mirror into window.DenizenWorldState so other browser modules
+        // (diag panel, operator UI, future indicators) can read current
+        // NPC mood/fatigue/stuck-loop/lastAddressed without hitting the
+        // HTTP endpoint per tick.
+        if (typeof window !== 'undefined') {
+          const mirror = window.DenizenWorldState = window.DenizenWorldState || {
+            npcs: {}, threats: [], environment: {}, events: [], at: 0,
+          };
+          mirror.at = msg.ts || Date.now();
+          if (Array.isArray(msg.changes)) {
+            for (const change of msg.changes) {
+              const k = change?.kind;
+              const p = change?.payload;
+              if (!k) continue;
+              if (k === 'npc' && p?.name) {
+                mirror.npcs[p.name] = p.state || mirror.npcs[p.name] || {};
+              } else if (k === 'threat' && p) {
+                mirror.threats.unshift(p);
+                if (mirror.threats.length > 16) mirror.threats.length = 16;
+              } else if (k === 'environment' && p) {
+                mirror.environment = { ...mirror.environment, ...p };
+              } else if (k === 'event' && p) {
+                mirror.events.unshift(p);
+                if (mirror.events.length > 32) mirror.events.length = 32;
+              } else if (k === 'presence' && p) {
+                mirror.environment.zionPresent = !!p.zionPresent;
+              }
+            }
+          }
+          // Fan out a single "tick" event so subscribers can poll.
+          try {
+            window.dispatchEvent(new CustomEvent('denizen:worldstate', {
+              detail: { ts: mirror.at, changeCount: msg.changes?.length || 0 },
+            }));
+          } catch (_) { /* CustomEvent unavailable in some test contexts */ }
         }
         break;
       }
@@ -1865,10 +2043,16 @@ class AgentOfficeManager {
       });
     }
 
+    // Robber snapshot — live positions of any active threats so the
+    // Bouncer's brain prompt can react to where intruders actually are.
+    // Empty array when no threats, cheap to ship.
+    const robbers = (this.scene._robberCtrl?.getActiveRobbers?.() || []);
+
     this._send({
       type: 'office_state',
       agents: agentList,
       furniture,
+      robbers,
       tasks: this.tasks.map(t => ({ id: t.id, type: t.type, agent: t.agent })),
       time: this.scene.worldClock?.toString() || '',
     });
@@ -1891,13 +2075,21 @@ class AgentOfficeManager {
       }
       const idleMs = now - (this._lastPlayerActiveAt || now);
       const roomInfo = this.actions.getRoom ? this.actions.getRoom(player.x, player.y) : null;
+      const room = roomInfo?.key || null;
+      // Track how long the player's been in their current room — used
+      // by the Bouncer's R5 loitering challenge. Resets every time the
+      // room changes.
+      if (room !== this._lastPlayerRoom) {
+        this._lastPlayerRoom = room;
+        this._playerRoomEnteredAt = now;
+      }
       this._send({
         type: 'player_idle',
         idleMs,
         position: {
           x: Math.round(player.x),
           y: Math.round(player.y),
-          room: roomInfo?.key || null,
+          room,
         },
       });
     }

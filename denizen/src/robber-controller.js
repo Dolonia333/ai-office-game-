@@ -275,6 +275,88 @@ class RobberController {
     });
   }
 
+  /**
+   * Confront a robber by threatId — called when the Bouncer (or any
+   * security NPC) physically reaches the robber's position. The robber
+   * delivers a defiant or fleeing line based on threat severity:
+   *   - low/medium    → 70% flee (despawn), 30% sass and despawn after a beat
+   *   - high/critical → stays defiant; operator UI / security feed has to
+   *     resolve the underlying threat itself
+   * Returns { ok: true, outcome: 'fled'|'stood'|'sassed' }
+   */
+  confront(threatId, challengerName = 'Bouncer') {
+    const robber = this.robbers.get(threatId);
+    if (!robber || !robber.sprite || !robber.sprite.visible) {
+      return { ok: false, reason: 'no-such-robber' };
+    }
+
+    const severity = String(robber.threat?.severity || 'medium').toLowerCase();
+    const category = robber.threat?.category || 'unknown';
+    const REPLIES = {
+      file_access:   ['I — I was just leaving!', 'Wrong office, my bad.', 'Files? What files?'],
+      data_breach:   ['You didn’t see anything.', 'I’ll be back.', 'Hey, easy now.'],
+      network_scan:  ['Just looking around.', 'New here, sorry.', 'Wrong floor, wrong floor.'],
+      brute_force:   ['The door was open!', 'I’m good with locks.', 'Fine, fine, I’m going.'],
+      shell_exec:    ['Ctrl-C, Ctrl-C.', 'It’s not what it looks like.', 'Just running diagnostics.'],
+      api_abuse:     ['That endpoint is public, right?', 'Oh come on.', 'I was rate-limited anyway.'],
+      process_spawn: ['Wrong building.', 'I’ll be out of your hair.', 'Sorry, sorry.'],
+      exfiltration:  ['It’s nothing — receipts, mostly.', 'Just my coat.', 'Don’t make this a thing.'],
+      scan_probe:    ['I was looking for the bathroom.', 'Just window shopping.', 'Lobby’s nice.'],
+      packet_anomaly:['Wrong wire.', 'Maintenance, swear.', 'I’ll come back later.'],
+      unknown:       ['Who are you?', 'I’m allowed to be here.', 'Don’t touch me.'],
+    };
+    const line = (REPLIES[category] || REPLIES.unknown)[Math.floor(Math.random() * 3)];
+    this._showBubble(robber, `🦹 ${line}`);
+    robber.sprite.body?.setVelocity?.(0, 0);
+
+    const isStubborn = severity === 'high' || severity === 'critical';
+    if (isStubborn) {
+      // Stays. Operator-driven resolution required.
+      console.log(`[RobberCtrl] ${challengerName} confronted ${category} (${severity}) — robber held position`);
+      return { ok: true, outcome: 'stood' };
+    }
+
+    // 70% bolt immediately, 30% one more sassy beat then flee.
+    const flee = () => {
+      console.log(`[RobberCtrl] ${challengerName} chased off ${category} robber`);
+      this.despawnRobber(threatId);
+    };
+    const willSass = Math.random() < 0.3;
+    if (willSass) {
+      this.scene.time.delayedCall(2200, () => {
+        if (this.robbers.has(threatId)) {
+          this._showBubble(robber, `🦹 Whatever.`);
+          this.scene.time.delayedCall(900, flee);
+        }
+      });
+      return { ok: true, outcome: 'sassed' };
+    }
+    this.scene.time.delayedCall(900, flee);
+    return { ok: true, outcome: 'fled' };
+  }
+
+  /**
+   * Snapshot of active robbers for the worldState mirror, so the
+   * Bouncer's brain prompt can see real-time threat positions and
+   * not just a count. Called by agent-office-manager._sendOfficeState.
+   */
+  getActiveRobbers() {
+    const out = [];
+    this.robbers.forEach((robber, threatId) => {
+      if (!robber.sprite || robber.sprite.visible === false) return;
+      out.push({
+        threatId,
+        category: robber.threat?.category || 'unknown',
+        severity: robber.threat?.severity || 'medium',
+        detail: robber.threat?.detail || '',
+        action: robber.config?.action || null,
+        state: robber.state,
+        position: { x: Math.round(robber.sprite.x), y: Math.round(robber.sprite.y) },
+      });
+    });
+    return out;
+  }
+
   // --- Robber behavior state machine ---
 
   _updateRobberBehavior(robber, time, delta) {
