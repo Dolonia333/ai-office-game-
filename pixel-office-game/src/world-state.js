@@ -23,6 +23,7 @@
  */
 
 const EventEmitter = require('node:events');
+const { classify: classifyMood } = require('./sentiment.js');
 
 /**
  * @typedef {Object} NpcLiveState
@@ -297,13 +298,55 @@ class WorldState extends EventEmitter {
   }
 
   /** Record a message the NPC just generated. Used by the repetition
-   *  detector to flag "you already said this 90s ago." */
+   *  detector to flag "you already said this 90s ago." Also runs the
+   *  cheap sentiment classifier and stamps `lastMood` on the NPC so
+   *  nearby peers can pick up a mood hint via renderContextBlock. */
   recordSelfMessage(npcName, text) {
     if (!npcName || !text) return;
     if (!this.recentSelfMessages.has(npcName)) this.recentSelfMessages.set(npcName, []);
     const ring = this.recentSelfMessages.get(npcName);
     ring.push({ text: String(text).slice(0, 200), ts: Date.now() });
     if (ring.length > this._caps.selfMessagesPerNpc) ring.shift();
+
+    // Mood tag — keyword-based, sub-millisecond, no LLM call. Only
+    // overwrite when we actually detect a mood (null result keeps the
+    // previous tag alive until it ages out via the freshness window in
+    // renderContextBlock).
+    const mood = classifyMood(text);
+    if (mood) {
+      this.updateNpc(npcName, { lastMood: { value: mood, ts: Date.now() } });
+    }
+  }
+
+  /** Count how many times messages with the same topic have flowed
+   *  from `from` to `to` inside `windowMs`. Topic is normalised as the
+   *  first 3 content words (lowercased, punctuation stripped, stop
+   *  words removed) — a tighter fingerprint than the stuck-loop one
+   *  because thread continuity tracks the same SUBJECT being raised
+   *  repeatedly, not the exact wording.
+   *
+   *  Returns 0 when there's no matching topic. The caller decides what
+   *  threshold (typically 3) is worth surfacing.
+   */
+  topicCount(from, to, text, { windowMs = 24 * 60 * 60 * 1000 } = {}) {
+    if (!from || !to || from === to || !text) return 0;
+    const key = this._pairKey(from, to);
+    const ring = this.recentExchanges.get(key);
+    if (!ring || !ring.length) return 0;
+    const target = _topicFingerprint(text);
+    if (!target) return 0;
+    const now = Date.now();
+    let count = 0;
+    for (const ex of ring) {
+      // Only count messages going in the same direction (from→to). A
+      // peer asking back isn't "raising the topic" — that's just
+      // conversation flow. Counting both directions would double-count
+      // every back-and-forth.
+      if (ex.from !== from) continue;
+      if (now - ex.ts > windowMs) continue;
+      if (_topicMatch(_topicFingerprint(ex.text), target)) count++;
+    }
+    return count;
   }
 
   /** Return a near-duplicate of `text` from this NPC's last few messages,
@@ -598,6 +641,13 @@ class WorldState extends EventEmitter {
           // coffee run without each NPC having to introspect.
           const peerAtDesk = this.minutesAtDesk(n);
           if (peerAtDesk != null && peerAtDesk >= 60) tags.push(`tired (${peerAtDesk}m at desk)`);
+          // Peer mood — surfaced for 10 min after their last classified
+          // message. So Alex sees "Josh (working, frustrated)" and can
+          // soften his approach or back off. Self-mood isn't surfaced
+          // (the LLM already knows what it's been saying).
+          if (s.lastMood && (Date.now() - s.lastMood.ts) < 10 * 60 * 1000) {
+            tags.push(s.lastMood.value);
+          }
           return tags.length ? `${n} (${tags.join(', ')})` : n;
         });
         lines.push(`- Nearby: ${nearStrs.join(', ')}`);
@@ -655,6 +705,37 @@ class WorldState extends EventEmitter {
       }
     }
 
+    // Conversation thread continuity — same SUBJECT raised by THIS NPC
+    // toward a peer 3+ times in the last 24h. Different from stuck-loop
+    // (which is back-and-forth on identical phrasing in 10 min). This
+    // catches "Sarah has asked about the mockups 3 times today" — the
+    // peer maybe hasn't answered yet, or the NPC is hammering the same
+    // topic across the day without realising. Cap to 1 line per think.
+    let bestThread = null; // { peer, count, fingerprint, sampleText }
+    for (const [key, ring] of this.recentExchanges) {
+      const [a, b] = key.split('|');
+      if (a !== npcName && b !== npcName) continue;
+      const peer = a === npcName ? b : a;
+      // Walk this NPC's outbound messages, ask topicCount for each
+      // distinct fingerprint we haven't already checked. We need the
+      // text to pass to topicCount — counting per outgoing message is
+      // fine, dedupe by fingerprint.
+      const seen = new Set();
+      for (const ex of ring) {
+        if (ex.from !== npcName) continue;
+        const fp = _topicFingerprint(ex.text);
+        if (!fp || seen.has(fp)) continue;
+        seen.add(fp);
+        const count = this.topicCount(npcName, peer, ex.text);
+        if (count >= 3 && (!bestThread || count > bestThread.count)) {
+          bestThread = { peer, count, fingerprint: fp, sampleText: ex.text };
+        }
+      }
+    }
+    if (bestThread) {
+      lines.push(`- Thread with ${bestThread.peer}: you've raised "${bestThread.fingerprint}" ${bestThread.count}x today. Either escalate, drop it, or shift topic.`);
+    }
+
     // Player presence — when the human (Zion / "the CEO") is in the
     // office, surface their position to every NPC. The receptionist role
     // (Lucy) uses this to decide whether to walk over and offer a tour
@@ -690,7 +771,65 @@ class WorldState extends EventEmitter {
   }
 }
 
+/**
+ * Stop words dropped before fingerprinting a topic. Kept small and
+ * targeted at the conversational filler that hurts topic matching
+ * (articles, pronouns, "to be" forms, common prepositions). NOT a
+ * full English stop word list — broader lists chew up real topic
+ * words like "all", "any", "no".
+ */
+const _TOPIC_STOPWORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'to', 'of', 'in', 'for', 'on', 'at',
+  'i', 'you', 'it', 'this', 'that', 'we', 'they',
+]);
+
+/**
+ * Reduce a message to its topic fingerprint: lowercase, strip
+ * punctuation, drop stop words, take the first 3 surviving tokens.
+ *
+ * So "The mockups are ready" → "mockups ready" (2 content words after
+ * stop word removal) and "mockups ready please" → "mockups ready
+ * please". To match topics phrased differently, callers compare with
+ * `_topicMatch(a, b)` which accepts prefix overlap — so "mockups
+ * ready" matches "mockups ready yet". Tighter than the 8-word
+ * self-repetition normalisation because we want SAME TOPIC to match
+ * even when phrased slightly differently.
+ */
+function _topicFingerprint(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .split(/\s+/)
+    .filter(t => t && !_TOPIC_STOPWORDS.has(t))
+    .slice(0, 3)
+    .join(' ');
+}
+
+/**
+ * Two topics match when one is a prefix of the other AND the shorter
+ * one is at least 1 token. So:
+ *   "mockups ready"   ≈ "mockups ready yet"   → match (shared prefix)
+ *   "mockups ready"   ≈ "deploy ready"        → no match (different first token)
+ *   "mockups"         ≈ "mockups ready yet"   → match
+ *   ""                ≈ "mockups ready"       → no match (empty)
+ * This lets "the mockups" (fp "mockups") align with "mockups please"
+ * (fp "mockups please") without false-matching unrelated topics.
+ */
+function _topicMatch(a, b) {
+  if (!a || !b) return false;
+  const at = a.split(' ');
+  const bt = b.split(' ');
+  const shorter = at.length <= bt.length ? at : bt;
+  const longer = at.length <= bt.length ? bt : at;
+  for (let i = 0; i < shorter.length; i++) {
+    if (shorter[i] !== longer[i]) return false;
+  }
+  return true;
+}
+
 // Singleton — every subsystem imports the same instance.
 const worldState = new WorldState();
 module.exports = worldState;
 module.exports.WorldState = WorldState;
+module.exports._topicFingerprint = _topicFingerprint;
