@@ -13,6 +13,7 @@ const ExternalSink = require('./src/external-sink');
 const elevenLabs = require('./src/elevenlabs-tts');
 const animationForge = require('./src/animation-forge');
 const soulReflection = require('./src/soul-reflection');
+const capabilityProposal = require('./src/capability-proposal');
 
 // Voice map (per-NPC ElevenLabs voice IDs). Loaded once at startup;
 // edit data/voice-map.json + restart to change. Missing file → empty map
@@ -198,6 +199,29 @@ function _consumeAnimationBudget(by) {
   if (by === 'system' || by === 'operator') return;
   const k = _budgetKey(by);
   _animationBudget.set(k, (_animationBudget.get(k) || 0) + 1);
+}
+
+// --- Per-NPC daily capability-request budget (Roadmap Stage 4, step 1) ---
+// Tighter than the animation cap because each capability proposal — if
+// approved — implies a code change in src/agent-actions.js + a server
+// restart. NPCs should be picky: 1 proposal per NPC per UTC-local day.
+// `system` / `operator` exempt for scripted seeds and manual fixtures.
+const CAPABILITY_BUDGET_PER_DAY = 1;
+const _capabilityBudget = new Map(); // key: "<by>|<YYYY-MM-DD>" → count
+function _checkCapabilityBudget(by) {
+  if (by === 'system' || by === 'operator') return { allowed: true, requestedToday: 0, cap: Infinity };
+  const k = _budgetKey(by);
+  const requestedToday = _capabilityBudget.get(k) || 0;
+  return {
+    allowed: requestedToday < CAPABILITY_BUDGET_PER_DAY,
+    requestedToday,
+    cap: CAPABILITY_BUDGET_PER_DAY,
+  };
+}
+function _consumeCapabilityBudget(by) {
+  if (by === 'system' || by === 'operator') return;
+  const k = _budgetKey(by);
+  _capabilityBudget.set(k, (_capabilityBudget.get(k) || 0) + 1);
 }
 
 // --- SOUL.md self-revision proposal queue (Roadmap Stage 3, steps 1-2) ---
@@ -679,6 +703,163 @@ const server = http.createServer((req, res) => {
     } catch (_) { /* file may not exist yet */ }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(store));
+    return;
+  }
+
+  // --- Capability-request proposal queue (Roadmap Stage 4, step 1) ---
+  // NPCs propose new actions (verbs) that don't exist yet. The proposal
+  // goes to a pending queue and an operator decides whether to actually
+  // implement the verb in src/agent-actions.js. This endpoint does NOT
+  // implement anything — that's step 3 of the roadmap and explicitly
+  // future work. See docs/CAPABILITY_PROPOSALS.md.
+  //
+  // Body shape: { by: "Roki", verbName: "whiteboardDraw", description: "..." }
+  const capabilityProposalsFile = path.join(ROOT, 'data', 'capability-proposals.json');
+
+  function _readCapabilityStore() {
+    let store = { proposals: [] };
+    try {
+      const raw = fs.readFileSync(capabilityProposalsFile, 'utf8');
+      store = JSON.parse(raw);
+      if (!store || typeof store !== 'object') store = { proposals: [] };
+      if (!Array.isArray(store.proposals)) store.proposals = [];
+    } catch (_) { /* lazy-create */ }
+    return store;
+  }
+  function _writeCapabilityStore(store) {
+    try { fs.mkdirSync(path.dirname(capabilityProposalsFile), { recursive: true }); } catch (_) {}
+    fs.writeFileSync(capabilityProposalsFile, JSON.stringify(store, null, 2), 'utf8');
+  }
+
+  if (urlPath === '/api/request-capability' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let p;
+      try { p = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const by = String(p.by || 'system').slice(0, 40);
+      const verbName = String(p.verbName || '').slice(0, 80);
+      // Slice slightly above the validator's MAX_DESCRIPTION_LEN so the
+      // validator can still surface a meaningful "too long" error instead
+      // of having the endpoint silently truncate at the same boundary.
+      const description = String(p.description || '').slice(0, 500);
+
+      // Shared validator — keeps the endpoint and capability-proposal in lockstep.
+      const v = capabilityProposal.validateProposal({ verbName, description });
+      if (!v.ok) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: v.error }));
+        return;
+      }
+
+      // Daily budget — tighter than animations because each capability
+      // proposal implies hand-written code + a restart if approved.
+      const budgetCheck = _checkCapabilityBudget(by);
+      if (!budgetCheck.allowed) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `${by} has hit the daily capability-request budget (${budgetCheck.cap}). Try again tomorrow.`,
+          requestedToday: budgetCheck.requestedToday,
+        }));
+        return;
+      }
+
+      const store = _readCapabilityStore();
+      const proposal = capabilityProposal.serializeProposal({ by, verbName, description });
+      store.proposals.push(proposal);
+      try {
+        _writeCapabilityStore(store);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist proposal: ' + err.message }));
+        return;
+      }
+
+      // Consume budget AFTER successful persist (don't penalize the NPC
+      // for our IO failures).
+      _consumeCapabilityBudget(by);
+
+      try {
+        worldState.pushEvent('proposed-capability',
+          `${by} proposed capability "${verbName}": ${description}`);
+      } catch (_) {}
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, proposal }));
+    });
+    return;
+  }
+
+  // GET /api/capability-proposals[?status=pending|approved|rejected]
+  if (urlPath === '/api/capability-proposals' && req.method === 'GET') {
+    const store = _readCapabilityStore();
+    const url = new URL(req.url, 'http://x');
+    const statusFilter = url.searchParams.get('status');
+    let proposals = store.proposals;
+    if (statusFilter) {
+      proposals = proposals.filter(p => p && p.status === statusFilter);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ proposals }));
+    return;
+  }
+
+  // POST /api/capability-proposal/approve — body { id, decision, note? }
+  // Same shape as /api/soul-proposal/approve. Does NOT implement the
+  // verb — operator still has to ship the code by hand.
+  if (urlPath === '/api/capability-proposal/approve' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const id = String(payload.id || '').trim();
+      const decision = String(payload.decision || '').trim();
+      const note = payload.note ? String(payload.note).slice(0, 400) : null;
+      if (!id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'id is required' }));
+        return;
+      }
+      if (decision !== 'approved' && decision !== 'rejected') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: "decision must be 'approved' or 'rejected'" }));
+        return;
+      }
+
+      const store = _readCapabilityStore();
+      const idx = store.proposals.findIndex(p => p && p.id === id);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `proposal not found: ${id}` }));
+        return;
+      }
+      store.proposals[idx].status = decision;
+      store.proposals[idx].review = {
+        decision,
+        note,
+        reviewedAt: new Date().toISOString(),
+      };
+      try {
+        _writeCapabilityStore(store);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist decision: ' + err.message }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, proposal: store.proposals[idx] }));
+    });
     return;
   }
 

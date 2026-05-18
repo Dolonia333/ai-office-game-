@@ -1710,6 +1710,17 @@ ${roleActions}
   Naming: lowercase snake_case, e.g. "meditate", "sketch_idea". Description
   ≤ 200 chars: what should the NPC look like during this action?
   Example: "[ACTION:requestAnimation:meditate:Sitting cross-legged with eyes closed, slight pulse]"
+- Request a NEW capability (action verb) that doesn't exist yet: [ACTION:requestCapability:verbName:description]
+  HEAVIER than requestAnimation — capabilities are real code changes (a
+  human has to implement the verb in the codebase and restart the server),
+  so the daily limit is just 1 request per NPC. Use only when you've hit a
+  genuine wall: you need a verb that doesn't exist, no existing action is a
+  reasonable substitute, and you can describe exactly what the new verb
+  should do.
+  Naming: camelCase, e.g. "whiteboardDraw", "printDocument". Description
+  up to 400 chars: what should the verb do, what is the use case, what
+  params does it need?
+  Example: "I need a whiteboardDraw(text) action to write on the whiteboard. [ACTION:requestCapability:whiteboardDraw:Render short text on the whiteboard sprite at the room I am standing in. Param: text up to 80 chars. Use case: sketching architecture diagrams during reviews.]"
 
 ### Delegation (for tasks outside your scope):
 - Delegate to the right person: [DELEGATE:PersonName:reason]

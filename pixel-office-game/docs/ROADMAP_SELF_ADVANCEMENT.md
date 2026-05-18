@@ -8,7 +8,7 @@
 Not a build target for any single sprint. Each stage is meaningful on
 its own and can ship independently.
 
-## What just shipped (stages 0 + 1 + 3 steps 1-2)
+## What just shipped (stages 0 + 1 + 3 steps 1-2 + 4 step 1)
 
 - **Awareness layer expanded** — room topology, convoy detection, desk
   geography, busy state, room occupancy, per-peer last-contact,
@@ -51,6 +51,19 @@ its own and can ship independently.
   reads the queue. `/api/soul-proposal/approve` flips `status` —
   **never** writes to SOUL.md (application is deferred, see Stage 3
   step 3). Full details in [SOUL_REFLECTION.md](SOUL_REFLECTION.md).
+- **`requestCapability` proposal queue (Stage 4, step 1)** — NPCs
+  call `[ACTION:requestCapability:verbName:description]` to propose
+  brand new actions that don't exist yet. The server validates against
+  `/^[a-z][a-zA-Z0-9]{0,30}$/` + 10-400 char description range,
+  enforces a per-NPC daily budget of **1** (system/operator exempt),
+  persists to `data/capability-proposals.json` with `status: "pending"`,
+  and emits a `proposed-capability` worldState event.
+  `GET /api/capability-proposals[?status=...]` lists the queue.
+  `POST /api/capability-proposal/approve` flips `status` and records a
+  review block — it does **not** implement the verb. Manual
+  implementation in `src/agent-actions.js` and the speculative
+  LLM-assisted code-gen variant remain explicit future work (steps
+  2-4 below). See [CAPABILITY_PROPOSALS.md](CAPABILITY_PROPOSALS.md).
 
 ## Stage 2 — Custom sprite animations (1 week)
 
@@ -132,21 +145,34 @@ similar to how they can request animations.
 
 Concrete steps:
 
-1. **`[ACTION:requestCapability:verbName:description]`** — NPC says
-   "I need a `whiteboard.draw(text)` action to write on the
-   whiteboard." Goes to a proposal queue.
-2. **Operator review** — proposed actions get evaluated against:
+1. **`[ACTION:requestCapability:verbName:description]` — SHIPPED.**
+   NPC says "I need a `whiteboard.draw(text)` action to write on the
+   whiteboard." Goes to a proposal queue at
+   `data/capability-proposals.json` with `status: "pending"`.
+   `POST /api/request-capability` validates the verb name + description
+   and enforces a 1/NPC/UTC-day budget (`system` / `operator` exempt).
+   `GET /api/capability-proposals[?status=...]` lists the queue.
+   `POST /api/capability-proposal/approve` flips `status` and records a
+   review block — it does **not** implement the verb. Full details in
+   [CAPABILITY_PROPOSALS.md](CAPABILITY_PROPOSALS.md).
+2. **Operator review — FUTURE.** Proposed actions get evaluated
+   against:
    - Does it duplicate an existing action?
    - Is the underlying primitive available? (E.g. can we actually
      render text on a whiteboard sprite?)
    - Is it safe? (No `[ACTION:deleteAllOtherNpcs]` allowed.)
-3. **Manual implementation** — once approved, you implement the action
-   in `src/agent-actions.js` and the verb becomes available in every
-   NPC's prompt the next restart.
-4. **Eventually: LLM-assisted implementation** — feed the proposed verb
-   spec to a code-gen model that writes the implementation, which then
-   goes through the existing PR review flow (CI tests must pass).
-   This is genuinely advanced AI engineering territory.
+   The approve endpoint exists, but a dedicated review UI does not.
+   Today the operator tails the JSON file.
+3. **Manual implementation — FUTURE.** Once approved, you implement
+   the action in `src/agent-actions.js` and the verb becomes available
+   in every NPC's prompt the next restart. This step is intentionally
+   *not* automated — approval is a label, not a deployment.
+4. **Eventually: LLM-assisted implementation — FUTURE.** Feed the
+   proposed verb spec to a code-gen model that writes the
+   implementation, which then goes through the existing PR review
+   flow (CI tests must pass). This is genuinely advanced AI engineering
+   territory and is explicitly out of scope for the step-1 proposal
+   queue.
 
 ## Stage 5 — Cross-NPC negotiation (open research)
 
