@@ -1692,7 +1692,12 @@ ${roleActions}
   phone_booth, meeting_table.
   x/y are absolute pixel coordinates in the 1280×720 office.
   Use sparingly — only if you genuinely need something that doesn't exist yet. Tell the team WHY in the reason.
+  Daily limit per NPC: 3 placements. The item appears live without a reload.
   Example: "We need a second whiteboard near my desk. [ACTION:placeFurniture:whiteboard:480:180:For sprint planning]"
+- Remove NPC-placed furniture: [ACTION:removeFurniture:instanceId]
+  Only items placed by NPCs (instanceId starts with "npc_") can be removed. The
+  scene's hand-placed furniture is permanent. Use to fix mistakes or reorganize.
+  Example: "[ACTION:removeFurniture:npc_couch_1715900000000]"
 - Think out loud (silent thought bubble): [ACTION:thinkAloud:short internal thought]
   Use this when you're processing something or talking to yourself — not addressing anyone.
   Renders as a thought bubble (cloud) over your head instead of a speech bubble.

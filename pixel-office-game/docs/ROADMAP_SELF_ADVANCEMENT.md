@@ -8,35 +8,32 @@
 Not a build target for any single sprint. Each stage is meaningful on
 its own and can ship independently.
 
-## What just shipped (stage 0)
+## What just shipped (stages 0 + 1)
 
 - **Awareness layer expanded** — room topology, convoy detection, desk
   geography, busy state, room occupancy, per-peer last-contact,
   self-repetition. See [AWARENESS.md](AWARENESS.md).
-- **`placeFurniture` action** — NPCs can call
+- **Social-behavior layer** — conversation focus (peer + player),
+  receptionist tour, office manners block, think-aloud bubbles,
+  fatigue tracking, cross-NPC stuck-loop detection. See
+  [SOCIAL_BEHAVIOR.md](SOCIAL_BEHAVIOR.md).
+- **`placeFurniture` with live spawn (Stage 1)** — NPCs call
   `[ACTION:placeFurniture:prefabId:x:y:reason]`. The server validates
-  against a whitelist, persists to `data/layouts/office-layout.json`,
-  emits an event. On next page load the new item appears in the office.
-  *Limitation:* no live spawn yet — requires reload. Live spawn is
-  stage 1.
-
-## Stage 1 — Live office mutation (1-2 days)
-
-Goal: when an NPC places a desk, the desk appears immediately, and other
-NPCs notice in their next think.
-
-Concrete steps:
-
-1. **Broadcast a `furniture.placed` event** over `/agent-ws` from
-   `POST /api/place-furniture`. The client subscribes and instantiates
-   the new sprite immediately.
-2. **Adapter to the live furniture map** — `office-scene.js` adds the
-   sprite to its `_interactables` array; the next `_sendOfficeState`
-   cycle picks it up; `worldState` mirrors it.
-3. **Undo / remove action** — `[ACTION:removeFurniture:instanceId]` for
-   when an NPC regrets a placement or a different NPC reorganizes.
-4. **Per-NPC placement budget** — cap each NPC to N placements per day
-   so no one bulldozes the office.
+  against a whitelist + bounds, persists to
+  `layouts/office-layout.json`, emits a `furniture_placed` broadcast
+  on `/agent-ws`. The client subscribes and spawns the sprite live via
+  `window.DenizenLiveFurniture.spawn` — no reload required. The new
+  entry lands in `_interactables`, the next `_sendOfficeState` cycle
+  mirrors it into `worldState`, and other NPCs see it on their next
+  think.
+- **`removeFurniture` action (Stage 1)** —
+  `[ACTION:removeFurniture:instanceId]`. Only items whose
+  `instanceId` starts with `npc_` are removable; hand-placed scene
+  furniture is read-only. Removal also broadcasts live so the sprite
+  disappears immediately.
+- **Per-NPC daily placement budget (Stage 1)** — capped at 3
+  placements per NPC per day. `system` and `operator` callers are
+  exempt. Returns HTTP 429 with `placedToday` when exceeded.
 
 ## Stage 2 — Custom sprite animations (1 week)
 

@@ -3116,4 +3116,30 @@ window.game = new Phaser.Game(config);
       if (editorActive) window._editorExport();
     }
   });
+
+  // Public bridge for NPC-driven live furniture mutations. Exposed so
+  // src/agent-office-manager.js can spawn / remove sprites in response
+  // to `furniture_placed` / `furniture_removed` WS broadcasts without
+  // requiring a page reload. We deliberately go through the same
+  // makePlacementSprite/removeEntry pipeline the editor uses so the
+  // spawned items are first-class: pathfinder obstacles get added, the
+  // depth/origin rules apply, and the entry shows up in _interactables
+  // for the next _sendOfficeState mirror.
+  window.DenizenLiveFurniture = {
+    spawn(placement) {
+      const scene = getScene();
+      if (!scene || !placement || !placement.id) return null;
+      const entry = makePlacementSprite(scene, placement);
+      if (entry) updateLayerVisibility();
+      return entry;
+    },
+    remove(instanceId) {
+      const scene = getScene();
+      if (!scene || !instanceId) return false;
+      const entry = scene._interactables?.find((it) => it.instanceId === instanceId);
+      if (!entry) return false;
+      removeEntry(scene, entry);
+      return true;
+    },
+  };
 })();

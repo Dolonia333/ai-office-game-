@@ -143,6 +143,39 @@ const npcBrains = new NpcBrainManager();
 const cofounderAgent = new CofounderAgent();
 cofounderAgent.npcBrains = npcBrains; // Give the director access to individual NPC brains
 
+// --- Furniture-placement whitelist + per-NPC daily budget ---
+// The whitelist is shared between /api/place-furniture and the prompt
+// hint in src/npc-brains.js. Edit both together if you ever expand it.
+// Daily budget keeps a chatty NPC from spamming the office with couches.
+const ALLOWED_PREFABS = new Set([
+  'desk_small', 'desk_2x2', 'office_chair', 'monitor',
+  'plant_small', 'plant_large', 'whiteboard', 'bookshelf',
+  'coffee_machine', 'water_cooler', 'couch', 'rug',
+  'standing_desk', 'phone_booth', 'meeting_table',
+]);
+const PLACEMENT_BUDGET_PER_DAY = 3;
+const _placementBudget = new Map(); // key: "<by>|<YYYY-MM-DD>" → count
+function _budgetKey(by) {
+  const d = new Date();
+  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${by}|${ymd}`;
+}
+function _checkPlacementBudget(by) {
+  if (by === 'system' || by === 'operator') return { allowed: true, placedToday: 0, cap: Infinity };
+  const k = _budgetKey(by);
+  const placedToday = _placementBudget.get(k) || 0;
+  return {
+    allowed: placedToday < PLACEMENT_BUDGET_PER_DAY,
+    placedToday,
+    cap: PLACEMENT_BUDGET_PER_DAY,
+  };
+}
+function _consumePlacementBudget(by) {
+  if (by === 'system' || by === 'operator') return;
+  const k = _budgetKey(by);
+  _placementBudget.set(k, (_placementBudget.get(k) || 0) + 1);
+}
+
 // Recent NPC-brain errors, surfaced through GET /api/health so the client
 // diagnostic widget can show them without the user opening the terminal.
 global._npcRecentErrors = global._npcRecentErrors || [];
@@ -354,12 +387,6 @@ const server = http.createServer((req, res) => {
 
       // Whitelist + bounds. Keep this short — expanding it should be a
       // deliberate change, not a wide-open "NPC can spawn anything" API.
-      const ALLOWED_PREFABS = new Set([
-        'desk_small', 'desk_2x2', 'office_chair', 'monitor',
-        'plant_small', 'plant_large', 'whiteboard', 'bookshelf',
-        'coffee_machine', 'water_cooler', 'couch', 'rug',
-        'standing_desk', 'phone_booth', 'meeting_table',
-      ]);
       if (!ALLOWED_PREFABS.has(prefabId)) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: `prefabId not in whitelist: ${prefabId}`, allowed: [...ALLOWED_PREFABS] }));
@@ -368,6 +395,19 @@ const server = http.createServer((req, res) => {
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 16 || y < 16 || x > 1264 || y > 704) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'x/y out of bounds (must fit inside 1280×720 with 16px margin)' }));
+        return;
+      }
+
+      // Per-NPC daily budget — keep a single NPC from bulldozing the
+      // office. system/operator (the empty/'system' caller) is exempt
+      // so manual fixtures still work.
+      const budgetCheck = _checkPlacementBudget(by);
+      if (!budgetCheck.allowed) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `${by} has hit the daily placement budget (${budgetCheck.cap}). Try again tomorrow.`,
+          placedToday: budgetCheck.placedToday,
+        }));
         return;
       }
 
@@ -392,14 +432,82 @@ const server = http.createServer((req, res) => {
         return;
       }
 
+      // Consume budget AFTER successful persist (don't penalize the NPC
+      // for our IO failures).
+      _consumePlacementBudget(by);
+
       // Surface as a worldState event so NPCs notice ("Abby placed a couch")
       // and the diag panel logs it.
       try {
         worldState.pushEvent('shipped', `${by} placed ${prefabId} at (${x},${y})${reason ? ' — ' + reason : ''}`);
       } catch (_) {}
 
+      // Broadcast LIVE so the browser can instantiate the sprite without
+      // waiting for a page reload. The client subscribes to
+      // 'furniture_placed' and pushes the new item into _interactables.
+      _sendImmediate({ type: 'furniture_placed', item, by });
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, item }));
+    });
+    return;
+  }
+
+  // --- Remove a single piece of NPC-placed furniture ---
+  // Body: { by: "Abby", instanceId: "npc_couch_169..." }
+  // Only items whose instanceId starts with "npc_" can be removed —
+  // hand-placed scene furniture is read-only. NPCs can remove their
+  // own placements or each other's; we surface who removed what in
+  // the world-state event feed so any griefing is visible.
+  if (urlPath === '/api/remove-furniture' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let p;
+      try { p = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const by = String(p.by || 'system').slice(0, 40);
+      const instanceId = String(p.instanceId || '');
+      if (!instanceId.startsWith('npc_')) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'instanceId must start with "npc_" (only NPC-placed furniture is removable)' }));
+        return;
+      }
+
+      let layout = { items: [] };
+      try {
+        const raw = fs.readFileSync(layoutFile, 'utf8');
+        layout = JSON.parse(raw);
+        if (!Array.isArray(layout.items)) layout.items = [];
+      } catch (_) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'no layout file' }));
+        return;
+      }
+      const idx = layout.items.findIndex(it => it.instanceId === instanceId);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `instanceId not found: ${instanceId}` }));
+        return;
+      }
+      const removed = layout.items.splice(idx, 1)[0];
+      try {
+        fs.writeFileSync(layoutFile, JSON.stringify(layout, null, 2), 'utf8');
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist layout: ' + err.message }));
+        return;
+      }
+      try {
+        worldState.pushEvent('shipped', `${by} removed ${removed.prefabId} (placed by ${removed.placedBy})`);
+      } catch (_) {}
+      _sendImmediate({ type: 'furniture_removed', instanceId, by });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, removed }));
     });
     return;
   }

@@ -1276,6 +1276,44 @@ class AgentOfficeManager {
         }
         break;
       }
+      case 'furniture_placed': {
+        // Live spawn — the server just persisted a new item via
+        // /api/place-furniture. Try to instantiate the sprite immediately
+        // so the placement is visible without a reload. Falls back to a
+        // simple console log if the editor bridge isn't loaded yet (e.g.
+        // headless tests). Either way the layout file has the truth.
+        const item = msg.item;
+        const by = msg.by || 'an NPC';
+        if (item && window.DenizenLiveFurniture?.spawn) {
+          const placement = {
+            id: item.prefabId,
+            instanceId: item.instanceId,
+            x: item.x,
+            y: item.y,
+          };
+          const entry = window.DenizenLiveFurniture.spawn(placement);
+          if (entry) {
+            console.log(`[AgentManager] Live-spawned ${item.prefabId} (${item.instanceId}) placed by ${by}`);
+            // Brief visual flourish on the placer so the player can see
+            // who's responsible without staring at logs.
+            const placerKey = Object.entries(this.NPC_NAMES).find(
+              ([k, v]) => v.toLowerCase() === String(by).toLowerCase()
+            )?.[0];
+            if (placerKey && this.actions?.emote) this.actions.emote(placerKey, 'idea');
+          } else {
+            console.warn(`[AgentManager] Live spawn failed for ${item.prefabId} — will appear on next reload`);
+          }
+        }
+        break;
+      }
+      case 'furniture_removed': {
+        const instanceId = msg.instanceId;
+        if (instanceId && window.DenizenLiveFurniture?.remove) {
+          const ok = window.DenizenLiveFurniture.remove(instanceId);
+          console.log(`[AgentManager] Live-removed ${instanceId} (${ok ? 'success' : 'not found'})`);
+        }
+        break;
+      }
       default:
         console.log('[AgentManager] Unknown message type:', msg.type);
     }
@@ -1666,6 +1704,24 @@ class AgentOfficeManager {
             if (thoughtText && this.actions.think) {
               this.actions.think(npcKey, thoughtText);
             }
+            break;
+          }
+          case 'removeFurniture': {
+            // Counterpart to placeFurniture — let NPCs undo or
+            // reorganize. Only items whose instanceId starts with "npc_"
+            // are removable; the server enforces that.
+            const instanceId = act.params[0] || '';
+            fetch('/api/remove-furniture', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ by: npcName, instanceId }),
+            }).then(r => r.json()).then(res => {
+              if (res?.ok) {
+                console.log(`[AgentManager] ${npcName} removed ${instanceId}`);
+              } else {
+                console.warn(`[AgentManager] removeFurniture rejected:`, res?.error);
+              }
+            }).catch(err => console.warn('[AgentManager] removeFurniture error:', err?.message || err));
             break;
           }
           case 'placeFurniture': {
