@@ -595,14 +595,48 @@ class AgentActions {
             if (npc.ai.facing === 'left') npc.setFrame(4);
             else npc.setFrame(8);
 
-            // Face the target NPC back toward the speaker
+            // Face the target NPC back toward the speaker, lock them in
+            // place for ~8s so they don't walk off mid-conversation, and
+            // mark them as "being addressed" in worldState so their next
+            // think prompt knows to acknowledge the speaker.
             if (target.ai) {
               target.ai.facing = npc.x > target.x ? 'right' : 'left';
               target.body.setVelocity(0, 0);
               target.anims.stop();
               if (target.ai.facing === 'left') target.setFrame(4);
               else target.setFrame(8);
+
+              // Conversation focus: pin the recipient until ~8s after they
+              // were spoken to. agent-office-manager's NPC tick respects
+              // this by skipping any new wander/walk decisions while
+              // _addressedUntil is in the future.
+              const now = this.scene.time.now;
+              target.ai._addressedUntil = now + 8000;
+              target.ai._addressedBy = npcKey;
             }
+
+            // Surface "you were just addressed" into worldState so the
+            // recipient's next LLM call sees it as a prompt section. The
+            // npc-brains think() reads worldState.npcs[name].lastAddressed.
+            try {
+              if (typeof globalThis !== 'undefined' && globalThis.window === undefined) {
+                // server-side — no-op; the cofounder mirror already handles state
+              } else if (window?.__DenizenScene?._agentManager) {
+                // Find the target's display name from the agent registry.
+                const tgtAgent = window.__DenizenScene._agentManager.agents.get(targetNpcKey);
+                if (tgtAgent && tgtAgent.name && window.__DenizenScene._agentManager._send) {
+                  // Lightweight 'addressed' message — the server will mirror
+                  // this into worldState so the next think sees it.
+                  window.__DenizenScene._agentManager._send({
+                    type: 'npc_addressed',
+                    target: tgtAgent.name,
+                    from: window.__DenizenScene._agentManager.agents.get(npcKey)?.name || npcKey,
+                    text: String(text || '').slice(0, 200),
+                    ts: Date.now(),
+                  });
+                }
+              }
+            } catch (_) { /* best-effort */ }
 
             // Small idle pause before speaking — looks like settling in
             this.scene.time.delayedCall(350, () => {

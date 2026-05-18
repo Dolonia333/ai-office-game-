@@ -1212,6 +1212,53 @@ agentWss.on('connection', (ws) => {
             });
             if (ws.readyState === 1) ws.send(fallback);
           });
+      } else if (msg.type === 'npc_introduce') {
+        // Tour stop: Lucy is presenting NPC X to the player. Ask X's
+        // brain to compose a one-line introduction in their own voice.
+        // Reuses the npc_conversation reply pipeline so the bubble +
+        // voice paths work without new wiring.
+        let introName = msg.npcName;
+        if (typeof introName === 'string' && introName && !npcBrains.brains[introName]) {
+          const lower = introName.toLowerCase();
+          introName = Object.keys(npcBrains.brains).find(n => n.toLowerCase() === lower) || introName;
+        }
+        if (introName && npcBrains.brains[introName]) {
+          npcBrains.getResponse(introName, 'Lucy', String(msg.context || 'Introduce yourself briefly to the CEO.'), {})
+            .then(response => {
+              if (ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                  type: 'npc_response',
+                  npcName: introName,
+                  fromName: 'Lucy',
+                  text: response,
+                  turn: 1,
+                }));
+              }
+            })
+            .catch(err => {
+              console.warn('[Tour] introduction error:', err?.message || err);
+            });
+        }
+      } else if (msg.type === 'npc_addressed') {
+        // Conversation focus: the client tells us "NPC X was just spoken
+        // to by Y". Mirror into worldState so X's next think() sees the
+        // 'lastAddressed' field and acknowledges them before doing
+        // something else.
+        if (msg.target && worldState && typeof worldState.updateNpc === 'function') {
+          worldState.updateNpc(msg.target, {
+            lastAddressed: { by: msg.from || 'someone', text: msg.text || '', at: msg.ts || Date.now() },
+          });
+        }
+      } else if (msg.type === 'player_idle') {
+        // Receptionist tour: the client tells us "the player has been
+        // idle for N ms". Mirror into worldState so Lucy's brain (or a
+        // scheduler) can decide to offer them a tour.
+        if (worldState) {
+          worldState.environment = worldState.environment || {};
+          worldState.environment.playerIdleMs = msg.idleMs || 0;
+          worldState.environment.playerPosition = msg.position || null;
+          worldState._emit('environment', worldState.environment);
+        }
       } else {
         cofounderAgent.handleClientMessage(msg);
       }

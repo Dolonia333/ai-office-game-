@@ -263,6 +263,106 @@ class AgentOfficeManager {
     });
     // Fire one ~45s after startup so the demo has early reception activity.
     this.scene.time.delayedCall(45000, () => this._spawnReceptionVisitor());
+
+    // #9 — Receptionist tour: every 15s, check if the player has been
+    // idle long enough to warrant Lucy walking over to offer help. Cheap
+    // tick — most calls are no-ops.
+    this.scene.time.addEvent({
+      delay: 15000,
+      loop: true,
+      callback: () => this._maybeOfferTour(),
+    });
+  }
+
+  /**
+   * #9 — Lucy offers a guided tour when the player has been standing
+   * around lost. Walks to the player, greets them, then introduces them
+   * to 2-3 nearby NPCs. Cooldown of 5 minutes so she doesn't pester.
+   */
+  _maybeOfferTour() {
+    if (!this.agents) return;
+    const lucy = this.agents.get('xp_lucy');
+    if (!lucy || lucy.status === 'task_override' || lucy.status === 'tour_guide') return;
+    if (!this.scene.player) return;
+
+    // Cooldown: don't pester the player more than once every 5 minutes.
+    const now = this.scene.time.now;
+    if (this._lastTourAt && (now - this._lastTourAt) < 5 * 60 * 1000) return;
+
+    // Need the player to have been idle for ~45s.
+    const idleMs = this._lastPlayerActiveAt ? (Date.now() - this._lastPlayerActiveAt) : 0;
+    if (idleMs < 45000) return;
+
+    this._lastTourAt = now;
+    this._runLucyTour();
+  }
+
+  /**
+   * Walk Lucy to the player, greet them, then escort them past 2 nearby
+   * NPCs and have each introduce themselves. Best-effort: relies on
+   * actions.walkTo + speak/speakTo. Aborts on any error.
+   */
+  _runLucyTour() {
+    const lucyKey = 'xp_lucy';
+    const lucy = this.agents.get(lucyKey);
+    const lucySprite = this.actions._getNpc(lucyKey);
+    const player = this.scene.player;
+    if (!lucy || !lucySprite || !player) return;
+
+    console.log('[Tour] Lucy starting receptionist tour for the player');
+    lucy.status = 'tour_guide';
+    this.actions.standUp(lucyKey);
+
+    // Walk to a spot near the player (offset so she doesn't overlap).
+    const offsetX = player.x > 640 ? -48 : 48;
+    this.actions.walkTo(lucyKey, player.x + offsetX, player.y);
+
+    // After arrival: greet.
+    this.scene.time.delayedCall(3500, () => {
+      this.actions.speak(lucyKey, "Hi! You look a bit lost — want a quick tour of the office?");
+    });
+
+    // Pick 2 nearby NPCs (other than Lucy) to introduce. Prefer ones at
+    // desks (interesting to meet) over ones in motion.
+    const candidates = [];
+    this.agents.forEach((agent, key) => {
+      if (key === lucyKey) return;
+      const sprite = this.actions._getNpc(key);
+      if (!sprite) return;
+      const d = Math.hypot(sprite.x - player.x, sprite.y - player.y);
+      candidates.push({ key, agent, sprite, d });
+    });
+    candidates.sort((a, b) => a.d - b.d);
+    const tourStops = candidates.slice(0, 2);
+
+    let delay = 8000;
+    tourStops.forEach((stop, i) => {
+      this.scene.time.delayedCall(delay, () => {
+        // Lucy walks toward the stop NPC.
+        this.actions.walkTo(lucyKey, stop.sprite.x + 32, stop.sprite.y);
+        this.scene.time.delayedCall(3000, () => {
+          this.actions.speak(lucyKey, `This is ${stop.agent.name}, our ${stop.agent.roleDef?.label || stop.agent.role}.`);
+        });
+        // Prompt the stop NPC to introduce themselves on the server side.
+        this.scene.time.delayedCall(5000, () => {
+          this._send({
+            type: 'npc_introduce',
+            npcName: stop.agent.name,
+            context: `Lucy is giving the CEO a tour. Introduce yourself in one short sentence — your name, role, and one thing you care about. Be warm but brief.`,
+          });
+        });
+      });
+      delay += 9000;
+    });
+
+    // Tour wraps up — Lucy returns to reception.
+    this.scene.time.delayedCall(delay + 4000, () => {
+      this.actions.speak(lucyKey, "I'll be at reception if you need anything else!");
+      this.scene.time.delayedCall(2500, () => {
+        this.actions.goToRoom(lucyKey, 'reception');
+        lucy.status = 'working';
+      });
+    });
   }
 
   /**
@@ -523,10 +623,31 @@ class AgentOfficeManager {
     if (!agent || agent.status === 'task_override') return;
 
     const thought = decision.thought || '';
-    const action = decision.action || 'work';
-    const target = decision.target || null;
-    const location = decision.location || null;
+    let action = decision.action || 'work';
+    let target = decision.target || null;
+    let location = decision.location || null;
     const message = decision.message || '';
+
+    // Conversation focus — if this NPC was just addressed (within 8s),
+    // don't let them wander off. Convert any move-y action into a stay-
+    // put 'talk' back at the addresser so they acknowledge before
+    // continuing whatever else they had planned. Real people don't pivot
+    // to a coffee run mid-sentence.
+    const npcSprite = this.actions._getNpc(npcKey);
+    const addressedUntil = npcSprite?.ai?._addressedUntil || 0;
+    const addressedBy = npcSprite?.ai?._addressedBy;
+    if (addressedUntil > this.scene.time.now && addressedBy && action !== 'talk') {
+      const addressedByName = this.NPC_NAMES[addressedBy];
+      if (addressedByName) {
+        const movey = ['work', 'break', 'wander', 'visit', 'collaborate'].indexOf(action) !== -1;
+        if (movey) {
+          console.log(`[NPC Focus] ${npcName} was just addressed by ${addressedByName} — staying put to respond`);
+          action = 'talk';
+          target = addressedByName;
+          location = null;
+        }
+      }
+    }
 
     // Track task label for visual display
     if (decision.taskPhase === 'starting' && message) {
@@ -1536,6 +1657,17 @@ class AgentOfficeManager {
             });
             break;
           }
+          case 'thinkAloud': {
+            // Internal monologue — surfaces as a thought bubble (cloud)
+            // instead of a speech bubble. Useful for ambient texture
+            // ("I should follow up with Marcus...") that shouldn't
+            // pin nearby NPCs into a conversation.
+            const thoughtText = (act.params[0] || '').trim();
+            if (thoughtText && this.actions.think) {
+              this.actions.think(npcKey, thoughtText);
+            }
+            break;
+          }
           case 'placeFurniture': {
             // Params: [prefabId, x, y, reason]. POST to the server endpoint;
             // the server validates the whitelist + bounds, persists, and
@@ -1636,6 +1768,35 @@ class AgentOfficeManager {
       tasks: this.tasks.map(t => ({ id: t.id, type: t.type, agent: t.agent })),
       time: this.scene.worldClock?.toString() || '',
     });
+
+    // Player presence + idle tracking — feeds the receptionist's "looks
+    // lost, walk over and offer a tour" behavior. Cheap: compares the
+    // player sprite's position to the last sample and bumps the activity
+    // timestamp when they've moved more than 2px.
+    const player = this.scene.player;
+    if (player && typeof player.x === 'number') {
+      const now = Date.now();
+      if (!this._lastPlayerSample) {
+        this._lastPlayerSample = { x: player.x, y: player.y, at: now };
+        this._lastPlayerActiveAt = now;
+      } else {
+        const dx = player.x - this._lastPlayerSample.x;
+        const dy = player.y - this._lastPlayerSample.y;
+        if ((dx * dx + dy * dy) > 4) this._lastPlayerActiveAt = now;
+        this._lastPlayerSample = { x: player.x, y: player.y, at: now };
+      }
+      const idleMs = now - (this._lastPlayerActiveAt || now);
+      const roomInfo = this.actions.getRoom ? this.actions.getRoom(player.x, player.y) : null;
+      this._send({
+        type: 'player_idle',
+        idleMs,
+        position: {
+          x: Math.round(player.x),
+          y: Math.round(player.y),
+          room: roomInfo?.key || null,
+        },
+      });
+    }
   }
 
   /**

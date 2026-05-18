@@ -436,6 +436,15 @@ class WorldState extends EventEmitter {
       if (me.lastAction) lines.push(`- Your last action: ${me.lastAction}`);
       if (me.currentTask) lines.push(`- Current task: ${me.currentTask}`);
 
+      // Conversation focus — when someone just spoke to you, the LLM
+      // should acknowledge before doing anything else. Window kept short
+      // (30s) so it doesn't haunt every prompt forever.
+      if (me.lastAddressed && (Date.now() - me.lastAddressed.at) < 30000) {
+        const ago = Math.round((Date.now() - me.lastAddressed.at) / 1000);
+        const txt = String(me.lastAddressed.text || '').slice(0, 120);
+        lines.push(`- ${me.lastAddressed.by} just spoke to you ${ago}s ago: "${txt}". Acknowledge them before doing anything else — it is rude to walk off mid-conversation.`);
+      }
+
       // Adjacent rooms — so the NPC can think "I'll drop by reception on
       // the way to storage" instead of treating rooms as a flat list.
       if (me.room && this.roomGraph[me.room]) {
@@ -521,6 +530,21 @@ class WorldState extends EventEmitter {
     if (this.environment.meetingInProgress) {
       const att = this.environment.meetingAttendees.join(', ') || 'unspecified attendees';
       lines.push(`- Meeting in progress: ${att}`);
+    }
+
+    // Player presence — when the human (Zion / "the CEO") is in the
+    // office, surface their position to every NPC. The receptionist role
+    // (Lucy) uses this to decide whether to walk over and offer a tour
+    // after the player has been standing still for a while.
+    // Note: independent of `zionPresent` (which gates voice/audio).
+    if (this.environment.playerPosition) {
+      const idleMs = this.environment.playerIdleMs || 0;
+      const idleSec = Math.round(idleMs / 1000);
+      const p = this.environment.playerPosition;
+      const tags = [`at (${Math.round(p.x)}, ${Math.round(p.y)})`];
+      if (p.room) tags.push(p.room);
+      if (idleSec > 30) tags.push(`idle ${idleSec}s — may need help`);
+      lines.push(`- Player presence: ${tags.join(', ')}`);
     }
 
     return lines.length ? lines.join('\n') : '';

@@ -805,6 +805,7 @@ The `docs/` directory has the canonical deep-dives for the runtime systems:
 | [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md) | **OpenClaw → WorldState bridge** — gateway events drive tasks + voice + agent-bus + per-NPC role-hinted assignment, in addition to the existing sprite/bubble layer |
 | [docs/VOICE_INPUT.md](docs/VOICE_INPUT.md) | **Voice loop** — push-to-talk STT (`\` or 🎤) + action classifier + outbound dispatch to OpenClaw. Closes the "voice in → real action out" loop. |
 | [docs/AWARENESS.md](docs/AWARENESS.md) | **NPC awareness signals** — every spatial / social / temporal signal injected into the think prompt, with a pattern for adding more. |
+| [docs/SOCIAL_BEHAVIOR.md](docs/SOCIAL_BEHAVIOR.md) | **Social layer** — conversation focus (NPCs stop walking when spoken to), Lucy's receptionist tour for idle players, office manners, think-aloud bubbles. |
 | [docs/ROADMAP_SELF_ADVANCEMENT.md](docs/ROADMAP_SELF_ADVANCEMENT.md) | **Where it's going** — staged plan from live office mutation → custom sprite generation → SOUL.md self-revision → cross-NPC negotiation. |
 | [docs/SCENE.md](docs/SCENE.md) | **`office-scene.js` navigation map** — what lives where in the 3079-line scene |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | **NPC action vocabulary** — every `actions.X()` (walk, sit, speak, callMeeting, …), the per-NPC turn queue, how cofounder dispatch reaches an action |

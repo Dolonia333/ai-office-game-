@@ -825,6 +825,18 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
     const situationalLines = [timeOfDayBlock, selfRepetitionHint].filter(Boolean);
     const situationalBlock = situationalLines.length ? situationalLines.join('\n') : '';
 
+    // Office manners — short social rules so NPC behavior feels like a
+    // real workplace instead of NPCs talking past each other. Kept
+    // intentionally short; the LLM only needs the gist.
+    const officeManners = [
+      "- If someone is mid-sentence or just spoke to you, acknowledge them before walking off.",
+      "- If a peer is `busy` (meeting / walking), don't interrupt unless it's urgent.",
+      "- Greet people you haven't spoken to in a while; short small talk is fine.",
+      "- Don't repeat the same check-in question — vary your topic or wait.",
+      "- The CEO (the human player) gets a hello if they're standing near you.",
+      "- Brevity is a virtue. One short sentence usually beats three long ones.",
+    ].join('\n');
+
     const systemPrompt = brain.personality + '\n\n' +
       '## Hierarchy Rules\n' + hierarchyRules + '\n\n' +
       '## Your Teams\n' + (teamContext || 'No team assignments.') + '\n\n' +
@@ -832,6 +844,7 @@ Respond in character as ${npcName}. Just the dialogue text, nothing else.`;
       (planText ? '## Today\'s Priorities\n' + planText + '\n\n' : '') +
       (skillContext ? '## Skills & Growth\n' + skillContext + '\n\n' : '') +
       '## Your Coworkers\n' + coworkerContext + '\n\n' +
+      '## Office Manners\n' + officeManners + '\n\n' +
       (liveContextBlock ? '## Current State (live)\n' + liveContextBlock + '\n\n' : '') +
       (situationalBlock ? '## Situational\n' + situationalBlock + '\n\n' : '') +
       (assistantProfileBlock ? assistantProfileBlock + '\n\n' : '') +
@@ -1674,6 +1687,10 @@ ${roleActions}
   x/y are absolute pixel coordinates in the 1280×720 office.
   Use sparingly — only if you genuinely need something that doesn't exist yet. Tell the team WHY in the reason.
   Example: "We need a second whiteboard near my desk. [ACTION:placeFurniture:whiteboard:480:180:For sprint planning]"
+- Think out loud (silent thought bubble): [ACTION:thinkAloud:short internal thought]
+  Use this when you're processing something or talking to yourself — not addressing anyone.
+  Renders as a thought bubble (cloud) over your head instead of a speech bubble.
+  Example: "[ACTION:thinkAloud:I wonder if Marcus already shipped the auth fix...]"
 
 ### Delegation (for tasks outside your scope):
 - Delegate to the right person: [DELEGATE:PersonName:reason]
