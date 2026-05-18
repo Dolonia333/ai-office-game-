@@ -111,6 +111,9 @@
     <!-- Agent Office System -->
     <script src="./src/agent-actions.js" defer></script>
     <script src="./src/agent-office-manager.js" defer></script>
+    <!-- Proximity audio (distance/facing volume + convo mute, must load
+         before voice-gate and elevenlabs-provider so they can call into it) -->
+    <script src="./src/proximity-audio.js" defer></script>
     <!-- Voice gate (Zion-presence flag + speech provider plug) -->
     <script src="./src/voice-gate.js" defer></script>
     <!-- ElevenLabs voice provider (auto-installs if /api/tts/health says yes) -->

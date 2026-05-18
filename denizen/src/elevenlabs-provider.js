@@ -29,11 +29,17 @@
   // keep a copy here so we don't need to import anything from that file.
   function speechSynthesisFallback(npcName, text) {
     if (!('speechSynthesis' in window)) return;
+    // Proximity gate — same rules as the ElevenLabs path.
+    const proximity = (window.DenizenProximityAudio && window.DenizenProximityAudio.computeVolumeForNpc)
+      ? window.DenizenProximityAudio.computeVolumeForNpc(npcName)
+      : { volume: 1, muted: false };
+    if (proximity.muted) return;
     const utter = new SpeechSynthesisUtterance(text);
     let hash = 0;
     for (let i = 0; i < (npcName || '').length; i++) hash = (hash * 31 + npcName.charCodeAt(i)) >>> 0;
     utter.pitch = 0.85 + ((hash % 30) / 100);
     utter.rate = 1.05;
+    utter.volume = proximity.volume;
     window.speechSynthesis.speak(utter);
   }
 
@@ -69,6 +75,16 @@
 
   async function elevenLabsProvider(npcName, text) {
     if (!window.DenizenPresence?.zionPresent) return; // belt + suspenders gate
+
+    // Proximity gate — skip the network round-trip entirely if the
+    // line would be muted anyway (active-convo lock with a different
+    // NPC). Saves ElevenLabs quota and keeps the office quiet when
+    // the player is mid-chat.
+    const proximity = (window.DenizenProximityAudio && window.DenizenProximityAudio.computeVolumeForNpc)
+      ? window.DenizenProximityAudio.computeVolumeForNpc(npcName)
+      : { volume: 1, muted: false };
+    if (proximity.muted) return;
+
     try {
       const res = await fetch(TTS_URL, {
         method: 'POST',
@@ -87,6 +103,7 @@
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      audio.volume = proximity.volume;
       audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
       audio.addEventListener('error', () => URL.revokeObjectURL(url), { once: true });
       audio.play().catch((err) => {

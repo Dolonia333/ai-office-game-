@@ -328,6 +328,15 @@ class PlayerChat {
     this._waitingForResponse = true;
     this._lastTargetKey = targetKey; // remember for response handler
 
+    // Proximity-audio: tell the audio gate the player is now in active
+    // conversation with this NPC, so every other NPC's voice line is
+    // muted for the duration of the chat. Decays after ~30s of no
+    // further messages.
+    if (window.DenizenProximityAudio?.setActiveConvoNpc) {
+      try { window.DenizenProximityAudio.setActiveConvoNpc(targetName); }
+      catch (_) { /* best-effort */ }
+    }
+
     // Show player's speech bubble above the player character
     this._showPlayerBubble(trimmed);
 
