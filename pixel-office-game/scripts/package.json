@@ -7,7 +7,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "SEE LICENSE IN ../LICENSE",
   "description": "",
   "dependencies": {
     "pngjs": "^7.0.0"
