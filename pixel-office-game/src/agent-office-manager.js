@@ -1771,6 +1771,32 @@ class AgentOfficeManager {
             }).catch(err => console.warn('[AgentManager] requestAnimation error:', err?.message || err));
             break;
           }
+          case 'requestCapability': {
+            // Stage 4 step 1 of the self-advancement roadmap. NPC
+            // proposes a brand new ACTION (verb) that doesn't exist
+            // yet. Goes to an operator-review queue. The verb does
+            // NOT become available instantly — even on approval an
+            // operator still has to hand-write the implementation in
+            // src/agent-actions.js. That gate is non-negotiable.
+            // Params: [verbName, description]. Description may
+            // contain colons, so re-join everything after the first
+            // param.
+            const verbName = (act.params[0] || '').trim();
+            const description = act.params.slice(1).join(':').trim();
+            fetch('/api/request-capability', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ by: npcName, verbName, description }),
+            }).then(r => r.json()).then(res => {
+              if (res?.ok) {
+                console.log(`[AgentManager] ${npcName} proposed capability "${verbName}"`);
+                if (this.actions?.emote) this.actions.emote(npcKey, 'idea');
+              } else {
+                console.warn(`[AgentManager] requestCapability rejected:`, res?.error);
+              }
+            }).catch(err => console.warn('[AgentManager] requestCapability error:', err?.message || err));
+            break;
+          }
           default:
             console.log(`[AgentManager] Unknown NPC action: ${act.action}`);
         }
