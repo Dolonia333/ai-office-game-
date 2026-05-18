@@ -1033,6 +1033,12 @@ IMPORTANT: You must pick actions OTHER than "work" at least 40% of the time. Use
           if (decision.target && typeof worldState.recordContact === 'function') {
             worldState.recordContact(npcName, decision.target);
           }
+          // Record the exchange itself for the cross-NPC stuck-loop
+          // detector. Catches "any updates?" ping-pong that neither NPC
+          // can detect alone via self-repetition.
+          if (decision.target && decision.message && typeof worldState.recordExchange === 'function') {
+            worldState.recordExchange(npcName, decision.target, decision.message);
+          }
         }
 
         // If the NPC chose to talk to a specific peer, also publish on the

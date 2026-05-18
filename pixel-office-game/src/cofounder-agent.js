@@ -594,6 +594,22 @@ YOUR JOB — create a LIVING office:
               busy: !!a.busy,
               currentTask: a.currentTask || null,
             });
+            // Fatigue tracking — derive deskSittingSince + lastBreakAt
+            // from the status transitions we already ship. Cheap because
+            // recordDeskStart is idempotent.
+            if (a.status === 'working' && typeof worldState.recordDeskStart === 'function') {
+              worldState.recordDeskStart(a.name);
+            } else if ((a.status === 'break' || a.status === 'walking' || a.status === 'talking')
+                       && typeof worldState.recordBreak === 'function') {
+              // Any non-working, non-meeting status counts as "off the desk"
+              // and resets the deskSittingSince clock. We only stamp
+              // lastBreakAt for actual break statuses though.
+              const cur = worldState.npcs[a.name];
+              if (cur?.deskSittingSince) {
+                worldState.updateNpc(a.name, { deskSittingSince: null });
+              }
+              if (a.status === 'break') worldState.recordBreak(a.name);
+            }
           }
           // Also mirror furniture once, so worldState can compute desk
           // neighbors without needing to round-trip the client every time.

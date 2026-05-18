@@ -153,7 +153,7 @@ class PlayerChat {
   /**
    * Stop an NPC, make them face the player, and freeze in place
    */
-  _stopNpcForConversation(npc, npcKey) {
+  _stopNpcForConversation(npc, npcKey, addressText) {
     if (!npc?.ai) return;
     const actions = this.manager?.actions;
 
@@ -167,6 +167,28 @@ class PlayerChat {
     if (npc._pathFollower) npc._pathFollower.stop();
     npc.ai.mode = 'agent_task';
     npc.ai.taskState = 'reporting'; // freeze in place
+
+    // Conversation focus — same mechanism NPCs use when addressed by a
+    // peer. Pins them for ~12s (longer than the NPC↔NPC 8s because
+    // human typing + LLM round-trip is slower) so they won't wander
+    // off mid-reply, and surfaces "the CEO just spoke to you" in their
+    // next think prompt so they prioritize acknowledgment.
+    const now = this.scene.time?.now || 0;
+    npc.ai._addressedUntil = now + 12000;
+    npc.ai._addressedBy = '__player__';
+
+    if (addressText && this.manager?._send) {
+      const agent = this.manager.agents?.get(npcKey);
+      if (agent?.name) {
+        this.manager._send({
+          type: 'npc_addressed',
+          target: agent.name,
+          from: 'the CEO',
+          text: String(addressText).slice(0, 200),
+          ts: Date.now(),
+        });
+      }
+    }
 
     // Face the player
     const player = this.scene.player;
@@ -316,11 +338,11 @@ class PlayerChat {
 
       // reportToCEO handles: stand up if sitting, walk via pathfinding, stop & face player
       await this.manager.actions.reportToCEO(targetKey);
-      this._stopNpcForConversation(targetNpc, targetKey);
+      this._stopNpcForConversation(targetNpc, targetKey, trimmed);
     } else {
       // NPC is nearby — show reaction, stop, face player
       this.manager.actions.emote(targetKey, '!');
-      this._stopNpcForConversation(targetNpc, targetKey);
+      this._stopNpcForConversation(targetNpc, targetKey, trimmed);
     }
 
     // Send to server for NPC brain processing

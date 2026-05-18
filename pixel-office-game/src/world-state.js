@@ -123,6 +123,14 @@ class WorldState extends EventEmitter {
      *  instead of looping. */
     this.recentSelfMessages = new Map();
 
+    /** Per-pair exchange ring. Keyed by "Alex|Josh" (sorted), value is a
+     *  ring of {fromA: bool, text, ts}. The stuck-loop detector compares
+     *  the last N exchanges between two NPCs and flags when they're
+     *  bouncing the same question back and forth ("any updates?" → "not
+     *  yet" → "any updates?" → "not yet" → ...) so the prompt can nudge
+     *  them to break the cycle. */
+    this.recentExchanges = new Map();
+
     /** Caps so a chatty subsystem can't OOM us. */
     this._caps = {
       activeThreats: 8,
@@ -131,6 +139,8 @@ class WorldState extends EventEmitter {
       foregroundTasks: 25,
       lastContact: 200,
       selfMessagesPerNpc: 5,
+      exchangesPerPair: 6,
+      exchangePairs: 100,
     };
   }
 
@@ -202,6 +212,88 @@ class WorldState extends EventEmitter {
     const ts = this.lastContact.get(this._pairKey(npcA, npcB));
     if (!ts) return null;
     return Math.round((Date.now() - ts) / 60000);
+  }
+
+  /** Record that an NPC just took a break (left their desk, hit the
+   *  breakroom, or chatted at the water cooler). Resets their fatigue
+   *  clock. Surfaced in the prompt so peers can notice
+   *  "Edward hasn't had a break in 2 hours." */
+  recordBreak(npcName) {
+    if (!npcName) return;
+    this.updateNpc(npcName, { lastBreakAt: Date.now(), deskSittingSince: null });
+  }
+
+  /** Record that an NPC sat down at their desk. Idempotent — won't
+   *  reset deskSittingSince if they were already sitting. */
+  recordDeskStart(npcName) {
+    if (!npcName) return;
+    const cur = this.npcs[npcName];
+    if (cur && cur.deskSittingSince) return; // already tracking
+    this.updateNpc(npcName, { deskSittingSince: Date.now() });
+  }
+
+  /** Minutes since this NPC last took a break. Returns null if never
+   *  recorded — caller decides whether to treat "unknown" as fresh or
+   *  stale. */
+  minutesSinceBreak(npcName) {
+    const s = this.npcs[npcName];
+    if (!s?.lastBreakAt) return null;
+    return Math.round((Date.now() - s.lastBreakAt) / 60000);
+  }
+
+  /** Minutes this NPC has been sitting at their desk uninterrupted. */
+  minutesAtDesk(npcName) {
+    const s = this.npcs[npcName];
+    if (!s?.deskSittingSince) return null;
+    return Math.round((Date.now() - s.deskSittingSince) / 60000);
+  }
+
+  /** Record one side of an A→B exchange. Used by the stuck-loop
+   *  detector to flag back-and-forth on the same question. Keep the
+   *  text short — only the first 8 normalized words are used for
+   *  matching. */
+  recordExchange(from, to, text) {
+    if (!from || !to || from === to || !text) return;
+    const key = this._pairKey(from, to);
+    if (!this.recentExchanges.has(key)) this.recentExchanges.set(key, []);
+    const ring = this.recentExchanges.get(key);
+    ring.push({ from, text: String(text).slice(0, 200), ts: Date.now() });
+    if (ring.length > this._caps.exchangesPerPair) ring.shift();
+    if (this.recentExchanges.size > this._caps.exchangePairs) {
+      // Drop oldest pair by last exchange ts.
+      const oldest = [...this.recentExchanges.entries()]
+        .sort((a, b) => a[1][a[1].length - 1].ts - b[1][b[1].length - 1].ts)[0];
+      if (oldest) this.recentExchanges.delete(oldest[0]);
+    }
+  }
+
+  /** Detect a stuck loop between two NPCs. Returns
+   *  { count, sample } when their recent exchanges include 3+
+   *  near-duplicate messages from EITHER side inside windowMs,
+   *  otherwise null. Same normalisation as self-repetition: lowercase,
+   *  strip punctuation, first 8 words. */
+  stuckLoop(npcA, npcB, { windowMs = 10 * 60 * 1000, minRepeats = 3 } = {}) {
+    const key = this._pairKey(npcA, npcB);
+    const ring = this.recentExchanges.get(key);
+    if (!ring || ring.length < minRepeats) return null;
+    const now = Date.now();
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ')
+      .split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+    const buckets = new Map();
+    for (const ex of ring) {
+      if (now - ex.ts > windowMs) continue;
+      const n = norm(ex.text);
+      if (!n) continue;
+      buckets.set(n, (buckets.get(n) || 0) + 1);
+    }
+    for (const [n, count] of buckets) {
+      if (count >= minRepeats) {
+        // Find the most recent matching exchange to return as a sample.
+        const sample = [...ring].reverse().find(ex => norm(ex.text) === n);
+        return { count, sample: sample?.text || n };
+      }
+    }
+    return null;
   }
 
   /** Record a message the NPC just generated. Used by the repetition
@@ -445,6 +537,16 @@ class WorldState extends EventEmitter {
         lines.push(`- ${me.lastAddressed.by} just spoke to you ${ago}s ago: "${txt}". Acknowledge them before doing anything else — it is rude to walk off mid-conversation.`);
       }
 
+      // Personal fatigue — wall-clock time at desk + since last break.
+      // Only surface when there's actually a reason ("you've been at it
+      // for an hour"). The Office Manners block already covers break
+      // etiquette so we don't need to repeat advice here.
+      const atDesk = this.minutesAtDesk(npcName);
+      const sinceBreak = this.minutesSinceBreak(npcName);
+      if (atDesk != null && atDesk >= 45) {
+        lines.push(`- You've been at your desk for ${atDesk} minutes${sinceBreak != null ? `, last break was ${sinceBreak} min ago` : ''}. A short break or chat would be reasonable.`);
+      }
+
       // Adjacent rooms — so the NPC can think "I'll drop by reception on
       // the way to storage" instead of treating rooms as a flat list.
       if (me.room && this.roomGraph[me.room]) {
@@ -491,6 +593,11 @@ class WorldState extends EventEmitter {
           // while, to flag "you haven't checked in with them today".
           const mins = this.minutesSinceContact(npcName, n);
           if (mins != null && mins > 15) tags.push(`last spoke ${mins}m ago`);
+          // Peer fatigue — visible "they look tired" tag once someone's
+          // been heads-down for over an hour. Lets a teammate offer a
+          // coffee run without each NPC having to introspect.
+          const peerAtDesk = this.minutesAtDesk(n);
+          if (peerAtDesk != null && peerAtDesk >= 60) tags.push(`tired (${peerAtDesk}m at desk)`);
           return tags.length ? `${n} (${tags.join(', ')})` : n;
         });
         lines.push(`- Nearby: ${nearStrs.join(', ')}`);
@@ -530,6 +637,22 @@ class WorldState extends EventEmitter {
     if (this.environment.meetingInProgress) {
       const att = this.environment.meetingAttendees.join(', ') || 'unspecified attendees';
       lines.push(`- Meeting in progress: ${att}`);
+    }
+
+    // Stuck-loop detection — check this NPC's exchange history against
+    // every peer they've recently interacted with. If they've been
+    // bouncing the same question back and forth, flag it so the prompt
+    // can nudge them to break the cycle (escalate, switch topic, or
+    // wait). Cross-NPC version of self-repetition.
+    for (const [key, ring] of this.recentExchanges) {
+      const [a, b] = key.split('|');
+      if (a !== npcName && b !== npcName) continue;
+      const peer = a === npcName ? b : a;
+      const loop = this.stuckLoop(npcName, peer);
+      if (loop) {
+        lines.push(`- Stuck loop with ${peer}: "${String(loop.sample).slice(0, 60)}" repeated ${loop.count}x. Break the cycle — escalate, change topic, or stop checking in.`);
+        break; // only show one loop per think to keep prompt tight
+      }
     }
 
     // Player presence — when the human (Zion / "the CEO") is in the
