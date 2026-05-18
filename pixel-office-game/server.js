@@ -11,6 +11,7 @@ const worldState = require('./src/world-state');
 const agentBus = require('./src/agent-bus');
 const ExternalSink = require('./src/external-sink');
 const elevenLabs = require('./src/elevenlabs-tts');
+const animationForge = require('./src/animation-forge');
 
 // Voice map (per-NPC ElevenLabs voice IDs). Loaded once at startup;
 // edit data/voice-map.json + restart to change. Missing file → empty map
@@ -174,6 +175,28 @@ function _consumePlacementBudget(by) {
   if (by === 'system' || by === 'operator') return;
   const k = _budgetKey(by);
   _placementBudget.set(k, (_placementBudget.get(k) || 0) + 1);
+}
+
+// --- Per-NPC daily animation request budget ---
+// Same shape as the placement budget, lower cap. Animation requests are
+// heavier review work for the operator (each one might trigger image-
+// generation cost) so we want NPCs to be picky about asking.
+const ANIMATION_BUDGET_PER_DAY = 2;
+const _animationBudget = new Map(); // key: "<by>|<YYYY-MM-DD>" → count
+function _checkAnimationBudget(by) {
+  if (by === 'system' || by === 'operator') return { allowed: true, requestedToday: 0, cap: Infinity };
+  const k = _budgetKey(by);
+  const requestedToday = _animationBudget.get(k) || 0;
+  return {
+    allowed: requestedToday < ANIMATION_BUDGET_PER_DAY,
+    requestedToday,
+    cap: ANIMATION_BUDGET_PER_DAY,
+  };
+}
+function _consumeAnimationBudget(by) {
+  if (by === 'system' || by === 'operator') return;
+  const k = _budgetKey(by);
+  _animationBudget.set(k, (_animationBudget.get(k) || 0) + 1);
 }
 
 // Recent NPC-brain errors, surfaced through GET /api/health so the client
@@ -509,6 +532,112 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, removed }));
     });
+    return;
+  }
+
+  // --- NPC-facing "request a new animation" endpoint ---
+  // Stage 2 of the self-advancement roadmap. NPCs propose a new
+  // animation by name + short description; the proposal goes into a
+  // pending queue and an operator decides whether to actually generate
+  // / register it. This endpoint does NOT generate sprite frames —
+  // that's a separate (and currently stubbed) generator pipeline. See
+  // docs/ANIMATION_FORGE.md.
+  //
+  // Body shape: { by: "Roki", animName: "meditate", description: "sitting cross-legged" }
+  const animationProposalsFile = path.join(ROOT, 'data', 'animation-proposals.json');
+
+  if (urlPath === '/api/request-animation' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let p;
+      try { p = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const by = String(p.by || 'system').slice(0, 40);
+      const animName = String(p.animName || '').slice(0, 80);
+      const description = String(p.description || '').slice(0, 400);
+
+      // Shared validator — keeps the endpoint and animation-forge in lockstep.
+      const v = animationForge.validateProposal({ animName, description });
+      if (!v.ok) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: v.error }));
+        return;
+      }
+
+      // Daily budget — lower than the placement budget because each
+      // proposal is heavier review work for the operator.
+      const budgetCheck = _checkAnimationBudget(by);
+      if (!budgetCheck.allowed) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: `${by} has hit the daily animation-request budget (${budgetCheck.cap}). Try again tomorrow.`,
+          requestedToday: budgetCheck.requestedToday,
+        }));
+        return;
+      }
+
+      // Read-modify-write the proposals file. Shape: { proposals: [...] }.
+      let store = { proposals: [] };
+      try {
+        const raw = fs.readFileSync(animationProposalsFile, 'utf8');
+        store = JSON.parse(raw);
+        if (!Array.isArray(store.proposals)) store.proposals = [];
+      } catch (_) {
+        try { fs.mkdirSync(path.dirname(animationProposalsFile), { recursive: true }); } catch (__) {}
+      }
+      const id = `anim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const proposal = {
+        id,
+        by,
+        animName,
+        description,
+        proposedAt: Date.now(),
+        status: 'pending',
+      };
+      store.proposals.push(proposal);
+      try {
+        fs.writeFileSync(animationProposalsFile, JSON.stringify(store, null, 2), 'utf8');
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist proposal: ' + err.message }));
+        return;
+      }
+
+      // Consume budget AFTER successful persist (don't penalize the NPC
+      // for our IO failures).
+      _consumeAnimationBudget(by);
+
+      // Surface as a worldState event so the diag panel sees the
+      // proposal arrive. NPCs may also notice — at minimum the operator
+      // gets a breadcrumb.
+      try {
+        worldState.pushEvent('proposed-animation',
+          `${by} proposed animation "${animName}": ${description}`);
+      } catch (_) {}
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, proposal }));
+    });
+    return;
+  }
+
+  // --- Operator-facing list of pending animation proposals ---
+  // Used by a future operator review UI. Returns the raw JSON; an empty
+  // file is treated as `{ proposals: [] }`.
+  if (urlPath === '/api/animation-proposals' && req.method === 'GET') {
+    let store = { proposals: [] };
+    try {
+      const raw = fs.readFileSync(animationProposalsFile, 'utf8');
+      store = JSON.parse(raw);
+      if (!Array.isArray(store.proposals)) store.proposals = [];
+    } catch (_) { /* file may not exist yet */ }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(store));
     return;
   }
 

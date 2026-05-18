@@ -34,6 +34,14 @@ its own and can ship independently.
 - **Per-NPC daily placement budget (Stage 1)** — capped at 3
   placements per NPC per day. `system` and `operator` callers are
   exempt. Returns HTTP 429 with `placedToday` when exceeded.
+- **`requestAnimation` proposal queue (Stage 2, phase 1)** — NPCs
+  call `[ACTION:requestAnimation:animName:description]`. The server
+  validates against `/^[a-z][a-z0-9_]{0,30}$/` + 200-char description
+  cap, enforces a per-NPC daily budget of 2 (system/operator exempt),
+  persists to `data/animation-proposals.json` with `status: "pending"`,
+  and emits a `proposed-animation` worldState event. `GET /api/animation-proposals`
+  returns the queue. The actual sprite generation backends are still
+  future work. See [ANIMATION_FORGE.md](ANIMATION_FORGE.md).
 
 ## Stage 2 — Custom sprite animations (1 week)
 
@@ -44,26 +52,32 @@ sprite sheet for itself.
 Concrete steps:
 
 1. **`[ACTION:requestAnimation:animName:description]`** — NPC asks
-   for a new animation. The request goes to a queue.
+   for a new animation. The request goes to a queue. **(Shipped — see
+   [ANIMATION_FORGE.md](ANIMATION_FORGE.md).)**
 2. **Server-side generator** — `src/animation-forge.js` builds a sprite
    sheet from the description. Three increasingly powerful options:
    - **Composition** (today, cheap): pick existing frames and layer/
      tint them. E.g. "Roki reading at desk" = existing sit-down frame
-     + book overlay. No new pixel art generated.
+     + book overlay. No new pixel art generated. **(API surface stubbed
+     in `composeFromExistingFrames`; renderer not yet wired.)**
    - **AI-generated PNG** (hosted): call an image model (DALL·E,
      Stable Diffusion, or a Replicate endpoint) with a constrained
      prompt template that produces a 4-frame strip at a fixed style.
      Save to `assets/generated/<animName>.png`. Cost: a few cents per
-     animation.
+     animation. **(Future — needs API key + cost controls.)**
    - **Local SD pipeline** (offline): run ComfyUI or AUTOMATIC1111
      locally with a LoRA tuned on the LimeZu Modern Office style.
-     Zero external API cost but heavier setup.
+     Zero external API cost but heavier setup. **(Future.)**
 3. **Registry** — `data/generated-animations.json` lists what's been
    created, with metadata (who requested it, when, prompt). The Phaser
-   anim factory reads this on boot.
+   anim factory reads this on boot. **(Future — proposals live in
+   `data/animation-proposals.json` today; the approved/generated
+   registry is a separate file once generators land.)**
 4. **Approval gate** — for the AI-gen variants, surface new animations
    in the diag panel for the operator to approve before they're
-   registered globally. Prevents unwanted visual drift.
+   registered globally. Prevents unwanted visual drift. **(Future —
+   `GET /api/animation-proposals` is the contract a future review UI
+   will consume.)**
 
 ## Stage 3 — SOUL.md self-revision (longer)
 

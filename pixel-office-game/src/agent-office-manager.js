@@ -1749,6 +1749,28 @@ class AgentOfficeManager {
             }).catch(err => console.warn('[AgentManager] placeFurniture error:', err?.message || err));
             break;
           }
+          case 'requestAnimation': {
+            // Stage 2 of the self-advancement roadmap. NPC proposes a
+            // new animation; it goes to an operator-review queue. The
+            // animation does NOT appear instantly — that's by design.
+            // Params: [animName, description]. Description may contain
+            // colons, so re-join everything after the first param.
+            const animName = (act.params[0] || '').trim();
+            const description = act.params.slice(1).join(':').trim();
+            fetch('/api/request-animation', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ by: npcName, animName, description }),
+            }).then(r => r.json()).then(res => {
+              if (res?.ok) {
+                console.log(`[AgentManager] ${npcName} proposed animation "${animName}"`);
+                if (this.actions?.emote) this.actions.emote(npcKey, 'idea');
+              } else {
+                console.warn(`[AgentManager] requestAnimation rejected:`, res?.error);
+              }
+            }).catch(err => console.warn('[AgentManager] requestAnimation error:', err?.message || err));
+            break;
+          }
           default:
             console.log(`[AgentManager] Unknown NPC action: ${act.action}`);
         }
