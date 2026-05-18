@@ -1149,6 +1149,178 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // --- POST /api/animation-proposal/approve ---
+  // Body: { id, decision: 'approved'|'rejected', note? }
+  // Symmetric with /api/soul-proposal/approve so the operator UI can use
+  // the same shape across kinds. Does NOT trigger sprite generation —
+  // that's still future work (see docs/ANIMATION_FORGE.md). Flipping
+  // status to 'approved' here just clears the proposal for whatever
+  // generator pipeline lands later.
+  if (urlPath === '/api/animation-proposal/approve' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let payload;
+      try { payload = JSON.parse(body || '{}'); }
+      catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid JSON: ' + err.message }));
+        return;
+      }
+      const id = String(payload.id || '').trim();
+      const decision = String(payload.decision || '').trim();
+      const note = payload.note ? String(payload.note).slice(0, 400) : null;
+      if (!id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'id is required' }));
+        return;
+      }
+      if (decision !== 'approved' && decision !== 'rejected') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: "decision must be 'approved' or 'rejected'" }));
+        return;
+      }
+      let store = { proposals: [] };
+      try {
+        const raw = fs.readFileSync(animationProposalsFile, 'utf8');
+        store = JSON.parse(raw);
+        if (!Array.isArray(store.proposals)) store.proposals = [];
+      } catch (_) { /* lazy-create equivalent */ }
+      const idx = store.proposals.findIndex(p => p && p.id === id);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `proposal not found: ${id}` }));
+        return;
+      }
+      store.proposals[idx].status = decision;
+      store.proposals[idx].review = {
+        decision,
+        note,
+        reviewedAt: new Date().toISOString(),
+      };
+      try {
+        fs.mkdirSync(path.dirname(animationProposalsFile), { recursive: true });
+        fs.writeFileSync(animationProposalsFile, JSON.stringify(store, null, 2), 'utf8');
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'failed to persist decision: ' + err.message }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, proposal: store.proposals[idx] }));
+    });
+    return;
+  }
+
+  // --- GET /api/proposals — aggregated read for the operator review UI ---
+  // Unifies the animation + SOUL + (future) capability queues into a
+  // single timestamp-sorted feed so the operator UI doesn't have to
+  // remember three endpoints. Each entry is kind-tagged and carries the
+  // raw record for "show details" UX.
+  //
+  // Query string:
+  //   ?status=pending|approved|rejected|applied|all   default: pending
+  //   ?kind=animation|soul|capability                 may be comma-separated
+  //
+  // Hard cap of 100 entries; newest first.
+  if (urlPath === '/api/proposals' && req.method === 'GET') {
+    const url = new URL(req.url, 'http://x');
+    const statusFilter = (url.searchParams.get('status') || 'pending').toLowerCase();
+    const kindParam = url.searchParams.get('kind') || '';
+    const kindFilter = new Set(
+      kindParam.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+    );
+    const HARD_CAP = 100;
+
+    function maybe(kind) {
+      return kindFilter.size === 0 || kindFilter.has(kind);
+    }
+
+    const merged = [];
+
+    // Animation proposals — { id, by, animName, description, proposedAt, status, review? }
+    if (maybe('animation')) {
+      let store = { proposals: [] };
+      try {
+        const raw = fs.readFileSync(animationProposalsFile, 'utf8');
+        store = JSON.parse(raw);
+        if (!Array.isArray(store.proposals)) store.proposals = [];
+      } catch (_) { /* missing file → empty */ }
+      for (const p of store.proposals) {
+        if (!p || typeof p !== 'object') continue;
+        merged.push({
+          kind: 'animation',
+          id: p.id,
+          by: p.by,
+          status: p.status || 'pending',
+          summary: `${p.animName || '?'} — ${p.description || ''}`.slice(0, 240),
+          ts: Number(p.proposedAt) || 0,
+          raw: p,
+        });
+      }
+    }
+
+    // SOUL proposals — { id, npcName, createdAt, status, proposal:{summary,...}, review? }
+    if (maybe('soul')) {
+      const file = _readSoulProposalsFile();
+      for (const p of file.proposals) {
+        if (!p || typeof p !== 'object') continue;
+        const tsMs = p.createdAt ? Date.parse(p.createdAt) : 0;
+        merged.push({
+          kind: 'soul',
+          id: p.id,
+          by: p.npcName,
+          status: p.status || 'pending',
+          summary: (p.proposal && p.proposal.summary) ? String(p.proposal.summary).slice(0, 240) : '(no summary)',
+          ts: Number.isFinite(tsMs) ? tsMs : 0,
+          raw: p,
+        });
+      }
+    }
+
+    // Capability proposals — may not exist on master (Stage 4 is in
+    // flight in a parallel branch). Treat missing/unparseable file as
+    // empty. Shape (best-effort): { id, by, verbName, description, proposedAt, status }.
+    if (maybe('capability')) {
+      const capabilityProposalsFile = path.join(ROOT, 'data', 'capability-proposals.json');
+      try {
+        const raw = fs.readFileSync(capabilityProposalsFile, 'utf8');
+        const store = JSON.parse(raw);
+        const arr = Array.isArray(store?.proposals) ? store.proposals : [];
+        for (const p of arr) {
+          if (!p || typeof p !== 'object') continue;
+          const tsMs = Number(p.proposedAt) || (p.createdAt ? Date.parse(p.createdAt) : 0) || 0;
+          const label = p.verbName || p.capability || p.animName || p.name || '?';
+          const desc = p.description || p.summary || '';
+          merged.push({
+            kind: 'capability',
+            id: p.id,
+            by: p.by || p.npcName,
+            status: p.status || 'pending',
+            summary: `${label} — ${desc}`.slice(0, 240),
+            ts: Number.isFinite(tsMs) ? tsMs : 0,
+            raw: p,
+          });
+        }
+      } catch (_) { /* file may not exist yet — fine */ }
+    }
+
+    // Status filter — 'all' bypasses.
+    const filtered = statusFilter === 'all'
+      ? merged
+      : merged.filter(e => String(e.status || '').toLowerCase() === statusFilter);
+
+    // Newest first.
+    filtered.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+    const total = filtered.length;
+    const proposals = filtered.slice(0, HARD_CAP);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ proposals, total, cap: HARD_CAP, truncated: total > HARD_CAP }));
+    return;
+  }
+
   // --- World-state snapshot (read-only) ---
   // Useful for debugging and for the n8n/Supabase integration to know what
   // the office "looks like" before posting an update.
