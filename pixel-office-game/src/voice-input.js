@@ -172,6 +172,30 @@
     };
   }
 
+  // Brave detection — Brave ships `webkitSpeechRecognition` but the
+  // underlying Google STT call is blocked (privacy), so the native path
+  // always errors with `network`. Pre-emptively use the server provider
+  // so the first mic press actually transcribes instead of erroring.
+  // navigator.brave.isBrave() returns a promise; resolve sync if possible.
+  let _braveDetected = false;
+  try {
+    if (typeof navigator !== 'undefined' && navigator.brave && typeof navigator.brave.isBrave === 'function') {
+      // Fire-and-forget — if we get true back, install the provider for
+      // subsequent presses. The first attempt may still hit native and
+      // auto-swap via the error path below.
+      navigator.brave.isBrave().then((isBrave) => {
+        if (isBrave && !providerOverride) {
+          const p = createServerSttProvider();
+          if (p) {
+            providerOverride = p;
+            _braveDetected = true;
+            console.log('[VoiceInput] Brave detected — using server STT provider (Whisper via /api/stt)');
+          }
+        }
+      }).catch(() => { /* not brave, or detection failed; native path stays */ });
+    }
+  } catch (_) { /* best-effort */ }
+
   if (!supportsSpeechRecognition) {
     console.log('[VoiceInput] SpeechRecognition not available — trying server STT fallback');
     providerOverride = createServerSttProvider();
@@ -406,6 +430,29 @@
     recognition.onerror = (ev) => {
       const code = ev?.error || 'unknown';
       console.warn('[VoiceInput] recognition error:', code);
+
+      // Auto-fallback: `network` (Brave blocks Google STT) and
+      // `service-not-allowed` (some Chromium forks / locked-down enterprise
+      // policy) both mean "native SR is structurally broken in this
+      // browser". Try to swap in the server provider transparently so the
+      // user's next mic press uses Whisper instead of erroring again.
+      const isNativeBroken = (code === 'network' || code === 'service-not-allowed');
+      if (isNativeBroken && !providerOverride) {
+        const p = createServerSttProvider();
+        if (p) {
+          providerOverride = p;
+          console.log('[VoiceInput] native SR error "' + code + '" — switching to server STT (Whisper via /api/stt)');
+          setMicState(
+            'idle',
+            '<b>🔄 switched to server STT</b><br><span style="opacity:0.85">Browser native voice failed (' + code + '). Hold ' + hotkey + ' again to try Whisper.</span>',
+            { sticky: false },
+          );
+          setTimeout(() => { if (!_errorSticky) setMicState('idle', ''); }, 6000);
+          listening = false;
+          return;
+        }
+      }
+
       const { short, hint } = explainError(code);
       const msg = hint
         ? `<b>${short}</b><br><span style="opacity:0.85">${hint}</span>`

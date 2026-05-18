@@ -92,9 +92,33 @@ window.DenizenVoiceInput.setProvider({
 
 ### Browser support
 
-`SpeechRecognition` (or `webkitSpeechRecognition`) is what powers it. As of writing, Chrome/Edge fully support it; Safari has partial support; Firefox requires a flag.
+The default path uses the W3C Web Speech API (`SpeechRecognition` /
+`webkitSpeechRecognition`). It only ships in Chrome and Edge — and
+Chrome's implementation routes your audio to Google's cloud STT, which
+some browsers explicitly block.
 
-If the API isn't present, the module logs `[VoiceInput] SpeechRecognition not available` and the mic button is never created. The script doesn't fail; everything else continues to work. The pluggable provider hook (above) is the path to support those browsers via a server-side STT.
+The module auto-falls-back to a **server-side Whisper provider** in
+two situations:
+
+| Trigger | Result |
+|---|---|
+| `webkitSpeechRecognition` is absent (Firefox without flag, Safari pre-15) | Server provider installed at boot. |
+| `navigator.brave.isBrave()` resolves true | Server provider installed at boot. Brave ships the API but blocks the network call, so we skip it entirely. |
+| Native SR returns `network` or `service-not-allowed` at runtime (locked-down Chromium fork, enterprise policy) | Server provider swapped in on the fly. A non-sticky badge tells you to hold the key again. |
+
+The fallback uses `MediaRecorder` to capture audio in the browser,
+POSTs it to **`/api/stt`** on the server, which proxies to OpenAI
+Whisper. Requires `OPENAI_WHISPER_API_KEY` (or `OPENAI_API_KEY`) to
+be set on the server. Without a key the badge surfaces a clear "server
+STT not configured" message instead of failing silently.
+
+`GET /api/stt/health` reports `{ configured, provider, model }` for
+quick diagnosis. The client probes it on first use; if `configured:
+false`, the user sees an instruction to set the env var.
+
+The pluggable provider hook (`setProvider`) above still works for
+custom engines if you want to swap Whisper for something else
+(Deepgram, AssemblyAI, local whisper.cpp via a different proxy).
 
 ## OpenClaw dispatch
 
@@ -182,7 +206,9 @@ await window.DenizenOpenClawDispatch.sendToHttpProxy("hello");
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Mic button doesn't appear | `SpeechRecognition` not in this browser | Use Chrome/Edge, or plug a custom provider via `setProvider()` |
+| Mic button doesn't appear | Neither `SpeechRecognition` NOR `MediaRecorder` available, or page isn't a secure context | Use http://localhost:… or https; or plug a custom provider via `setProvider()` |
+| Badge says "🌐 network" / "service-not-allowed" then "🔄 switched to server STT" | Native SR blocked by Brave or enterprise policy. Auto-fallback to Whisper. | Hold the hotkey again; transcription continues via `/api/stt`. |
+| Badge says "🎤 server STT not configured" | No `OPENAI_WHISPER_API_KEY` (or `OPENAI_API_KEY`) on the server | Set the env var and restart `npm start`. |
 | Hotkey ignored | Cursor is in a text input | Click outside the input first |
 | Recognition error: `not-allowed` | Mic permission denied | Click 🔒 in the address bar → enable microphone |
 | Recognition error: `no-speech` | No audio detected for several seconds | Talk closer to the mic, or check the OS input device |
