@@ -62,12 +62,16 @@
   // ---- Audio: native SpeechSynthesis as a sane default ----
   function defaultVoiceProvider(npcName, text) {
     if (!('speechSynthesis' in window)) return;
-    // Proximity gate — gracefully degrades to full volume if the
-    // proximity-audio module isn't loaded.
+    // Proximity + slot gates — both gracefully degrade if the proximity
+    // module isn't loaded.
     const proximity = (window.DenizenProximityAudio && window.DenizenProximityAudio.computeVolumeForNpc)
       ? window.DenizenProximityAudio.computeVolumeForNpc(npcName)
       : { volume: 1, muted: false };
     if (proximity.muted) return;
+    if (window.DenizenProximityAudio?.acquireSpeakerSlot
+        && !window.DenizenProximityAudio.acquireSpeakerSlot(npcName, text)) {
+      return;
+    }
     const utter = new SpeechSynthesisUtterance(text);
     // Tiny per-NPC pitch jitter so different characters don't all sound
     // identical. Real TTS providers will override this entirely.
@@ -76,6 +80,8 @@
     utter.pitch = 0.85 + ((hash % 30) / 100); // 0.85..1.14
     utter.rate = 1.05;
     utter.volume = proximity.volume;
+    utter.onend = () => { try { window.DenizenProximityAudio?.releaseSpeakerSlot?.(npcName); } catch (_) {} };
+    utter.onerror = utter.onend;
     window.speechSynthesis.speak(utter);
   }
 

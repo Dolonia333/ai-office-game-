@@ -27,19 +27,28 @@
 
   // Speech-synthesis fallback identical to voice-gate.js's default. We
   // keep a copy here so we don't need to import anything from that file.
-  function speechSynthesisFallback(npcName, text) {
+  function speechSynthesisFallback(npcName, text, alreadyHoldsSlot) {
     if (!('speechSynthesis' in window)) return;
     // Proximity gate — same rules as the ElevenLabs path.
     const proximity = (window.DenizenProximityAudio && window.DenizenProximityAudio.computeVolumeForNpc)
       ? window.DenizenProximityAudio.computeVolumeForNpc(npcName)
       : { volume: 1, muted: false };
     if (proximity.muted) return;
+    // If the elevenlabs path already grabbed the slot, don't double-
+    // acquire; otherwise we need our own claim so two NPCs falling
+    // through to SpeechSynthesis don't overlap each other.
+    if (!alreadyHoldsSlot && window.DenizenProximityAudio?.acquireSpeakerSlot
+        && !window.DenizenProximityAudio.acquireSpeakerSlot(npcName, text)) {
+      return;
+    }
     const utter = new SpeechSynthesisUtterance(text);
     let hash = 0;
     for (let i = 0; i < (npcName || '').length; i++) hash = (hash * 31 + npcName.charCodeAt(i)) >>> 0;
     utter.pitch = 0.85 + ((hash % 30) / 100);
     utter.rate = 1.05;
     utter.volume = proximity.volume;
+    utter.onend = () => { try { window.DenizenProximityAudio?.releaseSpeakerSlot?.(npcName); } catch (_) {} };
+    utter.onerror = utter.onend;
     window.speechSynthesis.speak(utter);
   }
 
@@ -85,6 +94,20 @@
       : { volume: 1, muted: false };
     if (proximity.muted) return;
 
+    // Single-speaker slot — only one NPC can play audio at a time.
+    // Newcomers during an active slot are dropped silently. Their
+    // speech BUBBLE still renders (that's the social visual). Without
+    // this gate, 16 NPCs on autonomous think cycles + Bouncer
+    // confrontations stack into an unintelligible crowd.
+    const acquireSlot = window.DenizenProximityAudio?.acquireSpeakerSlot;
+    if (acquireSlot && !acquireSlot(npcName, text)) {
+      return;
+    }
+
+    const releaseSlot = () => {
+      try { window.DenizenProximityAudio?.releaseSpeakerSlot?.(npcName); } catch (_) {}
+    };
+
     try {
       const res = await fetch(TTS_URL, {
         method: 'POST',
@@ -97,26 +120,31 @@
         let detail = '';
         try { detail = (await res.json()).error || ''; } catch (_) {}
         console.warn(`[ElevenLabs] /api/tts ${res.status} ${detail} — using SpeechSynthesis`);
-        speechSynthesisFallback(npcName, text);
+        releaseSlot();
+        // Let the fallback re-acquire the slot itself (its own helper).
+        speechSynthesisFallback(npcName, text, /*alreadyHoldsSlot=*/false);
         return;
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.volume = proximity.volume;
-      audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
-      audio.addEventListener('error', () => URL.revokeObjectURL(url), { once: true });
+      const cleanup = () => { URL.revokeObjectURL(url); releaseSlot(); };
+      audio.addEventListener('ended', cleanup, { once: true });
+      audio.addEventListener('error', cleanup, { once: true });
       audio.play().catch((err) => {
         // Browsers block autoplay until a user gesture has happened — if
         // we hit that, surface it so the user knows what to do (click
         // anywhere on the page once).
         console.warn(`[ElevenLabs] audio.play() blocked: ${err?.message || err}. Click the page once to unlock audio.`);
         showAudioUnlockHint();
-        speechSynthesisFallback(npcName, text);
+        cleanup();
+        speechSynthesisFallback(npcName, text, /*alreadyHoldsSlot=*/false);
       });
     } catch (err) {
       console.warn(`[ElevenLabs] ${err?.message || err} — using SpeechSynthesis`);
-      speechSynthesisFallback(npcName, text);
+      releaseSlot();
+      speechSynthesisFallback(npcName, text, /*alreadyHoldsSlot=*/false);
     }
   }
 

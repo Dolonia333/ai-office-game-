@@ -178,6 +178,60 @@ describe('proximity-audio.computeVolumeForNpc', () => {
   });
 });
 
+describe('proximity-audio.acquireSpeakerSlot', () => {
+  beforeEach(() => {
+    if (typeof globalThis.window === 'undefined') globalThis.window = globalThis;
+    delete globalThis.window.__DenizenScene;
+    delete globalThis.window.DenizenNpcRoster;
+    delete globalThis.window.DenizenProximityAudio;
+    delete globalThis.window.DenizenProximityConfig;
+  });
+
+  it('first speaker gets the slot; second gets dropped while first holds it', () => {
+    const m = loadModule();
+    assert.equal(m.acquireSpeakerSlot('Lucy', 'Hello there'), true);
+    assert.equal(m.acquireSpeakerSlot('Edward', 'I have an update'), false);
+    assert.equal(m.getSlotHolder(), 'Lucy');
+  });
+
+  it('release frees the slot for the next speaker', () => {
+    const m = loadModule();
+    m.acquireSpeakerSlot('Lucy', 'short');
+    m.releaseSpeakerSlot('Lucy');
+    assert.equal(m.getSlotHolder(), null);
+    assert.equal(m.acquireSpeakerSlot('Edward', 'longer line'), true);
+  });
+
+  it('a late release from a previous speaker does not steal the new slot', () => {
+    const m = loadModule();
+    m.acquireSpeakerSlot('Lucy', 'first');
+    m.releaseSpeakerSlot('Lucy');
+    m.acquireSpeakerSlot('Edward', 'second');
+    // Lucy's audio finishes late and fires an onended → release('Lucy')
+    m.releaseSpeakerSlot('Lucy'); // should be a no-op
+    assert.equal(m.getSlotHolder(), 'Edward');
+  });
+
+  it('active-convo partner can steal the slot (player priority)', () => {
+    const m = loadModule();
+    m.acquireSpeakerSlot('Edward', 'I am rambling');
+    m.setActiveConvoNpc('Lucy');
+    // Lucy is the player's chat partner — should preempt Edward.
+    assert.equal(m.acquireSpeakerSlot('Lucy', 'Sorry, you were asking?'), true);
+    assert.equal(m.getSlotHolder(), 'Lucy');
+  });
+
+  it('slot auto-expires roughly proportional to text length', async () => {
+    const m = loadModule();
+    // Cheat by pretending we acquired a slot for a 1-char string, which
+    // clamps to 800ms minimum. We jam the holder, wait > 800ms, then
+    // assert it's free again.
+    m.acquireSpeakerSlot('Lucy', 'a');
+    await new Promise((r) => setTimeout(r, 850));
+    assert.equal(m.getSlotHolder(), null, 'slot should auto-expire after the estimated duration');
+  });
+});
+
 describe('proximity-audio file shape', () => {
   it('has the right module surface and graceful fallbacks', () => {
     const file = fs.readFileSync(path.join(__dirname, '..', 'src', 'proximity-audio.js'), 'utf8');

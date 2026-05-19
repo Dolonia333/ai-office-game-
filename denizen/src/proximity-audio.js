@@ -72,6 +72,66 @@
     return null;
   }
 
+  // --- single-speaker slot ------------------------------------------------
+  // Real-world fix for "I hear two voices at once." Only one NPC can have
+  // audio playing at any moment. New speakers during an active slot are
+  // dropped silently — their bubble still renders (visual stays). We
+  // estimate slot duration from text length (~75 ms/char + 600 ms tail)
+  // so a stuck Audio.play() doesn't permanently silence the office.
+  // Conversation lock-holder gets right-of-way: when the player is in
+  // an active chat with X, X never gets dropped even if another NPC
+  // arrived first.
+  let _slotHolder = null;        // display name currently speaking
+  let _slotUntil = 0;            // ms epoch — auto-expire deadline
+
+  function _estimateSpeakDurationMs(text) {
+    const len = String(text || '').length;
+    // 75 ms/char ≈ 800 chars/min, matches typical TTS pacing for
+    // English; clamp so even one-word lines hold the slot at least
+    // 800 ms (otherwise rapid-fire decisions still overlap).
+    return Math.max(800, Math.min(20000, len * 75 + 600));
+  }
+
+  /**
+   * Try to claim the audio channel for `npcName` to speak `text`.
+   * Returns true if the slot is free (or if this NPC is the active
+   * convo partner, who gets priority). Returns false to mean "stay
+   * silent for this line — someone else is talking."
+   */
+  function acquireSpeakerSlot(npcName, text) {
+    const now = Date.now();
+    if (_slotHolder && now < _slotUntil) {
+      // Convo partner priority — if the player is mid-chat with this
+      // NPC, kick whoever's holding the slot. That makes player chats
+      // feel responsive even if Lucy started a line right before
+      // Edward (the partner) replies.
+      const convo = getActiveConvoNpc();
+      if (convo && convo === npcName && _slotHolder !== convo) {
+        _slotHolder = npcName;
+        _slotUntil = now + _estimateSpeakDurationMs(text);
+        return true;
+      }
+      return false;
+    }
+    _slotHolder = npcName;
+    _slotUntil = now + _estimateSpeakDurationMs(text);
+    return true;
+  }
+
+  function releaseSpeakerSlot(npcName) {
+    // Only release if we still own it — late `ended` events from a
+    // previous Audio object shouldn't free a newer speaker's slot.
+    if (!npcName || _slotHolder === npcName) {
+      _slotHolder = null;
+      _slotUntil = 0;
+    }
+  }
+
+  function getSlotHolder() {
+    if (_slotHolder && Date.now() < _slotUntil) return _slotHolder;
+    return null;
+  }
+
   // --- npc-name → sprite resolution ---------------------------------------
   // The roster ships under window.DenizenNpcRoster.keyToDisplay
   // (npcKey -> displayName). We need the inverse for resolving by name.
@@ -179,9 +239,19 @@
       computeVolumeForNpc,
       setActiveConvoNpc,
       getActiveConvoNpc,
+      acquireSpeakerSlot,
+      releaseSpeakerSlot,
+      getSlotHolder,
     };
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeVolumeForNpc, setActiveConvoNpc, getActiveConvoNpc };
+    module.exports = {
+      computeVolumeForNpc,
+      setActiveConvoNpc,
+      getActiveConvoNpc,
+      acquireSpeakerSlot,
+      releaseSpeakerSlot,
+      getSlotHolder,
+    };
   }
 })();
