@@ -1312,21 +1312,27 @@ class AgentOfficeManager {
           currentTurn < MAX_CHAT_TURNS;
 
         if (canReplyBack) {
-          // Small beat so the responder's bubble is visible before the next
-          // request fires (server adds its own delay before the response bubble).
+          // Small beat so the responder's bubble is visible before the
+          // next request fires.
           this.scene.time.delayedCall(1800, () => {
-            // Responder now becomes the speaker — walks to and addresses the
-            // original speaker with their just-generated line.
-            this.actions.speakTo(responderKey, originalSpeakerKey, msg.text).then(() => {
-              this._send({
-                type: 'npc_conversation',
-                npcName: msg.fromName,   // original speaker is now the target
-                fromName: msg.npcName,   // responder is now the speaker
-                text: msg.text,
-                turn: currentTurn + 1,
-              });
-            }).catch(() => {
-              // NPC destroyed or scene torn down — conversation dies silently, no retry.
+            // Walk the responder toward the original speaker so the
+            // conversation has spatial weight, BUT do NOT speak the same
+            // line again — line 1295 already played the audio + bubble.
+            // Pre-fix: actions.speakTo re-spoke msg.text on arrival,
+            // which was the second voice the player heard for short
+            // replies (the single-speaker slot only dedupes when the
+            // estimated TTL > the 1800ms walk delay).
+            const targetSprite = this.actions._getNpc(originalSpeakerKey);
+            if (targetSprite) {
+              try { this.actions.walkTo(responderKey, targetSprite.x - 24, targetSprite.y); }
+              catch (_) { /* sprite gone — okay */ }
+            }
+            this._send({
+              type: 'npc_conversation',
+              npcName: msg.fromName,   // original speaker is now the target
+              fromName: msg.npcName,   // responder is now the speaker
+              text: msg.text,
+              turn: currentTurn + 1,
             });
           });
         }

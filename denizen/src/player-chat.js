@@ -435,16 +435,23 @@ class PlayerChat {
     // Add to chat log
     this._addToLog(npcName, safeText);
 
-    // Show speech bubble on the NPC
+    // Show speech bubble on the NPC. actions.speak → _showSpeechBubble
+    // now also fires window.DenizenSpeak for us (since the autonomous-
+    // speech TTS fix), so this single path covers both visual + audio.
     const npcKey = this._nameToKey[npcName?.toLowerCase()] || this._lastTargetKey;
-    if (npcKey && this.manager?.actions) {
+    const bubblePathFired = !!(npcKey && this.manager?.actions);
+    if (bubblePathFired) {
       this.manager.actions.speak(npcKey, safeText);
     }
 
-    // Voice gate — bubbles always render; audio only fires when Zion is at
-    // the keyboard. The presence flag is mirrored from /api/presence into
-    // window.DenizenPresence by the world-state ws bridge below.
-    if (globalThis.DenizenPresence?.zionPresent && globalThis.DenizenSpeak) {
+    // Audio fallback — only fire the explicit DenizenSpeak if the bubble
+    // path didn't (unknown NPC key, manager not yet wired). Without this
+    // guard the player heard EVERY reply twice: once via the bubble,
+    // once here. The proximity slot deduped most of them but the timing
+    // was close enough that both got through occasionally.
+    if (!bubblePathFired
+        && globalThis.DenizenPresence?.zionPresent
+        && globalThis.DenizenSpeak) {
       try { globalThis.DenizenSpeak(npcName, safeText); }
       catch (err) { console.warn('[PlayerChat] DenizenSpeak failed:', err?.message || err); }
     }
